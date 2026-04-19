@@ -7,15 +7,15 @@
 <!--
   ============================================================================
   Project : CodeSmith
-  Version : 0.1.0
+  Version : 0.2.0
   Targets : Chrome/Edge 120+, Firefox 120+, Safari 17+
   ----------------------------------------------------------------------------
-  Day 1 UI shell for a browser-based AI code-generation tool. Provides the
-  chat layout, settings modal, IndexedDB persistence (settings / sessions /
-  artifacts stores), session lifecycle with hardcoded placeholder replies,
-  and a bottom status strip. No Pyodide, no real AI calls, no streaming —
-  those wire in on later days. Everything lives in a single CodeSmith
-  namespace; no frameworks, no build step.
+  Day 1 UI shell + Day 2 Pyodide sandbox. Provides the chat layout, settings
+  modal, IndexedDB persistence, session lifecycle, status strip, AND a
+  sandboxed Python execution environment via Pyodide with a debug panel
+  (Ctrl+Shift+D). No real AI calls yet — those wire in on Day 3.
+  Everything lives in a single CodeSmith namespace; no frameworks, no build
+  step.
   ============================================================================
 -->
 <script src="https://cdn.tailwindcss.com"></script>
@@ -234,6 +234,48 @@
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
   }
+
+  /* ---- Debug panel (Day 2) ----------------------------------------------- */
+  .debug-panel {
+    position: fixed; right: 16px; bottom: 40px; width: 520px; max-width: calc(100vw - 32px);
+    max-height: 70vh; background: #141820; border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 70; display: flex; flex-direction: column; overflow: hidden;
+    font-size: 13px;
+  }
+  .debug-panel[hidden] { display: none; }
+  .debug-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .debug-tab {
+    padding: 8px 16px; cursor: pointer; color: #8b92a1; font-size: 12px;
+    border-bottom: 2px solid transparent; background: none; border-top: none;
+    border-left: none; border-right: none; font-family: inherit;
+  }
+  .debug-tab:hover { color: #e8ecf1; }
+  .debug-tab.active { color: #4f8cff; border-bottom-color: #4f8cff; }
+  .debug-tab-content { display: none; flex: 1; min-height: 0; overflow: auto; }
+  .debug-tab-content.active { display: flex; flex-direction: column; }
+  .debug-output {
+    flex: 1; min-height: 80px; max-height: 260px; overflow: auto;
+    padding: 8px 10px; font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+    font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+    background: #0b0d10;
+  }
+  .debug-output .lbl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #5b6474; margin-top: 6px; display: block;
+  }
+  .debug-output .lbl:first-child { margin-top: 0; }
+  .debug-output .o-out { color: #e8ecf1; }
+  .debug-output .o-err { color: #f59e0b; }
+  .debug-output .o-exc { color: #ff6b6b; }
+  .debug-output .o-ret { color: #4ade80; }
+  .debug-file-item {
+    padding: 5px 8px; border-radius: 4px; cursor: pointer; font-family: monospace;
+    font-size: 12px; color: #8b92a1;
+  }
+  .debug-file-item:hover { background: rgba(255,255,255,0.04); color: #e8ecf1; }
+  .debug-stats { padding: 10px; font-size: 12px; color: #8b92a1; line-height: 2; }
+  .debug-stats span.val { color: #e8ecf1; font-family: "JetBrains Mono",monospace; }
 </style>
 </head>
 <body class="bg-bg text-text">
@@ -350,6 +392,47 @@
   </footer>
 </div>
 
+<!-- ========= Debug panel (Ctrl+Shift+D) — Day 2 ========= -->
+<div id="debug-panel" class="debug-panel" hidden>
+  <div style="display:flex;align-items:center;padding:6px 10px 0;">
+    <div class="debug-tabs" style="flex:1;">
+      <button class="debug-tab active" data-tab="repl">REPL</button>
+      <button class="debug-tab" data-tab="files">Files</button>
+      <button class="debug-tab" data-tab="stats">Stats</button>
+    </div>
+    <button id="btn-close-debug" class="iconbtn" aria-label="Close debug panel" style="margin-left:auto;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+  <div class="debug-tab-content active" data-content="repl" style="padding:8px;">
+    <textarea id="debug-code" rows="5"
+              style="font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:12px;resize:vertical;min-height:60px;"
+              placeholder="Enter Python code…"></textarea>
+    <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+      <button id="btn-debug-run" class="btn btn-primary" style="font-size:12px;">Run</button>
+      <button id="btn-debug-clear" class="btn" style="font-size:12px;">Clear</button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#8b92a1;margin-left:auto;cursor:pointer;">
+        <input type="checkbox" id="debug-session-globals" style="accent-color:#4f8cff;"> Session globals
+      </label>
+    </div>
+    <div id="debug-output" class="debug-output" style="margin-top:8px;border-radius:6px;"></div>
+  </div>
+  <div class="debug-tab-content" data-content="files" style="padding:8px;">
+    <div style="display:flex;gap:6px;margin-bottom:6px;">
+      <button id="btn-debug-refresh-files" class="btn" style="font-size:12px;">Refresh</button>
+    </div>
+    <div id="debug-files" style="background:#0b0d10;border-radius:6px;min-height:80px;max-height:200px;overflow:auto;padding:6px;"></div>
+    <pre id="debug-file-preview" class="debug-output" style="margin-top:6px;border-radius:6px;display:none;max-height:200px;"></pre>
+  </div>
+  <div class="debug-tab-content" data-content="stats">
+    <div id="debug-stats" class="debug-stats"></div>
+  </div>
+</div>
+
 <!-- ========= Settings modal ========= -->
 <div id="settings-backdrop" class="modal-backdrop" hidden></div>
 <div id="settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"
@@ -436,8 +519,9 @@
  * 1. NAMESPACE + STATE
  * ==========================================================================*/
 const CodeSmith = {
-  version: '0.1.0',
+  version: '0.2.0',
   db: null,        // filled by DB section
+  sandbox: null,   // filled by PYODIDE SANDBOX section (Day 2)
   state: {
     settings: null,
     sessions: [],
@@ -643,6 +727,321 @@ const API = (() => {
   return { testConnection, listModels };
 })();
 CodeSmith.api = API;
+
+/* ============================================================================
+ * 3b. PYODIDE SANDBOX — Day 2
+ *     Lazy-loads Pyodide, runs Python in sandboxed namespaces, captures
+ *     stdout/stderr/exceptions, manages a virtual FS at /workdir.
+ *     All functions return Promises; expected errors yield ok=false results,
+ *     never thrown exceptions.
+ * ==========================================================================*/
+const Sandbox = (() => {
+  let _pyodide = null;
+  let _loading = false;
+  let _loadError = null;
+  let _sessionGlobals = null;
+  let _installedPackages = new Set();
+  let _warmUpTime = null;
+
+  const STDOUT_LIMIT = 100 * 1024; // 100KB
+  const DEFAULT_TIMEOUT = 15000;
+
+  // ---- helpers ----
+  const $ = (sel) => document.querySelector(sel);
+
+  function _updateStatus(state, text) {
+    const dot = $('#st-pyodide-dot');
+    const txt = $('#st-pyodide-text');
+    if (!dot || !txt) return;
+    dot.classList.remove('gray', 'green', 'red', 'amber');
+    dot.classList.add(state);
+    txt.textContent = text;
+  }
+
+  // ---- Pyodide script loader ----
+  function _loadScript(url) {
+    return new Promise((resolve, reject) => {
+      if (window.loadPyodide) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = url;
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Failed to load Pyodide script from CDN'));
+      document.head.appendChild(s);
+    });
+  }
+
+  // ---- core loader ----
+  async function warmUp() {
+    if (_pyodide) return;
+    if (_loading) {
+      // Wait for in-progress load
+      while (_loading) await new Promise(r => setTimeout(r, 100));
+      if (_pyodide) return;
+      if (_loadError) throw _loadError;
+      return;
+    }
+    _loading = true;
+    _loadError = null;
+    _updateStatus('amber', 'loading…');
+
+    try {
+      await _loadScript('https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js');
+
+      _pyodide = await window.loadPyodide({
+        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+        stdout: () => {},  // suppress default
+        stderr: () => {},
+      });
+
+      // Create /workdir
+      _pyodide.FS.mkdir('/workdir');
+
+      // Load micropip for fallback package installs
+      await _pyodide.loadPackage('micropip');
+
+      // Init session globals dict
+      _pyodide.runPython('__session_globals__ = {}');
+      _sessionGlobals = _pyodide.globals.get('__session_globals__');
+
+      _warmUpTime = Date.now();
+      const ver = _pyodide.version || '?';
+      _updateStatus('green', 'Python ' + (_pyodide.runPython('import sys; sys.version.split()[0]') || '3.12'));
+    } catch (err) {
+      _loadError = err;
+      _updateStatus('red', 'load failed');
+      throw err;
+    } finally {
+      _loading = false;
+    }
+  }
+
+  async function ready() {
+    return !!_pyodide;
+  }
+
+  // ---- code execution ----
+  async function runPython(code, opts = {}) {
+    if (typeof code !== 'string') throw new TypeError('runPython: code must be a string');
+
+    // Ensure Pyodide is loaded
+    try { await warmUp(); } catch (err) {
+      return {
+        ok: false, stdout: '', stderr: '', result: null,
+        error: { type: 'LoadError', message: err.message, traceback: '' },
+        durationMs: 0, stdoutTruncated: false,
+      };
+    }
+
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT;
+    const useSession = !!opts.sessionGlobals;
+
+    let stdoutBuf = '';
+    let stderrBuf = '';
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+
+    // Capture stdout/stderr
+    _pyodide.setStdout({
+      batched: (text) => {
+        if (stdoutBuf.length < STDOUT_LIMIT) {
+          stdoutBuf += text + '\n';
+          if (stdoutBuf.length >= STDOUT_LIMIT) {
+            stdoutBuf = stdoutBuf.slice(0, STDOUT_LIMIT) + '\n[output truncated at 100KB]';
+            stdoutTruncated = true;
+          }
+        }
+      }
+    });
+    _pyodide.setStderr({
+      batched: (text) => {
+        if (stderrBuf.length < STDOUT_LIMIT) {
+          stderrBuf += text + '\n';
+          if (stderrBuf.length >= STDOUT_LIMIT) {
+            stderrBuf = stderrBuf.slice(0, STDOUT_LIMIT) + '\n[output truncated at 100KB]';
+            stderrTruncated = true;
+          }
+        }
+      }
+    });
+
+    const t0 = performance.now();
+
+    // Build execution promise
+    const execPromise = (async () => {
+      try {
+        let result;
+        if (useSession) {
+          // Run in persistent session namespace
+          result = _pyodide.runPython(code, { globals: _sessionGlobals });
+        } else {
+          // Fresh namespace each time
+          const ns = _pyodide.globals.get('dict')();
+          try {
+            result = _pyodide.runPython(code, { globals: ns });
+          } finally {
+            ns.destroy();
+          }
+        }
+
+        // Convert result to JSON-safe
+        let jsonResult = null;
+        if (result !== undefined && result !== null) {
+          try {
+            if (result.toJs) {
+              const jsVal = result.toJs({ dict_converter: Object.fromEntries });
+              jsonResult = JSON.parse(JSON.stringify(jsVal));
+            } else {
+              jsonResult = JSON.parse(JSON.stringify(result));
+            }
+          } catch {
+            jsonResult = String(result);
+          }
+          // Destroy proxy if applicable
+          if (result.destroy) try { result.destroy(); } catch {}
+        }
+
+        return {
+          ok: true, stdout: stdoutBuf, stderr: stderrBuf, result: jsonResult,
+          error: null, durationMs: performance.now() - t0,
+          stdoutTruncated,
+        };
+      } catch (pyErr) {
+        // Extract Python exception info
+        let errorType = 'Error';
+        let errorMessage = '';
+        let traceback = '';
+
+        if (pyErr && pyErr.type) {
+          errorType = pyErr.type;
+          errorMessage = pyErr.message || String(pyErr);
+          // Get clean traceback from Pyodide
+          try {
+            traceback = _pyodide.runPython(`
+import traceback, sys
+tb = ''.join(traceback.format_exception(sys.last_type, sys.last_value, sys.last_traceback))
+tb
+            `) || '';
+          } catch {
+            traceback = String(pyErr);
+          }
+        } else {
+          errorType = (pyErr && pyErr.constructor && pyErr.constructor.name) || 'Error';
+          errorMessage = (pyErr && pyErr.message) || String(pyErr);
+          traceback = errorMessage;
+        }
+
+        return {
+          ok: false, stdout: stdoutBuf, stderr: stderrBuf, result: null,
+          error: { type: errorType, message: errorMessage, traceback },
+          durationMs: performance.now() - t0,
+          stdoutTruncated,
+        };
+      }
+    })();
+
+    // Timeout race
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        // Attempt clean stop
+        try { _pyodide.runPython('raise KeyboardInterrupt'); } catch {}
+        resolve({
+          ok: false, stdout: stdoutBuf, stderr: stderrBuf, result: null,
+          error: { type: 'TimeoutError', message: `Execution timed out after ${timeoutMs}ms`, traceback: '' },
+          durationMs: timeoutMs,
+          stdoutTruncated,
+        });
+      }, timeoutMs);
+    });
+
+    return Promise.race([execPromise, timeoutPromise]);
+  }
+
+  // ---- package installation ----
+  async function installPackage(name) {
+    if (typeof name !== 'string') throw new TypeError('installPackage: name must be a string');
+    await warmUp();
+
+    if (_installedPackages.has(name)) return; // already cached
+
+    try {
+      // Try pre-built first
+      await _pyodide.loadPackage(name);
+      _installedPackages.add(name);
+      return;
+    } catch {
+      // Fall back to micropip
+    }
+
+    try {
+      const micropip = _pyodide.pyimport('micropip');
+      await micropip.install(name);
+      _installedPackages.add(name);
+    } catch (err) {
+      throw new Error(
+        `Package '${name}' is not available in Pyodide. Pure-Python packages and prebuilt WASM packages only.` +
+        (err.message ? ' (' + err.message + ')' : '')
+      );
+    }
+  }
+
+  // ---- virtual filesystem ----
+  async function listFiles(path = '/workdir') {
+    await warmUp();
+    try {
+      return _pyodide.FS.readdir(path).filter(n => n !== '.' && n !== '..');
+    } catch {
+      return [];
+    }
+  }
+
+  async function writeFile(path, content) {
+    if (typeof path !== 'string') throw new TypeError('writeFile: path must be a string');
+    await warmUp();
+    _pyodide.FS.writeFile(path, content);
+  }
+
+  async function readFile(path) {
+    if (typeof path !== 'string') throw new TypeError('readFile: path must be a string');
+    await warmUp();
+    return _pyodide.FS.readFile(path, { encoding: 'utf8' });
+  }
+
+  // ---- reset ----
+  async function reset() {
+    if (!_pyodide) return;
+    // Wipe /workdir contents
+    try {
+      const files = _pyodide.FS.readdir('/workdir').filter(n => n !== '.' && n !== '..');
+      for (const f of files) {
+        try { _pyodide.FS.unlink('/workdir/' + f); } catch {
+          try { _pyodide.FS.rmdir('/workdir/' + f); } catch {}
+        }
+      }
+    } catch {}
+    // Clear session globals
+    try {
+      _pyodide.runPython('__session_globals__.clear()');
+    } catch {}
+  }
+
+  // ---- introspection (for debug panel) ----
+  function getStats() {
+    return {
+      loaded: !!_pyodide,
+      version: _pyodide ? (_pyodide.version || '?') : null,
+      pythonVersion: _pyodide ? (function() {
+        try { return _pyodide.runPython('import sys; sys.version'); } catch { return '?'; }
+      })() : null,
+      installedPackages: Array.from(_installedPackages),
+      warmUpTime: _warmUpTime,
+      uptimeMs: _warmUpTime ? Date.now() - _warmUpTime : 0,
+    };
+  }
+
+  return { ready, warmUp, runPython, installPackage, reset, listFiles, writeFile, readFile, getStats };
+})();
+CodeSmith.sandbox = Sandbox;
 
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
@@ -1020,6 +1419,186 @@ const UI = (() => {
       $('#sidebar').classList.toggle('collapsed');
     });
     wireComposer();
+    wireDebugPanel(); // Day 2
+  }
+
+  // ---- debug panel (Day 2) ------------------------------------------------
+  function wireDebugPanel() {
+    // Ctrl+Shift+D toggle
+    document.addEventListener('keydown', (ev) => {
+      if (ev.ctrlKey && ev.shiftKey && ev.key === 'D') {
+        ev.preventDefault();
+        const panel = $('#debug-panel');
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) {
+          $('#debug-code').focus();
+          refreshDebugStats();
+        }
+      }
+    });
+
+    // Close button
+    $('#btn-close-debug').addEventListener('click', () => {
+      $('#debug-panel').hidden = true;
+    });
+
+    // Tab switching
+    for (const tab of document.querySelectorAll('.debug-tab')) {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.debug-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.debug-tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        const content = document.querySelector(`.debug-tab-content[data-content="${target}"]`);
+        if (content) content.classList.add('active');
+        if (target === 'files') refreshDebugFiles();
+        if (target === 'stats') refreshDebugStats();
+      });
+    }
+
+    // Run button
+    $('#btn-debug-run').addEventListener('click', async () => {
+      const code = $('#debug-code').value;
+      if (!code.trim()) return;
+      const btn = $('#btn-debug-run');
+      btn.disabled = true;
+      btn.textContent = 'Running…';
+      const useSession = $('#debug-session-globals').checked;
+      try {
+        const r = await CodeSmith.sandbox.runPython(code, { sessionGlobals: useSession });
+        renderDebugResult(r);
+      } catch (err) {
+        renderDebugResult({
+          ok: false, stdout: '', stderr: '', result: null,
+          error: { type: 'InternalError', message: err.message, traceback: '' },
+          durationMs: 0, stdoutTruncated: false,
+        });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run';
+      }
+    });
+
+    // Ctrl+Enter to run in textarea
+    $('#debug-code').addEventListener('keydown', (ev) => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+        ev.preventDefault();
+        $('#btn-debug-run').click();
+      }
+    });
+
+    // Clear button
+    $('#btn-debug-clear').addEventListener('click', () => {
+      $('#debug-output').replaceChildren();
+    });
+
+    // Files refresh
+    $('#btn-debug-refresh-files').addEventListener('click', refreshDebugFiles);
+  }
+
+  function renderDebugResult(r) {
+    const out = $('#debug-output');
+    out.replaceChildren();
+
+    function addSection(label, text, cls) {
+      if (!text) return;
+      const lbl = document.createElement('span');
+      lbl.className = 'lbl';
+      lbl.textContent = label;
+      out.appendChild(lbl);
+      const val = document.createElement('span');
+      val.className = cls;
+      val.textContent = text;
+      out.appendChild(val);
+    }
+
+    if (r.stdout) addSection('stdout', r.stdout, 'o-out');
+    if (r.stderr) addSection('stderr', r.stderr, 'o-err');
+    if (r.error) {
+      addSection('error (' + r.error.type + ')', r.error.message, 'o-exc');
+      if (r.error.traceback && r.error.traceback !== r.error.message) {
+        addSection('traceback', r.error.traceback, 'o-exc');
+      }
+    }
+    if (r.result !== null && r.result !== undefined) {
+      addSection('result', typeof r.result === 'string' ? r.result : JSON.stringify(r.result, null, 2), 'o-ret');
+    }
+    if (r.stdoutTruncated) {
+      addSection('note', 'stdout was truncated at 100KB', 'o-err');
+    }
+
+    // Duration
+    const dur = document.createElement('span');
+    dur.className = 'lbl';
+    dur.textContent = (r.ok ? '✓' : '✗') + ' ' + r.durationMs.toFixed(0) + 'ms';
+    dur.style.marginTop = '8px';
+    dur.style.color = r.ok ? '#4ade80' : '#ff6b6b';
+    out.appendChild(dur);
+  }
+
+  async function refreshDebugFiles() {
+    const container = $('#debug-files');
+    const preview = $('#debug-file-preview');
+    container.replaceChildren();
+    preview.style.display = 'none';
+
+    if (!await CodeSmith.sandbox.ready()) {
+      container.textContent = 'Pyodide not loaded';
+      return;
+    }
+    const files = await CodeSmith.sandbox.listFiles();
+    if (files.length === 0) {
+      container.textContent = '/workdir is empty';
+      return;
+    }
+    for (const f of files) {
+      const item = document.createElement('div');
+      item.className = 'debug-file-item';
+      item.textContent = f;
+      item.addEventListener('click', async () => {
+        try {
+          const content = await CodeSmith.sandbox.readFile('/workdir/' + f);
+          preview.textContent = content;
+          preview.style.display = 'block';
+        } catch (err) {
+          preview.textContent = 'Error reading file: ' + err.message;
+          preview.style.display = 'block';
+        }
+      });
+      container.appendChild(item);
+    }
+  }
+
+  function refreshDebugStats() {
+    const el = $('#debug-stats');
+    if (!el) return;
+    const s = CodeSmith.sandbox.getStats();
+    if (!s.loaded) {
+      el.innerHTML = 'Pyodide: <span class="val">not loaded</span>';
+      return;
+    }
+    const uptime = s.uptimeMs > 0
+      ? (s.uptimeMs < 60000
+          ? (s.uptimeMs / 1000).toFixed(0) + 's'
+          : (s.uptimeMs / 60000).toFixed(1) + 'min')
+      : '—';
+    // Using textContent + manual DOM to avoid innerHTML with any user data
+    el.replaceChildren();
+    const lines = [
+      ['Pyodide version', s.version],
+      ['Python', s.pythonVersion || '?'],
+      ['Uptime', uptime],
+      ['Installed packages', s.installedPackages.length > 0 ? s.installedPackages.join(', ') : 'none'],
+    ];
+    for (const [label, value] of lines) {
+      const div = document.createElement('div');
+      div.textContent = label + ': ';
+      const span = document.createElement('span');
+      span.className = 'val';
+      span.textContent = value;
+      div.appendChild(span);
+      el.appendChild(div);
+    }
   }
 
   return {
