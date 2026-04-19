@@ -7,7 +7,7 @@
 <!--
   ============================================================================
   Project : CodeSmith
-  Version : 0.2.0
+  Version : 0.3.0
   Targets : Chrome/Edge 120+, Firefox 120+, Safari 17+
   ----------------------------------------------------------------------------
   Day 1 UI shell + Day 2 Pyodide sandbox. Provides the chat layout, settings
@@ -276,6 +276,67 @@
   .debug-file-item:hover { background: rgba(255,255,255,0.04); color: #e8ecf1; }
   .debug-stats { padding: 10px; font-size: 12px; color: #8b92a1; line-height: 2; }
   .debug-stats span.val { color: #e8ecf1; font-family: "JetBrains Mono",monospace; }
+/* ---- Day 3: streaming chat --------------------------------------------- */
+  .typing-indicator {
+    display: inline-flex; gap: 4px; padding: 8px 14px;
+  }
+  .typing-indicator span {
+    width: 6px; height: 6px; border-radius: 50%; background: #5b6474;
+    animation: blink 1.2s infinite;
+  }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+
+  .thinking-block {
+    margin-bottom: 6px; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; overflow: hidden; font-size: 12px;
+  }
+  .thinking-toggle {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    background: rgba(255,255,255,0.02); color: #8b92a1; cursor: pointer;
+    border: none; width: 100%; text-align: left; font: inherit; font-size: 12px;
+  }
+  .thinking-toggle:hover { background: rgba(255,255,255,0.04); }
+  .thinking-toggle .arrow { transition: transform 120ms; }
+  .thinking-toggle.open .arrow { transform: rotate(90deg); }
+  .thinking-body {
+    display: none; padding: 8px 10px; white-space: pre-wrap;
+    font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+    font-size: 11px; color: #8b92a1; line-height: 1.5;
+    max-height: 200px; overflow-y: auto; border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .thinking-toggle.open + .thinking-body { display: block; }
+
+  .usage-line {
+    font-size: 11px; color: #5b6474; margin-top: 4px; cursor: pointer;
+    font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+  }
+  .usage-line:hover { color: #8b92a1; }
+
+  .bubble-error {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.30);
+    color: #ff6b6b;
+  }
+
+  .btn-stop {
+    background: #ff6b6b; border-color: transparent; color: #0b0d10; font-weight: 600;
+  }
+  .btn-stop:hover { background: #e05555; }
+
+  .rate-limit-notice {
+    font-size: 11px; color: #f59e0b; padding: 2px 0;
+  }
+
+  /* Raw JSON modal */
+  .raw-modal-content {
+    background: #0b0d10; border-radius: 6px; padding: 12px;
+    font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+    font-size: 11px; max-height: 60vh; overflow: auto;
+    white-space: pre-wrap; word-break: break-all; color: #8b92a1;
+  }
+
 </style>
 </head>
 <body class="bg-bg text-text">
@@ -519,9 +580,10 @@
  * 1. NAMESPACE + STATE
  * ==========================================================================*/
 const CodeSmith = {
-  version: '0.2.0',
+  version: '0.3.0',
   db: null,        // filled by DB section
   sandbox: null,   // filled by PYODIDE SANDBOX section (Day 2)
+  llm: null,       // filled by LLM section (Day 3)
   state: {
     settings: null,
     sessions: [],
@@ -537,6 +599,8 @@ const CodeSmith = {
     modelOrchestrator: 'moonshotai/kimi-k2-thinking',
     modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
     modelFast:         'meta/llama-3.1-8b-instruct',
+    tokenBudgetCap: 100000,
+    rateLimitRpm: 40,
   },
 };
 // expose for devtools only — not for app code
@@ -1043,6 +1107,404 @@ tb
 })();
 CodeSmith.sandbox = Sandbox;
 
+  /* ============================================================================
+ * 3c. LLM — OpenAI-compatible streaming chat client (Day 3)
+ *     Pure module: no DOM access. Emits ChatEvents consumed by the UI layer.
+ *     Handles SSE parsing, retries, rate limiting, token budget tracking.
+ * ==========================================================================*/
+const LLM = (() => {
+  // ---- budget & call log --------------------------------------------------
+  let _budget = { tokensIn: 0, tokensOut: 0, calls: 0 };
+  const _recentCalls = [];          // ring buffer, max 20
+  const MAX_RECENT = 20;
+
+  // ---- rate limiter (token bucket per-model) ------------------------------
+  const _buckets = {};  // { modelKey: { tokens, lastRefill, rpm, windowMs } }
+
+  function _getBucket(model) {
+    if (_buckets[model]) return _buckets[model];
+    const rpm = _getSettings().rateLimitRpm || 40;
+    _buckets[model] = { tokens: rpm, lastRefill: Date.now(), rpm, windowMs: 60000 };
+    return _buckets[model];
+  }
+
+  function _refillBucket(b) {
+    const now = Date.now();
+    const elapsed = now - b.lastRefill;
+    const refill = (elapsed / b.windowMs) * b.rpm;
+    b.tokens = Math.min(b.rpm, b.tokens + refill);
+    b.lastRefill = now;
+  }
+
+  async function _acquireToken(model, signal) {
+    const b = _getBucket(model);
+    _refillBucket(b);
+    if (b.tokens >= 1) { b.tokens -= 1; return; }
+    // Wait
+    const waitMs = Math.ceil(((1 - b.tokens) / b.rpm) * b.windowMs);
+    const capped = Math.min(waitMs, 30000);
+    await new Promise((resolve, reject) => {
+      const id = setTimeout(resolve, capped);
+      if (signal) signal.addEventListener('abort', () => {
+        clearTimeout(id); reject(new DOMException('Aborted', 'AbortError'));
+      }, { once: true });
+    });
+    _refillBucket(b);
+    b.tokens = Math.max(0, b.tokens - 1);
+  }
+
+  // ---- helpers ------------------------------------------------------------
+  function _getSettings() {
+    return CodeSmith.state.settings || CodeSmith.DEFAULTS;
+  }
+
+  function getModelForTier(tier) {
+    const s = _getSettings();
+    if (tier === 'orchestrator') return s.modelOrchestrator || CodeSmith.DEFAULTS.modelOrchestrator;
+    if (tier === 'worker')       return s.modelWorker || CodeSmith.DEFAULTS.modelWorker;
+    if (tier === 'fast')         return s.modelFast || CodeSmith.DEFAULTS.modelFast;
+    return s.modelOrchestrator || CodeSmith.DEFAULTS.modelOrchestrator;
+  }
+
+  function tokenEstimate(text) {
+    // ~4 chars per token, fast heuristic
+    if (!text) return 0;
+    return Math.ceil(text.length / 4);
+  }
+
+  function resetBudget() { _budget = { tokensIn: 0, tokensOut: 0, calls: 0 }; }
+  function getBudget() { return { ..._budget }; }
+  function getRecentCalls() { return _recentCalls.slice(); }
+
+  function _logCall(entry) {
+    // Strip auth from logged data
+    _recentCalls.push({
+      ts: Date.now(),
+      model: entry.model || '?',
+      tokensIn: entry.tokensIn || 0,
+      tokensOut: entry.tokensOut || 0,
+      status: entry.status || 'ok',
+      durationMs: entry.durationMs || 0,
+    });
+    if (_recentCalls.length > MAX_RECENT) _recentCalls.shift();
+  }
+
+  // ---- SSE parser ---------------------------------------------------------
+  function _isThinkingModel(model) {
+    if (!model) return false;
+    const m = model.toLowerCase();
+    return m.includes('kimi') || m.includes('k2-thinking') ||
+           m.includes('deepseek-r1') || m.includes('qwq');
+  }
+
+  // ---- core streaming chat ------------------------------------------------
+  async function* chat(options) {
+    const {
+      messages, tier, model: explicitModel, temperature, maxTokens,
+      responseFormat, timeoutMs = 90000, signal,
+    } = options;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      yield { type: 'error', error: new Error('messages array is required'), recoverable: false };
+      return;
+    }
+
+    const s = _getSettings();
+    if (!s.apiKey) {
+      yield { type: 'error', error: new Error('API key not configured — open Settings and add your key.'), recoverable: false };
+      return;
+    }
+
+    const model = explicitModel || getModelForTier(tier || 'orchestrator');
+    const apiUrl = (s.apiUrl || CodeSmith.DEFAULTS.apiUrl).replace(/\/+$/, '');
+    const url = apiUrl + '/chat/completions';
+    const isThinking = _isThinkingModel(model);
+
+    const body = {
+      model,
+      messages,
+      stream: true,
+    };
+    if (temperature != null) body.temperature = temperature;
+    if (maxTokens != null) body.max_tokens = maxTokens;
+    if (responseFormat) body.response_format = responseFormat;
+
+    // Rate limit
+    try {
+      await _acquireToken(model, signal);
+    } catch (err) {
+      if (err.name === 'AbortError') return; // clean abort
+      yield { type: 'error', error: err, recoverable: false };
+      return;
+    }
+
+    // Retry wrapper
+    let lastError = null;
+    const maxRetries = 3;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (signal && signal.aborted) return;
+
+      const controller = new AbortController();
+      const combinedSignal = controller.signal;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      // Link external signal
+      let onAbort;
+      if (signal) {
+        onAbort = () => controller.abort();
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+
+      const t0 = performance.now();
+      let response;
+
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + s.apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
+          },
+          body: JSON.stringify(body),
+          signal: combinedSignal,
+        });
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (signal) signal.removeEventListener('abort', onAbort);
+
+        if (err.name === 'AbortError') {
+          if (signal && signal.aborted) return; // user abort — silent
+          yield { type: 'error', error: new Error('Request timed out after ' + (timeoutMs/1000) + 's'), recoverable: true };
+          return;
+        }
+        // Network error: 1 retry
+        if (attempt === 0) {
+          lastError = err;
+          await _sleep(1000);
+          continue;
+        }
+        yield { type: 'error', error: new Error('Network error — check your connection and API URL. (' + (err.message || '') + ')'), recoverable: true };
+        _logCall({ model, status: 'network_error', durationMs: performance.now() - t0 });
+        return;
+      }
+
+      clearTimeout(timeoutId);
+      if (signal) signal.removeEventListener('abort', onAbort);
+
+      // HTTP error handling
+      if (!response.ok) {
+        const status = response.status;
+        const bodyText = await response.text().catch(() => '');
+        const clean = bodyText.slice(0, 300).replace(/Bearer\s+\S+/gi, 'Bearer ***');
+
+        // 429 — rate limit
+        if (status === 429 && attempt < maxRetries) {
+          const retryAfter = response.headers.get('Retry-After');
+          const waitSec = retryAfter ? Math.min(parseInt(retryAfter, 10) || 2, 30) : Math.min(2 * Math.pow(2, attempt), 30);
+          lastError = new Error('Rate limited (429). Retrying in ' + waitSec + 's…');
+          yield { type: 'error', error: lastError, recoverable: true };
+          await _sleep(waitSec * 1000);
+          continue;
+        }
+
+        // 5xx — server error
+        if (status >= 500 && attempt < maxRetries) {
+          const waitSec = Math.min(2 * Math.pow(2, attempt), 30);
+          lastError = new Error('Server error (' + status + '). Retrying in ' + waitSec + 's…');
+          await _sleep(waitSec * 1000);
+          continue;
+        }
+
+        // 4xx non-recoverable
+        let msg = 'HTTP ' + status;
+        if (status === 401) msg = 'API key rejected (401). Check Settings.';
+        else if (status === 403) msg = 'Forbidden (403). Model may not be available on your tier.';
+        else if (status === 404) msg = 'Model not found (404). Try Fetch Models in Settings.';
+        else if (clean) msg += ' — ' + clean;
+
+        _logCall({ model, status: 'http_' + status, durationMs: performance.now() - t0 });
+        yield { type: 'error', error: new Error(msg), recoverable: status === 429 || status >= 500 };
+        return;
+      }
+
+      // ---- Stream the response ----
+      let fullText = '';
+      let thinkingText = '';
+      let usage = { promptTokens: 0, completionTokens: 0 };
+      let inThinking = false;
+
+      try {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';  // keep incomplete line
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith(':')) continue; // comment or empty
+            if (!trimmed.startsWith('data:')) continue;
+
+            const data = trimmed.slice(5).trim();
+            if (data === '[DONE]') continue;
+
+            let parsed;
+            try { parsed = JSON.parse(data); } catch { continue; }
+
+            // Extract usage from final chunk if present
+            if (parsed.usage) {
+              usage.promptTokens = parsed.usage.prompt_tokens || 0;
+              usage.completionTokens = parsed.usage.completion_tokens || 0;
+            }
+
+            const choices = parsed.choices;
+            if (!choices || choices.length === 0) continue;
+            const delta = choices[0].delta;
+            if (!delta) continue;
+
+            // Thinking / reasoning detection
+            // Kimi-k2: delta.reasoning_content
+            // DeepSeek-R1: delta.reasoning_content or role-based
+            if (delta.reasoning_content) {
+              thinkingText += delta.reasoning_content;
+              yield { type: 'thinking', delta: delta.reasoning_content };
+              continue;
+            }
+
+            // Content with <think> tags (some models)
+            let content = delta.content;
+            if (content == null) continue;
+
+            if (isThinking) {
+              // Handle inline <think>...</think> tags
+              if (!inThinking && content.includes('<think>')) {
+                const parts = content.split('<think>');
+                if (parts[0]) {
+                  fullText += parts[0];
+                  yield { type: 'token', delta: parts[0] };
+                }
+                inThinking = true;
+                const rest = parts.slice(1).join('<think>');
+                if (rest) {
+                  if (rest.includes('</think>')) {
+                    const endParts = rest.split('</think>');
+                    thinkingText += endParts[0];
+                    yield { type: 'thinking', delta: endParts[0] };
+                    inThinking = false;
+                    const after = endParts.slice(1).join('</think>');
+                    if (after) {
+                      fullText += after;
+                      yield { type: 'token', delta: after };
+                    }
+                  } else {
+                    thinkingText += rest;
+                    yield { type: 'thinking', delta: rest };
+                  }
+                }
+                continue;
+              }
+
+              if (inThinking) {
+                if (content.includes('</think>')) {
+                  const endParts = content.split('</think>');
+                  thinkingText += endParts[0];
+                  yield { type: 'thinking', delta: endParts[0] };
+                  inThinking = false;
+                  const after = endParts.slice(1).join('</think>');
+                  if (after) {
+                    fullText += after;
+                    yield { type: 'token', delta: after };
+                  }
+                } else {
+                  thinkingText += content;
+                  yield { type: 'thinking', delta: content };
+                }
+                continue;
+              }
+            }
+
+            // Normal content
+            fullText += content;
+            yield { type: 'token', delta: content };
+          }
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          if (signal && signal.aborted) {
+            // User-initiated stop — yield what we have
+            if (fullText) {
+              _budget.tokensIn += usage.promptTokens || tokenEstimate(messages.map(m => m.content).join(''));
+              _budget.tokensOut += usage.completionTokens || tokenEstimate(fullText);
+              _budget.calls++;
+              _logCall({ model, tokensIn: usage.promptTokens, tokensOut: usage.completionTokens, status: 'stopped', durationMs: performance.now() - t0 });
+            }
+            yield { type: 'done', text: fullText, thinking: thinkingText, usage, stopped: true };
+            return;
+          }
+          yield { type: 'error', error: new Error('Request timed out'), recoverable: true };
+          _logCall({ model, status: 'timeout', durationMs: performance.now() - t0 });
+          return;
+        }
+        // Mid-stream error
+        yield { type: 'error', error: new Error('Stream interrupted: ' + (err.message || '')), recoverable: true };
+        _logCall({ model, status: 'stream_error', durationMs: performance.now() - t0 });
+        return;
+      }
+
+      // ---- Success ----
+      // Estimate tokens if usage not provided by API
+      if (!usage.promptTokens) usage.promptTokens = tokenEstimate(messages.map(m => m.content).join(''));
+      if (!usage.completionTokens) usage.completionTokens = tokenEstimate(fullText);
+
+      _budget.tokensIn += usage.promptTokens;
+      _budget.tokensOut += usage.completionTokens;
+      _budget.calls++;
+
+      _logCall({ model, tokensIn: usage.promptTokens, tokensOut: usage.completionTokens, status: 'ok', durationMs: performance.now() - t0 });
+
+      yield { type: 'done', text: fullText, thinking: thinkingText, usage, stopped: false };
+      return; // success — no more retries
+    }
+
+    // Exhausted retries
+    yield { type: 'error', error: lastError || new Error('Request failed after retries'), recoverable: false };
+  }
+
+  // ---- non-streaming convenience wrapper ----------------------------------
+  async function chatComplete(options) {
+    let text = '';
+    let thinking = '';
+    let usage = {};
+    let error = null;
+
+    for await (const ev of chat(options)) {
+      if (ev.type === 'token') text += ev.delta;
+      else if (ev.type === 'thinking') thinking += ev.delta;
+      else if (ev.type === 'done') { text = ev.text; thinking = ev.thinking || ''; usage = ev.usage; }
+      else if (ev.type === 'error') { error = ev.error; if (!ev.recoverable) break; }
+    }
+
+    if (error && !text) throw error;
+    return { text, thinking, usage };
+  }
+
+  function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  return {
+    chat, chatComplete, tokenEstimate, getModelForTier,
+    resetBudget, getBudget, getRecentCalls,
+  };
+})();
+CodeSmith.llm = LLM;
+  
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
  *    No innerHTML with user content — textContent or element builders only.
@@ -1115,7 +1577,7 @@ const UI = (() => {
     }
   }
 
-  function renderChat() {
+function renderChat() {
     const list = $('#chat-list');
     const empty = $('#chat-empty');
     list.replaceChildren();
@@ -1138,12 +1600,50 @@ const UI = (() => {
       const row = el('div', {
         class: 'flex ' + (m.role === 'user' ? 'justify-end' : 'justify-start'),
       });
-      const bubble = el('div', {
-        class: 'bubble ' + (m.role === 'user' ? 'bubble-user' : 'bubble-assistant'),
-      });
-      // textContent only — never innerHTML for user/assistant content
+      const col = el('div', { class: 'flex flex-col', style: 'max-width:760px;width:100%;' });
+
+      // Thinking block (collapsible)
+      if (m.thinking) {
+        const tb = el('div', { class: 'thinking-block' });
+        const toggle = el('button', { class: 'thinking-toggle' });
+        toggle.innerHTML = '<span class="arrow" aria-hidden="true">▶</span> Reasoning';
+        const body = el('div', { class: 'thinking-body' });
+        body.textContent = m.thinking;
+        toggle.addEventListener('click', () => {
+          toggle.classList.toggle('open');
+        });
+        tb.appendChild(toggle);
+        tb.appendChild(body);
+        col.appendChild(tb);
+      }
+
+      // Bubble
+      const isError = m.isError;
+      const bubbleCls = m.role === 'user' ? 'bubble bubble-user'
+                      : isError ? 'bubble bubble-error'
+                      : 'bubble bubble-assistant';
+      const bubble = el('div', { class: bubbleCls });
       bubble.textContent = m.content;
-      row.appendChild(bubble);
+      col.appendChild(bubble);
+
+      // Usage line
+      if (m.usage && m.role === 'assistant' && !isError) {
+        const uLine = el('div', { class: 'usage-line' });
+        const dur = m.durationMs ? (m.durationMs / 1000).toFixed(1) + 's' : '';
+        uLine.textContent = '↑ ' + (m.usage.promptTokens || 0) + '  ↓ ' + (m.usage.completionTokens || 0) + (dur ? '  ' + dur : '');
+        uLine.title = 'Click for raw response details';
+        uLine.addEventListener('click', () => showRawModal(m));
+        col.appendChild(uLine);
+      }
+
+      // Retry button for errors
+      if (isError && m.recoverable) {
+        const retryBtn = el('button', { class: 'btn', style: 'margin-top:6px;font-size:12px;align-self:flex-start;' }, 'Retry');
+        retryBtn.addEventListener('click', () => retryLastMessage());
+        col.appendChild(retryBtn);
+      }
+
+      row.appendChild(col);
       list.appendChild(row);
     }
     // Scroll to bottom
@@ -1153,13 +1653,19 @@ const UI = (() => {
     });
   }
 
-  function renderStatusStrip() {
+function renderStatusStrip() {
     const orchDot  = $('#st-orch-dot');
     const orchText = $('#st-orch-text');
     const hasKey = !!(CodeSmith.state.settings && CodeSmith.state.settings.apiKey);
     orchDot.classList.remove('red','green','gray','amber');
     if (hasKey) { orchDot.classList.add('green'); orchText.textContent = 'ready'; }
     else        { orchDot.classList.add('red');   orchText.textContent = 'no key'; }
+
+    // Token budget (Day 3)
+    const budget = CodeSmith.llm ? CodeSmith.llm.getBudget() : { tokensIn: 0, tokensOut: 0 };
+    const total = budget.tokensIn + budget.tokensOut;
+    const cap = (CodeSmith.state.settings && CodeSmith.state.settings.tokenBudgetCap) || 100000;
+    $('#st-tokens').textContent = total.toLocaleString() + ' / ' + cap.toLocaleString();
   }
 
   function renderComposerHelp() {
@@ -1193,6 +1699,7 @@ const UI = (() => {
     renderChat();
     $('#composer').focus();
   }
+
   async function sendMessage(text) {
     const t = text.trim();
     if (!t) return;
@@ -1200,26 +1707,222 @@ const UI = (() => {
     const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
     if (!sess) return;
     const now = Date.now();
+
+    // Push user message
     sess.messages.push({ role: 'user', content: t, ts: now });
-    // Day 1 placeholder reply
-    sess.messages.push({
-      role: 'assistant',
-      content: 'Day 1 shell — AI not wired yet.',
-      ts: now + 1,
-    });
     sess.updatedAt = now;
     if (!sess.title || sess.title === 'New session') {
       sess.title = deriveTitle(sess.messages);
     }
+    renderChat();
+    renderSessionList();
+
+    // ---- Stream AI response ----
+    const sendBtn = $('#btn-send');
+    const composer = $('#composer');
+    const abortCtrl = new AbortController();
+
+    // Switch Send → Stop
+    sendBtn.textContent = 'Stop';
+    sendBtn.classList.remove('btn-primary');
+    sendBtn.classList.add('btn-stop');
+    composer.disabled = true;
+    _currentAbort = abortCtrl;
+
+    // Typing indicator
+    const chatList = $('#chat-list');
+    const typingRow = el('div', { class: 'flex justify-start', id: 'typing-row' });
+    const typingEl = el('div', { class: 'typing-indicator' });
+    typingEl.innerHTML = '<span></span><span></span><span></span>';
+    typingRow.appendChild(typingEl);
+    chatList.appendChild(typingRow);
+    _scrollBottom();
+
+    // Build messages array with system prompt
+    const systemPrompt = 'You are a helpful AI assistant embedded in CodeSmith, a browser-based code-generation tool. The user has not yet started a build — answer general questions and help them think about what they want to build.';
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...sess.messages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    let fullText = '';
+    let thinkingText = '';
+    let usage = {};
+    let stopped = false;
+    let hasError = false;
+    let lastError = null;
+    let recoverable = false;
+    const t0 = performance.now();
+
+    // Replace typing indicator with live bubble
+    let liveBubble = null;
+    let liveThinking = null;
+    let liveRow = null;
+    let liveCol = null;
+
+    function ensureLiveBubble() {
+      if (liveRow) return;
+      const tr = document.getElementById('typing-row');
+      if (tr) tr.remove();
+      liveRow = el('div', { class: 'flex justify-start' });
+      liveCol = el('div', { class: 'flex flex-col', style: 'max-width:760px;width:100%;' });
+      liveBubble = el('div', { class: 'bubble bubble-assistant' });
+      liveCol.appendChild(liveBubble);
+      liveRow.appendChild(liveCol);
+      chatList.appendChild(liveRow);
+    }
+
+    try {
+      for await (const ev of CodeSmith.llm.chat({
+        messages: apiMessages,
+        tier: 'orchestrator',
+        signal: abortCtrl.signal,
+      })) {
+        if (ev.type === 'thinking') {
+          ensureLiveBubble();
+          thinkingText += ev.delta;
+          // Build thinking block if not yet present
+          if (!liveThinking) {
+            const tb = el('div', { class: 'thinking-block' });
+            const toggle = el('button', { class: 'thinking-toggle open' });
+            toggle.innerHTML = '<span class="arrow" aria-hidden="true">▶</span> Reasoning…';
+            const body = el('div', { class: 'thinking-body' });
+            toggle.addEventListener('click', () => toggle.classList.toggle('open'));
+            tb.appendChild(toggle);
+            tb.appendChild(body);
+            liveCol.insertBefore(tb, liveBubble);
+            liveThinking = body;
+          }
+          liveThinking.textContent = thinkingText;
+          _scrollBottom();
+        } else if (ev.type === 'token') {
+          ensureLiveBubble();
+          fullText += ev.delta;
+          liveBubble.textContent = fullText;
+          _scrollBottom();
+        } else if (ev.type === 'done') {
+          fullText = ev.text || fullText;
+          thinkingText = ev.thinking || thinkingText;
+          usage = ev.usage || {};
+          stopped = !!ev.stopped;
+        } else if (ev.type === 'error') {
+          hasError = true;
+          lastError = ev.error;
+          recoverable = ev.recoverable;
+        }
+      }
+    } catch (err) {
+      hasError = true;
+      lastError = err;
+      recoverable = false;
+    }
+
+    // Clean up typing indicator if still present
+    const tr = document.getElementById('typing-row');
+    if (tr) tr.remove();
+    if (liveRow) liveRow.remove();
+
+    const durationMs = performance.now() - t0;
+
+    // Store the response
+    if (hasError && !fullText) {
+      sess.messages.push({
+        role: 'assistant',
+        content: lastError ? lastError.message : 'Request failed',
+        ts: Date.now(),
+        isError: true,
+        recoverable,
+      });
+    } else {
+      const content = stopped ? fullText + '\n\n[stopped by user]' : fullText;
+      sess.messages.push({
+        role: 'assistant',
+        content,
+        ts: Date.now(),
+        thinking: thinkingText || undefined,
+        usage,
+        durationMs,
+        stopped,
+      });
+    }
+
     await CodeSmith.db.putSession(sess);
-    // Re-sort session list by updatedAt
     CodeSmith.state.sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    // Restore button
+    _currentAbort = null;
+    sendBtn.textContent = 'Send';
+    sendBtn.classList.remove('btn-stop');
+    sendBtn.classList.add('btn-primary');
+    // Re-add the send arrow SVG
+    sendBtn.innerHTML = 'Send <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>';
+    composer.disabled = false;
+    composer.focus();
+
     renderSessionList();
     renderChat();
+    renderStatusStrip();
+  }
+
+  let _currentAbort = null;
+
+  function _scrollBottom() {
+    requestAnimationFrame(() => {
+      const scroll = $('#chat-scroll');
+      scroll.scrollTop = scroll.scrollHeight;
+    });
+  }
+
+  function showRawModal(m) {
+    // Reuse settings modal pattern
+    const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+    const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:640px;' });
+    const header = el('div', { class: 'flex items-center justify-between mb-3' }, [
+      el('div', { class: 'text-[14px] font-semibold' }, 'Response Details'),
+    ]);
+    const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close' });
+    closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const raw = {
+      role: m.role,
+      content: m.content ? m.content.slice(0, 2000) : '',
+      thinking: m.thinking ? m.thinking.slice(0, 500) + (m.thinking.length > 500 ? '…' : '') : undefined,
+      usage: m.usage,
+      durationMs: m.durationMs,
+      stopped: m.stopped,
+      ts: m.ts,
+    };
+    const pre = el('div', { class: 'raw-modal-content' });
+    pre.textContent = JSON.stringify(raw, null, 2);
+    modal.appendChild(pre);
+
+    const close = () => { backdrop.remove(); modal.remove(); };
+    closeBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    document.body.appendChild(backdrop);
+    document.body.appendChild(modal);
+  }
+
+  async function retryLastMessage() {
+    const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+    if (!sess || sess.messages.length < 2) return;
+    // Remove last assistant message (the error)
+    const last = sess.messages[sess.messages.length - 1];
+    if (last.role === 'assistant') sess.messages.pop();
+    // Remove last user message, re-send it
+    const userMsg = sess.messages[sess.messages.length - 1];
+    if (userMsg && userMsg.role === 'user') {
+      sess.messages.pop();
+      await CodeSmith.db.putSession(sess);
+      renderChat();
+      await sendMessage(userMsg.content);
+    }
   }
 
   // ---- composer -----------------------------------------------------------
-  function wireComposer() {
+function wireComposer() {
     const ta = $('#composer');
     const MAX_ROWS = 8;
     function autogrow() {
@@ -1236,20 +1939,28 @@ const UI = (() => {
     ta.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' && !ev.shiftKey) {
         ev.preventDefault();
-        const v = ta.value;
-        ta.value = '';
-        autogrow();
-        sendMessage(v);
+        handleSendOrStop();
       }
     });
     $('#btn-send').addEventListener('click', () => {
-      const v = ta.value;
-      ta.value = '';
-      autogrow();
-      sendMessage(v);
-      ta.focus();
+      handleSendOrStop();
     });
     autogrow();
+  }
+
+  function handleSendOrStop() {
+    // If currently streaming, abort
+    if (_currentAbort) {
+      _currentAbort.abort();
+      return;
+    }
+    const ta = $('#composer');
+    const v = ta.value;
+    ta.value = '';
+    // Reset height
+    ta.style.height = 'auto';
+    sendMessage(v);
+    ta.focus();
   }
 
   // ---- settings modal -----------------------------------------------------
