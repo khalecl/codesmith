@@ -369,22 +369,49 @@
     <div class="field">
       <label for="s-api-url">API base URL</label>
       <input id="s-api-url" type="url" autocomplete="off" spellcheck="false" />
+      <div class="text-[11px] text-muted mt-1">
+        Default is the Cloudflare Worker proxy — required because NVIDIA's direct API blocks browser CORS on the free tier.
+      </div>
     </div>
     <div class="field">
       <label for="s-api-key">API key</label>
-      <input id="s-api-key" type="password" autocomplete="off" spellcheck="false" />
+      <input id="s-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="nvapi-…" />
     </div>
+
+    <!-- Models section with fetch button -->
+    <div class="hairline-t pt-3 mt-1">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[12px] text-muted">Models</div>
+        <div class="flex items-center gap-2">
+          <span id="models-cache-info" class="text-[11px] text-muted font-mono"></span>
+          <button id="btn-fetch-models" class="btn" aria-label="Fetch available models from the API">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Fetch models
+          </button>
+        </div>
+      </div>
+      <datalist id="models-datalist"></datalist>
+    </div>
+
     <div class="field">
       <label for="s-model-orch">Orchestrator model</label>
-      <input id="s-model-orch" type="text" autocomplete="off" spellcheck="false" class="font-mono" />
+      <input id="s-model-orch" type="text" autocomplete="off" spellcheck="false" class="font-mono"
+             list="models-datalist" />
     </div>
     <div class="field">
       <label for="s-model-worker">Worker model</label>
-      <input id="s-model-worker" type="text" autocomplete="off" spellcheck="false" class="font-mono" />
+      <input id="s-model-worker" type="text" autocomplete="off" spellcheck="false" class="font-mono"
+             list="models-datalist" />
     </div>
     <div class="field">
       <label for="s-model-fast">Fast model</label>
-      <input id="s-model-fast" type="text" autocomplete="off" spellcheck="false" class="font-mono" />
+      <input id="s-model-fast" type="text" autocomplete="off" spellcheck="false" class="font-mono"
+             list="models-datalist" />
     </div>
 
     <div class="flex items-center gap-2 mt-1">
@@ -421,7 +448,7 @@ const CodeSmith = {
   STORES: { SETTINGS: 'settings', SESSIONS: 'sessions', ARTIFACTS: 'artifacts' },
   DEFAULTS: {
     id: 'app',
-    apiUrl: 'https://integrate.api.nvidia.com/v1',
+    apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
     apiKey: '',
     modelOrchestrator: 'moonshotai/kimi-k2-thinking',
     modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
@@ -526,6 +553,48 @@ CodeSmith.db = DB;
  *    Day 3 replaces this with real streaming + routing.
  * ==========================================================================*/
 const API = (() => {
+  async function listModels({ apiUrl, apiKey }) {
+    if (!apiUrl) throw new Error('API base URL is required');
+    if (!apiKey) throw new Error('API key is required');
+    const url = apiUrl.replace(/\/+$/, '') + '/models';
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), 20000);
+    try {
+      const r = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + apiKey,
+          'Accept': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '');
+        const clean = txt.slice(0, 240).replace(/Bearer\s+\S+/gi, 'Bearer ***');
+        // Friendlier messages for the common NVIDIA-via-Worker failure modes
+        if (r.status === 401) throw new Error('401 — API key rejected. Check that your nvapi-… key is pasted in full.');
+        if (r.status === 403) throw new Error('403 — forbidden. Your tier may not allow /models listing, or the Worker is blocking this path.');
+        if (r.status === 404) throw new Error('404 — /models not found. Your Worker may not forward this path; check the base URL.');
+        if (r.status === 429) throw new Error('429 — rate limited. Wait a moment and try again.');
+        throw new Error('HTTP ' + r.status + (clean ? ' — ' + clean : ''));
+      }
+      const j = await r.json();
+      // OpenAI-compatible: { data: [{ id, ... }, ...] }
+      const arr = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : []);
+      const ids = arr
+        .map(m => (typeof m === 'string' ? m : (m?.id || m?.name)))
+        .filter(Boolean);
+      // Dedup + stable alpha sort
+      return Array.from(new Set(ids)).sort((a, b) => a.localeCompare(b));
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Request timed out after 20s.');
+      if (err instanceof TypeError) throw new Error('Network error — CORS, offline, or Worker unreachable.');
+      throw err;
+    } finally {
+      clearTimeout(to);
+    }
+  }
+
   async function testConnection({ apiUrl, apiKey, model }) {
     if (!apiUrl) throw new Error('API base URL is required');
     if (!apiKey) throw new Error('API key is required');
@@ -539,7 +608,7 @@ const API = (() => {
       stream: false,
     };
     const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), 15000);
+    const to = setTimeout(() => controller.abort(), 20000);
     try {
       const r = await fetch(url, {
         method: 'POST',
@@ -553,18 +622,25 @@ const API = (() => {
       });
       if (!r.ok) {
         const txt = await r.text().catch(() => '');
-        // Truncate any server echo of the key, just in case.
         const clean = txt.slice(0, 240).replace(/Bearer\s+\S+/gi, 'Bearer ***');
+        if (r.status === 401) throw new Error('401 — API key rejected. Check your nvapi-… key.');
+        if (r.status === 403) throw new Error('403 — forbidden. This model may not be available on your tier.');
+        if (r.status === 404) throw new Error('404 — model not found on this endpoint. Try "Fetch models" to see what\'s available.');
+        if (r.status === 429) throw new Error('429 — rate limited. Wait and retry.');
         throw new Error('HTTP ' + r.status + (clean ? ' — ' + clean : ''));
       }
       const j = await r.json();
       // Any well-formed response is success for Day 1.
       return { ok: true, model: j.model || model };
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Request timed out after 20s.');
+      if (err instanceof TypeError) throw new Error('Network error — CORS, offline, or Worker unreachable.');
+      throw err;
     } finally {
       clearTimeout(to);
     }
   }
-  return { testConnection };
+  return { testConnection, listModels };
 })();
 CodeSmith.api = API;
 
@@ -779,6 +855,32 @@ const UI = (() => {
 
   // ---- settings modal -----------------------------------------------------
   let lastFocused = null;
+  function populateDatalist(ids) {
+    const dl = $('#models-datalist');
+    dl.replaceChildren();
+    for (const id of ids || []) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      dl.appendChild(opt);
+    }
+  }
+  function renderModelsCacheInfo() {
+    const s = CodeSmith.state.settings || {};
+    const info = $('#models-cache-info');
+    const list = s.modelsCache || [];
+    const at = s.modelsCacheAt;
+    if (!at || list.length === 0) {
+      info.textContent = 'not fetched';
+      return;
+    }
+    const d = new Date(at);
+    const ago = Math.max(0, Math.round((Date.now() - at) / 60000));
+    const when = ago < 1 ? 'just now'
+               : ago < 60 ? ago + 'm ago'
+               : ago < 1440 ? Math.round(ago/60) + 'h ago'
+               : d.toLocaleDateString();
+    info.textContent = list.length + ' models · ' + when;
+  }
   function openSettings() {
     lastFocused = document.activeElement;
     const s = CodeSmith.state.settings || CodeSmith.DEFAULTS;
@@ -788,6 +890,8 @@ const UI = (() => {
     $('#s-model-worker').value= s.modelWorker || '';
     $('#s-model-fast').value  = s.modelFast || '';
     $('#test-result').textContent = '';
+    populateDatalist(s.modelsCache || []);
+    renderModelsCacheInfo();
     $('#settings-backdrop').hidden = false;
     $('#settings-modal').hidden = false;
     // Focus first field
@@ -817,18 +921,65 @@ const UI = (() => {
   }
 
   async function saveSettingsFromModal() {
+    const prev = CodeSmith.state.settings || {};
     const next = {
       apiUrl:            $('#s-api-url').value.trim() || CodeSmith.DEFAULTS.apiUrl,
       apiKey:            $('#s-api-key').value,                     // raw — never logged
       modelOrchestrator: $('#s-model-orch').value.trim() || CodeSmith.DEFAULTS.modelOrchestrator,
       modelWorker:       $('#s-model-worker').value.trim() || CodeSmith.DEFAULTS.modelWorker,
       modelFast:         $('#s-model-fast').value.trim() || CodeSmith.DEFAULTS.modelFast,
+      modelsCache:       prev.modelsCache || [],
+      modelsCacheAt:     prev.modelsCacheAt || 0,
     };
     await CodeSmith.db.saveSettings(next);
     CodeSmith.state.settings = { ...next, id: 'app' };
     renderStatusStrip();
     renderComposerHelp();
     closeSettings();
+  }
+
+  async function runFetchModels() {
+    const btn = $('#btn-fetch-models');
+    const info = $('#models-cache-info');
+    btn.disabled = true;
+    info.textContent = 'fetching…';
+    try {
+      const ids = await CodeSmith.api.listModels({
+        apiUrl: $('#s-api-url').value.trim(),
+        apiKey: $('#s-api-key').value,
+      });
+      // Persist cache immediately (without disturbing unsaved form fields for models)
+      const current = CodeSmith.state.settings || { ...CodeSmith.DEFAULTS };
+      const updated = {
+        ...current,
+        apiUrl: $('#s-api-url').value.trim() || current.apiUrl,
+        apiKey: $('#s-api-key').value || current.apiKey,
+        modelsCache: ids,
+        modelsCacheAt: Date.now(),
+      };
+      delete updated.id; // saveSettings re-applies it
+      await CodeSmith.db.saveSettings(updated);
+      CodeSmith.state.settings = { ...updated, id: 'app' };
+      populateDatalist(ids);
+      renderModelsCacheInfo();
+      // Brief inline confirmation in the test-result slot if it's empty
+      if (!$('#test-result').textContent) {
+        $('#test-result').className = 'text-[12px] conn-ok';
+        $('#test-result').textContent = '✓ Fetched ' + ids.length + ' model' + (ids.length === 1 ? '' : 's');
+        setTimeout(() => {
+          if ($('#test-result').textContent.startsWith('✓ Fetched')) {
+            $('#test-result').textContent = '';
+          }
+        }, 4000);
+      }
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : 'Fetch failed';
+      info.textContent = 'fetch failed';
+      $('#test-result').className = 'text-[12px] conn-err';
+      $('#test-result').textContent = '✗ ' + msg.replace(/Bearer\s+\S+/gi, 'Bearer ***').slice(0, 240);
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   async function runTestConnection() {
@@ -864,6 +1015,7 @@ const UI = (() => {
     $('#settings-backdrop').addEventListener('click', closeSettings);
     $('#btn-save-settings').addEventListener('click', saveSettingsFromModal);
     $('#btn-test-conn').addEventListener('click', runTestConnection);
+    $('#btn-fetch-models').addEventListener('click', runFetchModels);
     $('#btn-toggle-sidebar').addEventListener('click', () => {
       $('#sidebar').classList.toggle('collapsed');
     });
