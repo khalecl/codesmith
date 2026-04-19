@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CodeSmith</title>
+<!--
+  ============================================================================
+  Project : CodeSmith
+  Version : 0.1.0
+  Targets : Chrome/Edge 120+, Firefox 120+, Safari 17+
+  ----------------------------------------------------------------------------
+  Day 1 UI shell for a browser-based AI code-generation tool. Provides the
+  chat layout, settings modal, IndexedDB persistence (settings / sessions /
+  artifacts stores), session lifecycle with hardcoded placeholder replies,
+  and a bottom status strip. No Pyodide, no real AI calls, no streaming —
+  those wire in on later days. Everything lives in a single CodeSmith
+  namespace; no frameworks, no build step.
+  ============================================================================
+-->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Tailwind config must be set before the runtime script renders anything.
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          bg:       '#0b0d10',
+          panel:    '#141820',
+          panel2:   '#1a1f2a',
+          accent:   '#4f8cff',
+          accentd:  '#3a72e0',
+          text:     '#e8ecf1',
+          muted:    '#8b92a1',
+          err:      '#ff6b6b',
+          ok:       '#4ade80',
+          hairline: 'rgba(255,255,255,0.06)',
+        },
+        fontFamily: {
+          sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
+          mono: ['"JetBrains Mono"', '"Fira Code"', 'ui-monospace', 'monospace'],
+        },
+        borderRadius: { panel: '8px', btn: '6px' },
+        transitionDuration: { fast: '120ms' },
+      },
+    },
+  };
+</script>
+<style>
+  /* ---- Base ----------------------------------------------------------- */
+  html, body { height: 100%; background: #0b0d10; color: #e8ecf1; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  /* Scrollbars — thin, theme-matched */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+  * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent; }
+
+  /* Focus ring — visible on every interactive element */
+  :focus-visible {
+    outline: 2px solid #4f8cff;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Hairline borders */
+  .hairline          { border: 1px solid rgba(255,255,255,0.06); }
+  .hairline-t        { border-top: 1px solid rgba(255,255,255,0.06); }
+  .hairline-b        { border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .hairline-r        { border-right: 1px solid rgba(255,255,255,0.06); }
+
+  /* Transitions — 120ms ease-out on everything interactive */
+  button, input, textarea, .sess-item, .gear, .btn, .iconbtn {
+    transition: background-color 120ms ease-out,
+                border-color 120ms ease-out,
+                color 120ms ease-out,
+                opacity 120ms ease-out,
+                transform 120ms ease-out;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 6px 12px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: #1a1f2a; color: #e8ecf1; font-size: 13px; line-height: 1;
+    cursor: pointer; user-select: none;
+  }
+  .btn:hover  { background: #222836; }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary {
+    background: #4f8cff; border-color: transparent; color: #0b0d10; font-weight: 600;
+  }
+  .btn-primary:hover { background: #3a72e0; }
+  .btn-ghost { background: transparent; }
+  .btn-ghost:hover { background: rgba(255,255,255,0.04); }
+
+  .iconbtn {
+    width: 32px; height: 32px; display: inline-flex; align-items: center;
+    justify-content: center; border-radius: 6px; background: transparent;
+    border: 1px solid transparent; color: #8b92a1; cursor: pointer;
+  }
+  .iconbtn:hover { color: #e8ecf1; background: rgba(255,255,255,0.04); }
+
+  /* Panels */
+  .panel  { background: #141820; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; }
+
+  /* Inputs */
+  input[type="text"], input[type="password"], input[type="url"], textarea {
+    background: #0f1319;
+    color: #e8ecf1;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    width: 100%;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus {
+    border-color: #4f8cff;
+    outline: none;
+  }
+  input::placeholder, textarea::placeholder { color: #5b6474; }
+
+  /* Chat bubbles */
+  .bubble {
+    max-width: 760px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .bubble-user {
+    background: rgba(79,140,255,0.14);
+    border: 1px solid rgba(79,140,255,0.28);
+    color: #e8ecf1;
+  }
+  .bubble-assistant {
+    background: #1a1f2a;
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #e8ecf1;
+  }
+  .bubble-meta {
+    font-size: 11px;
+    color: #8b92a1;
+    margin-top: 4px;
+  }
+
+  /* Session list */
+  .sess-item {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .sess-item:hover { background: rgba(255,255,255,0.04); }
+  .sess-item.active {
+    background: rgba(79,140,255,0.10);
+    border-color: rgba(79,140,255,0.30);
+  }
+  .sess-title { font-size: 13px; color: #e8ecf1; line-height: 1.3;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess-time  { font-size: 11px; color: #8b92a1; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .modal {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    overflow: auto;
+    background: #141820;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .modal[hidden], .modal-backdrop[hidden] { display: none; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: #8b92a1; }
+
+  /* Status strip */
+  .status-strip {
+    height: 24px; font-size: 11px; color: #8b92a1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 12px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
+         box-shadow: 0 0 0 1px rgba(0,0,0,0.2) inset; }
+  .dot.gray { background: #5b6474; }
+  .dot.green { background: #4ade80; }
+  .dot.red   { background: #ff6b6b; }
+  .dot.amber { background: #f59e0b; }
+
+  /* Stage pill */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    font-size: 11px; color: #8b92a1;
+    font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+  }
+
+  /* Empty state */
+  .empty {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    color: #8b92a1; text-align: center; padding: 24px;
+    flex-direction: column; gap: 8px;
+  }
+
+  /* Sidebar collapse */
+  .sidebar { width: 280px; transition: width 120ms ease-out; }
+  .sidebar.collapsed { width: 0; border-right-width: 0 !important; overflow: hidden; }
+
+  /* Inline test-connection result */
+  .conn-ok  { color: #4ade80; }
+  .conn-err { color: #ff6b6b; }
+
+  /* sr-only */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+</style>
+</head>
+<body class="bg-bg text-text">
+
+<!-- =========================================================================
+     Layout
+     ========================================================================= -->
+<div id="app" class="flex flex-col h-full">
+
+  <!-- ========== Top bar ========== -->
+  <header class="hairline-b flex items-center justify-between px-4" style="height:48px;">
+    <div class="flex items-center gap-3">
+      <button id="btn-toggle-sidebar" class="iconbtn" aria-label="Toggle sessions sidebar" title="Toggle sidebar">
+        <!-- sidebar icon -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <line x1="9" y1="4" x2="9" y2="20"></line>
+        </svg>
+      </button>
+      <div class="flex items-center gap-2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f8cff" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14.7 6.3a4.5 4.5 0 0 1 6 6L10 23H4v-6L14.7 6.3z"></path>
+          <path d="M13 7l4 4"></path>
+        </svg>
+        <span class="font-semibold tracking-tight text-[15px]">CodeSmith</span>
+        <span class="text-muted text-[11px] font-mono">v0.1.0</span>
+      </div>
+      <span id="stage-pill" class="pill" aria-live="polite">
+        <span class="dot gray" aria-hidden="true"></span><span>Idle</span>
+      </span>
+    </div>
+    <div class="flex items-center gap-1">
+      <button id="btn-settings" class="iconbtn" aria-label="Open settings" title="Settings">
+        <!-- gear -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.2.4.5.8 1 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.5 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========== Body: sidebar + main ========== -->
+  <div class="flex flex-1 min-h-0">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar hairline-r flex flex-col" aria-label="Sessions">
+      <div class="p-3 hairline-b">
+        <button id="btn-new-session" class="btn btn-primary w-full" aria-label="Create a new session">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New session</span>
+        </button>
+      </div>
+      <div id="session-list" class="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-1"
+           role="listbox" aria-label="Past sessions"></div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex flex-col flex-1 min-w-0">
+      <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
+        <div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
+        <div id="chat-empty" class="empty" hidden>
+          <div class="text-[15px] text-text">No session selected</div>
+          <div class="text-[12px]">Create a new session to start chatting.</div>
+        </div>
+      </div>
+
+      <!-- Composer -->
+      <div class="hairline-t p-3">
+        <div class="max-w-[920px] mx-auto">
+          <div class="flex items-end gap-2 panel p-2">
+            <label for="composer" class="sr-only">Message</label>
+            <textarea id="composer" rows="1"
+                      placeholder="Describe what you want to build…"
+                      aria-label="Message input"
+                      style="background:transparent;border:none;resize:none;padding:6px 8px;"
+                      ></textarea>
+            <button id="btn-send" class="btn btn-primary" aria-label="Send message">
+              Send
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+          </div>
+          <div id="composer-help" class="mt-2 text-[11px] text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>Orchestrator:&nbsp;<span id="help-model" class="font-mono text-text/80">—</span></span>
+            <span class="text-muted/50">·</span>
+            <span>API:&nbsp;<span id="help-api" class="font-mono text-text/80">—</span></span>
+            <span class="text-muted/50">·</span>
+            <span class="text-muted/80"><kbd class="font-mono">Enter</kbd> to send, <kbd class="font-mono">Shift+Enter</kbd> for newline</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ========== Status strip ========== -->
+  <footer class="status-strip hairline-t" role="status" aria-live="off">
+    <span><span id="st-pyodide-dot" class="dot gray" aria-hidden="true"></span>
+      <span>Pyodide: </span><span id="st-pyodide-text">not loaded</span></span>
+    <span><span id="st-orch-dot" class="dot red" aria-hidden="true"></span>
+      <span>Orchestrator: </span><span id="st-orch-text">no key</span></span>
+    <span>Tokens: <span id="st-tokens" class="font-mono">0 / 100,000</span></span>
+    <span class="ml-auto font-mono text-muted/70" id="st-session-id">—</span>
+  </footer>
+</div>
+
+<!-- ========= Settings modal ========= -->
+<div id="settings-backdrop" class="modal-backdrop" hidden></div>
+<div id="settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"
+     hidden style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;">
+  <div class="flex items-center justify-between mb-4">
+    <h2 id="settings-title" class="text-[15px] font-semibold">Settings</h2>
+    <button id="btn-close-settings" class="iconbtn" aria-label="Close settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+
+  <div class="flex flex-col gap-3">
+    <div class="field">
+      <label for="s-api-url">API base URL</label>
+      <input id="s-api-url" type="url" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="s-api-key">API key</label>
+      <input id="s-api-key" type="password" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="s-model-orch">Orchestrator model</label>
+      <input id="s-model-orch" type="text" autocomplete="off" spellcheck="false" class="font-mono" />
+    </div>
+    <div class="field">
+      <label for="s-model-worker">Worker model</label>
+      <input id="s-model-worker" type="text" autocomplete="off" spellcheck="false" class="font-mono" />
+    </div>
+    <div class="field">
+      <label for="s-model-fast">Fast model</label>
+      <input id="s-model-fast" type="text" autocomplete="off" spellcheck="false" class="font-mono" />
+    </div>
+
+    <div class="flex items-center gap-2 mt-1">
+      <button id="btn-test-conn" class="btn" aria-label="Test API connection">Test connection</button>
+      <span id="test-result" class="text-[12px]" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-end gap-2 mt-5 hairline-t pt-4">
+    <button id="btn-cancel-settings" class="btn" aria-label="Cancel and close settings">Cancel</button>
+    <button id="btn-save-settings" class="btn btn-primary" aria-label="Save settings">Save</button>
+  </div>
+</div>
+
+<!-- =========================================================================
+     Script
+     ========================================================================= -->
+<script type="module">
+'use strict';
+
+/* ============================================================================
+ * 1. NAMESPACE + STATE
+ * ==========================================================================*/
+const CodeSmith = {
+  version: '0.1.0',
+  db: null,        // filled by DB section
+  state: {
+    settings: null,
+    sessions: [],
+    currentId: null,
+  },
+  DB_NAME: 'codesmith_v1',
+  DB_VERSION: 1,
+  STORES: { SETTINGS: 'settings', SESSIONS: 'sessions', ARTIFACTS: 'artifacts' },
+  DEFAULTS: {
+    id: 'app',
+    apiUrl: 'https://integrate.api.nvidia.com/v1',
+    apiKey: '',
+    modelOrchestrator: 'moonshotai/kimi-k2-thinking',
+    modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
+    modelFast:         'meta/llama-3.1-8b-instruct',
+  },
+};
+// expose for devtools only — not for app code
+Object.defineProperty(window, 'CodeSmith', { value: CodeSmith, enumerable: false });
+
+/* ============================================================================
+ * 2. DB — promisified IndexedDB wrapper
+ *    Every op returns a Promise. No callbacks leak past this section.
+ * ==========================================================================*/
+const DB = (() => {
+  let _db = null;
+
+  function open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(CodeSmith.DB_NAME, CodeSmith.DB_VERSION);
+      req.onupgradeneeded = (ev) => {
+        const db = ev.target.result;
+        if (!db.objectStoreNames.contains(CodeSmith.STORES.SETTINGS)) {
+          db.createObjectStore(CodeSmith.STORES.SETTINGS, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(CodeSmith.STORES.SESSIONS)) {
+          const s = db.createObjectStore(CodeSmith.STORES.SESSIONS,
+            { keyPath: 'id', autoIncrement: true });
+          s.createIndex('updatedAt', 'updatedAt', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(CodeSmith.STORES.ARTIFACTS)) {
+          db.createObjectStore(CodeSmith.STORES.ARTIFACTS, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => { _db = req.result; resolve(_db); };
+      req.onerror   = () => reject(req.error);
+      req.onblocked = () => reject(new Error('IndexedDB open blocked'));
+    });
+  }
+
+  function tx(storeName, mode = 'readonly') {
+    const t = _db.transaction(storeName, mode);
+    return t.objectStore(storeName);
+  }
+
+  function pReq(req) {
+    return new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    });
+  }
+
+  // ---- Settings ----
+  function getSettings() {
+    return pReq(tx(CodeSmith.STORES.SETTINGS, 'readonly').get('app'));
+  }
+  function saveSettings(obj) {
+    const record = { ...obj, id: 'app' };
+    return pReq(tx(CodeSmith.STORES.SETTINGS, 'readwrite').put(record));
+  }
+
+  // ---- Sessions ----
+  function listSessions() {
+    return new Promise((resolve, reject) => {
+      const store = tx(CodeSmith.STORES.SESSIONS, 'readonly');
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const arr = req.result || [];
+        arr.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        resolve(arr);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+  function getSession(id) {
+    return pReq(tx(CodeSmith.STORES.SESSIONS, 'readonly').get(id));
+  }
+  function putSession(session) {
+    return pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').put(session));
+  }
+  async function createSession() {
+    const now = Date.now();
+    const session = {
+      title: 'New session',
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+    const id = await pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').add(session));
+    return { ...session, id };
+  }
+
+  return {
+    init: async () => { await open(); },
+    getSettings, saveSettings,
+    listSessions, getSession, putSession, createSession,
+  };
+})();
+CodeSmith.db = DB;
+
+/* ============================================================================
+ * 3. API — minimal chat completions client for connection testing.
+ *    Day 3 replaces this with real streaming + routing.
+ * ==========================================================================*/
+const API = (() => {
+  async function testConnection({ apiUrl, apiKey, model }) {
+    if (!apiUrl) throw new Error('API base URL is required');
+    if (!apiKey) throw new Error('API key is required');
+    if (!model)  throw new Error('Model is required');
+    const url = apiUrl.replace(/\/+$/, '') + '/chat/completions';
+    const body = {
+      model,
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+      temperature: 0,
+      stream: false,
+    };
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), 15000);
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '');
+        // Truncate any server echo of the key, just in case.
+        const clean = txt.slice(0, 240).replace(/Bearer\s+\S+/gi, 'Bearer ***');
+        throw new Error('HTTP ' + r.status + (clean ? ' — ' + clean : ''));
+      }
+      const j = await r.json();
+      // Any well-formed response is success for Day 1.
+      return { ok: true, model: j.model || model };
+    } finally {
+      clearTimeout(to);
+    }
+  }
+  return { testConnection };
+})();
+CodeSmith.api = API;
+
+/* ============================================================================
+ * 4. UI — rendering, events, modal, composer, status strip.
+ *    No innerHTML with user content — textContent or element builders only.
+ * ==========================================================================*/
+const UI = (() => {
+  // ---- tiny DOM helpers ---------------------------------------------------
+  const $ = (sel) => document.querySelector(sel);
+  function el(tag, props = {}, children = []) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === 'class') n.className = v;
+      else if (k === 'dataset') Object.assign(n.dataset, v);
+      else if (k === 'aria')    for (const [ak, av] of Object.entries(v)) n.setAttribute('aria-' + ak, av);
+      else if (k in n)          n[k] = v;
+      else                      n.setAttribute(k, v);
+    }
+    for (const c of [].concat(children)) {
+      if (c == null) continue;
+      n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return n;
+  }
+  function fmtTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    const dayDiff = Math.floor((now - d) / 86400000);
+    if (dayDiff < 7) return d.toLocaleDateString([], { weekday: 'short' }) + ' ' +
+                            d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString();
+  }
+  function deriveTitle(messages) {
+    const first = messages.find(m => m.role === 'user');
+    if (!first) return 'New session';
+    const t = first.content.trim().replace(/\s+/g, ' ');
+    return t.length > 48 ? t.slice(0, 47) + '…' : t;
+  }
+
+  // ---- rendering ----------------------------------------------------------
+  function renderSessionList() {
+    const list = $('#session-list');
+    list.replaceChildren();
+    if (CodeSmith.state.sessions.length === 0) {
+      const empty = el('div', { class: 'text-muted text-[12px] px-2 py-4 text-center' },
+                       'No sessions yet');
+      list.appendChild(empty);
+      return;
+    }
+    for (const s of CodeSmith.state.sessions) {
+      const active = s.id === CodeSmith.state.currentId;
+      const item = el('div', {
+        class: 'sess-item' + (active ? ' active' : ''),
+        role: 'option',
+        tabindex: '0',
+        dataset: { id: String(s.id) },
+        aria: { selected: active ? 'true' : 'false', label: (s.title || 'Untitled session') },
+      }, [
+        el('div', { class: 'sess-title' }, s.title || 'Untitled'),
+        el('div', { class: 'sess-time' }, fmtTime(s.updatedAt)),
+      ]);
+      item.addEventListener('click', () => selectSession(s.id));
+      item.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectSession(s.id); }
+      });
+      list.appendChild(item);
+    }
+  }
+
+  function renderChat() {
+    const list = $('#chat-list');
+    const empty = $('#chat-empty');
+    list.replaceChildren();
+    const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+    if (!sess) {
+      list.style.display = 'none';
+      empty.hidden = false;
+      $('#composer').disabled = true;
+      $('#btn-send').disabled = true;
+      $('#st-session-id').textContent = '—';
+      return;
+    }
+    list.style.display = '';
+    empty.hidden = true;
+    $('#composer').disabled = false;
+    $('#btn-send').disabled = false;
+    $('#st-session-id').textContent = 'session #' + sess.id;
+
+    for (const m of sess.messages) {
+      const row = el('div', {
+        class: 'flex ' + (m.role === 'user' ? 'justify-end' : 'justify-start'),
+      });
+      const bubble = el('div', {
+        class: 'bubble ' + (m.role === 'user' ? 'bubble-user' : 'bubble-assistant'),
+      });
+      // textContent only — never innerHTML for user/assistant content
+      bubble.textContent = m.content;
+      row.appendChild(bubble);
+      list.appendChild(row);
+    }
+    // Scroll to bottom
+    requestAnimationFrame(() => {
+      const scroll = $('#chat-scroll');
+      scroll.scrollTop = scroll.scrollHeight;
+    });
+  }
+
+  function renderStatusStrip() {
+    const orchDot  = $('#st-orch-dot');
+    const orchText = $('#st-orch-text');
+    const hasKey = !!(CodeSmith.state.settings && CodeSmith.state.settings.apiKey);
+    orchDot.classList.remove('red','green','gray','amber');
+    if (hasKey) { orchDot.classList.add('green'); orchText.textContent = 'ready'; }
+    else        { orchDot.classList.add('red');   orchText.textContent = 'no key'; }
+  }
+
+  function renderComposerHelp() {
+    const s = CodeSmith.state.settings || {};
+    $('#help-model').textContent = s.modelOrchestrator || '—';
+    $('#help-api').textContent   = s.apiUrl || '—';
+  }
+
+  // ---- session actions ----------------------------------------------------
+  async function refreshSessions() {
+    CodeSmith.state.sessions = await CodeSmith.db.listSessions();
+    renderSessionList();
+  }
+  async function newSession() {
+    const sess = await CodeSmith.db.createSession();
+    CodeSmith.state.sessions.unshift(sess);
+    CodeSmith.state.currentId = sess.id;
+    renderSessionList();
+    renderChat();
+    $('#composer').focus();
+  }
+  async function selectSession(id) {
+    CodeSmith.state.currentId = id;
+    // Refresh the single session from DB in case of stale state.
+    const fresh = await CodeSmith.db.getSession(id);
+    if (fresh) {
+      const idx = CodeSmith.state.sessions.findIndex(s => s.id === id);
+      if (idx >= 0) CodeSmith.state.sessions[idx] = fresh;
+    }
+    renderSessionList();
+    renderChat();
+    $('#composer').focus();
+  }
+  async function sendMessage(text) {
+    const t = text.trim();
+    if (!t) return;
+    if (CodeSmith.state.currentId == null) { await newSession(); }
+    const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+    if (!sess) return;
+    const now = Date.now();
+    sess.messages.push({ role: 'user', content: t, ts: now });
+    // Day 1 placeholder reply
+    sess.messages.push({
+      role: 'assistant',
+      content: 'Day 1 shell — AI not wired yet.',
+      ts: now + 1,
+    });
+    sess.updatedAt = now;
+    if (!sess.title || sess.title === 'New session') {
+      sess.title = deriveTitle(sess.messages);
+    }
+    await CodeSmith.db.putSession(sess);
+    // Re-sort session list by updatedAt
+    CodeSmith.state.sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    renderSessionList();
+    renderChat();
+  }
+
+  // ---- composer -----------------------------------------------------------
+  function wireComposer() {
+    const ta = $('#composer');
+    const MAX_ROWS = 8;
+    function autogrow() {
+      ta.style.height = 'auto';
+      const cs = getComputedStyle(ta);
+      const lh = parseFloat(cs.lineHeight) || 20;
+      const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const max = lh * MAX_ROWS + pad;
+      const next = Math.min(ta.scrollHeight, max);
+      ta.style.height = next + 'px';
+      ta.style.overflowY = ta.scrollHeight > max ? 'auto' : 'hidden';
+    }
+    ta.addEventListener('input', autogrow);
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        const v = ta.value;
+        ta.value = '';
+        autogrow();
+        sendMessage(v);
+      }
+    });
+    $('#btn-send').addEventListener('click', () => {
+      const v = ta.value;
+      ta.value = '';
+      autogrow();
+      sendMessage(v);
+      ta.focus();
+    });
+    autogrow();
+  }
+
+  // ---- settings modal -----------------------------------------------------
+  let lastFocused = null;
+  function openSettings() {
+    lastFocused = document.activeElement;
+    const s = CodeSmith.state.settings || CodeSmith.DEFAULTS;
+    $('#s-api-url').value     = s.apiUrl || '';
+    $('#s-api-key').value     = s.apiKey || '';
+    $('#s-model-orch').value  = s.modelOrchestrator || '';
+    $('#s-model-worker').value= s.modelWorker || '';
+    $('#s-model-fast').value  = s.modelFast || '';
+    $('#test-result').textContent = '';
+    $('#settings-backdrop').hidden = false;
+    $('#settings-modal').hidden = false;
+    // Focus first field
+    setTimeout(() => $('#s-api-url').focus(), 0);
+    document.addEventListener('keydown', onModalKeydown);
+  }
+  function closeSettings() {
+    $('#settings-backdrop').hidden = true;
+    $('#settings-modal').hidden = true;
+    document.removeEventListener('keydown', onModalKeydown);
+    if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+  }
+  function onModalKeydown(ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); closeSettings(); return; }
+    if (ev.key === 'Tab')    trapFocus(ev);
+  }
+  function trapFocus(ev) {
+    const modal = $('#settings-modal');
+    const focusables = modal.querySelectorAll(
+      'button, [href], input, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last  = focusables[focusables.length - 1];
+    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+  }
+
+  async function saveSettingsFromModal() {
+    const next = {
+      apiUrl:            $('#s-api-url').value.trim() || CodeSmith.DEFAULTS.apiUrl,
+      apiKey:            $('#s-api-key').value,                     // raw — never logged
+      modelOrchestrator: $('#s-model-orch').value.trim() || CodeSmith.DEFAULTS.modelOrchestrator,
+      modelWorker:       $('#s-model-worker').value.trim() || CodeSmith.DEFAULTS.modelWorker,
+      modelFast:         $('#s-model-fast').value.trim() || CodeSmith.DEFAULTS.modelFast,
+    };
+    await CodeSmith.db.saveSettings(next);
+    CodeSmith.state.settings = { ...next, id: 'app' };
+    renderStatusStrip();
+    renderComposerHelp();
+    closeSettings();
+  }
+
+  async function runTestConnection() {
+    const btn = $('#btn-test-conn');
+    const out = $('#test-result');
+    btn.disabled = true;
+    out.className = 'text-[12px]';
+    out.textContent = 'Testing…';
+    try {
+      const res = await CodeSmith.api.testConnection({
+        apiUrl: $('#s-api-url').value.trim(),
+        apiKey: $('#s-api-key').value,
+        model:  $('#s-model-orch').value.trim(),
+      });
+      out.className = 'text-[12px] conn-ok';
+      out.textContent = '✓ Connected' + (res.model ? ' (' + res.model + ')' : '');
+    } catch (err) {
+      out.className = 'text-[12px] conn-err';
+      const msg = (err && err.message) ? err.message : 'Connection failed';
+      // Redact any accidental key echo before display
+      out.textContent = '✗ ' + msg.replace(/Bearer\s+\S+/gi, 'Bearer ***').slice(0, 200);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ---- wiring -------------------------------------------------------------
+  function wire() {
+    $('#btn-new-session').addEventListener('click', newSession);
+    $('#btn-settings').addEventListener('click', openSettings);
+    $('#btn-close-settings').addEventListener('click', closeSettings);
+    $('#btn-cancel-settings').addEventListener('click', closeSettings);
+    $('#settings-backdrop').addEventListener('click', closeSettings);
+    $('#btn-save-settings').addEventListener('click', saveSettingsFromModal);
+    $('#btn-test-conn').addEventListener('click', runTestConnection);
+    $('#btn-toggle-sidebar').addEventListener('click', () => {
+      $('#sidebar').classList.toggle('collapsed');
+    });
+    wireComposer();
+  }
+
+  return {
+    wire, refreshSessions, renderChat, renderSessionList,
+    renderStatusStrip, renderComposerHelp, newSession,
+  };
+})();
+CodeSmith.ui = UI;
+
+/* ============================================================================
+ * 5. BOOT
+ * ==========================================================================*/
+(async function boot() {
+  try {
+    await CodeSmith.db.init();
+    const saved = await CodeSmith.db.getSettings();
+    CodeSmith.state.settings = saved || { ...CodeSmith.DEFAULTS };
+    await CodeSmith.ui.refreshSessions();
+    // Select most recent session if any
+    if (CodeSmith.state.sessions.length > 0) {
+      CodeSmith.state.currentId = CodeSmith.state.sessions[0].id;
+    }
+    CodeSmith.ui.wire();
+    CodeSmith.ui.renderStatusStrip();
+    CodeSmith.ui.renderComposerHelp();
+    CodeSmith.ui.renderChat();
+  } catch (err) {
+    // Don't leak anything sensitive; just surface a minimal error.
+    console.error('[CodeSmith] boot failed:', err && err.message ? err.message : err);
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;inset:auto 16px 16px auto;padding:10px 14px;' +
+      'background:#2a1418;border:1px solid #ff6b6b;border-radius:8px;color:#ff6b6b;' +
+      'font:13px system-ui;z-index:80;">Failed to initialize. See console.</div>');
+  }
+})();
+</script>
+</body>
+</html>
