@@ -19,6 +19,10 @@
   ============================================================================
 -->
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
   // Tailwind config must be set before the runtime script renders anything.
   tailwind.config = {
@@ -337,6 +341,113 @@
     white-space: pre-wrap; word-break: break-all; color: #8b92a1;
   }
 
+ /* ---- Day 4: build mode ------------------------------------------------- */
+  .mode-toggle {
+    display: inline-flex; border-radius: 6px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .mode-btn {
+    padding: 4px 14px; font-size: 12px; cursor: pointer; background: transparent;
+    color: #8b92a1; border: none; font-family: inherit; transition: all 120ms;
+  }
+  .mode-btn:hover { color: #e8ecf1; }
+  .mode-btn.active { background: rgba(79,140,255,0.15); color: #4f8cff; }
+
+  .split-layout { display: flex; flex: 1; min-h-0: 0; }
+  .split-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .split-right {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  .split-right[hidden] { display: none; }
+
+  .build-header {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+  .build-module-name {
+    font-size: 14px; font-weight: 600; font-family: "JetBrains Mono",monospace;
+  }
+  .build-badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 999px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-draft     { background: rgba(139,146,161,0.15); color: #8b92a1; }
+  .badge-running   { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .badge-passed    { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .badge-failed    { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+  .badge-repairing { background: rgba(168,85,247,0.15); color: #a855f7; }
+  .badge-escalated { background: rgba(255,107,107,0.25); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.3); }
+
+  .build-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
+  .build-tab {
+    padding: 7px 16px; cursor: pointer; color: #8b92a1; font-size: 12px;
+    border: none; border-bottom: 2px solid transparent; background: none; font-family: inherit;
+  }
+  .build-tab:hover { color: #e8ecf1; }
+  .build-tab.active { color: #4f8cff; border-bottom-color: #4f8cff; }
+
+  .build-content { flex: 1; min-height: 0; overflow: auto; }
+  .build-content[hidden] { display: none; }
+
+  .build-code-view {
+    padding: 12px; font-size: 12px; overflow: auto;
+    font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+  }
+  .build-code-view pre { margin: 0; }
+  .build-code-view code { font-size: 12px !important; border-radius: 6px; }
+
+  .build-output {
+    padding: 12px; font-size: 12px; white-space: pre-wrap;
+    font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace;
+    color: #8b92a1; line-height: 1.5;
+  }
+
+  .spec-card {
+    margin: 8px 12px; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; overflow: hidden; font-size: 12px;
+  }
+  .spec-toggle {
+    display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+    background: rgba(255,255,255,0.02); color: #8b92a1; cursor: pointer;
+    border: none; width: 100%; text-align: left; font: inherit; font-size: 12px;
+  }
+  .spec-toggle:hover { background: rgba(255,255,255,0.04); }
+  .spec-body {
+    display: none; padding: 8px 10px; white-space: pre-wrap;
+    font-family: "JetBrains Mono",monospace; font-size: 11px; color: #8b92a1;
+    max-height: 240px; overflow-y: auto; border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .spec-toggle.open + .spec-body { display: block; }
+
+  .attempt-counter { font-size: 11px; color: #8b92a1; font-family: monospace; }
+
+  .escalated-editor {
+    width: 100%; min-height: 200px; resize: vertical;
+    font-family: "JetBrains Mono",monospace; font-size: 12px;
+    background: #0b0d10; color: #e8ecf1; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 8px;
+  }
+
+  /* Artifact sidebar items */
+  .artifact-item {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; font-size: 12px;
+  }
+  .artifact-item:hover { background: rgba(255,255,255,0.04); }
+  .artifact-item .art-name { font-family: monospace; color: #e8ecf1; }
+  .artifact-item .art-status { font-size: 10px; color: #8b92a1; }
+
+  /* JSON editor modal */
+  .json-editor {
+    width: 100%; min-height: 300px; resize: vertical;
+    font-family: "JetBrains Mono",monospace; font-size: 12px;
+    background: #0b0d10; color: #e8ecf1; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 8px;
+  }
+  .json-error { color: #ff6b6b; font-size: 11px; margin-top: 4px; }
+
 </style>
 </head>
 <body class="bg-bg text-text">
@@ -368,6 +479,10 @@
       </div>
       <span id="stage-pill" class="pill" aria-live="polite">
         <span class="dot gray" aria-hidden="true"></span><span>Idle</span>
+		<div class="mode-toggle" style="margin-left:8px;">
+        <button class="mode-btn active" data-mode="chat">Chat</button>
+        <button class="mode-btn" data-mode="build">Build</button>
+      </div>
       </span>
     </div>
     <div class="flex items-center gap-1">
@@ -399,47 +514,100 @@
       </div>
       <div id="session-list" class="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-1"
            role="listbox" aria-label="Past sessions"></div>
+		   
+		<div class="hairline-t p-2">
+			<div class="text-[11px] text-muted px-2 py-1 font-semibold uppercase tracking-wider">Artifacts</div>
+			<div id="artifact-list" class="flex flex-col gap-1 max-h-[200px] overflow-y-auto"></div>
+		  </div>
     </aside>
 
     <!-- Main -->
-    <main class="flex flex-col flex-1 min-w-0">
-      <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
-        <div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
-        <div id="chat-empty" class="empty" hidden>
-          <div class="text-[15px] text-text">No session selected</div>
-          <div class="text-[12px]">Create a new session to start chatting.</div>
-        </div>
-      </div>
+	<main class="flex flex-col flex-1 min-w-0">
+		  <div class="split-layout flex-1 min-h-0">
+			<!-- Left: chat (always visible) -->
+			<div id="split-left" class="split-left">
+			  <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
+				<div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
+				<div id="chat-empty" class="empty" hidden>
+				  <div class="text-[15px] text-text">No session selected</div>
+				  <div class="text-[12px]">Create a new session to start chatting.</div>
+				</div>
+			  </div>
+			</div>
 
-      <!-- Composer -->
-      <div class="hairline-t p-3">
-        <div class="max-w-[920px] mx-auto">
-          <div class="flex items-end gap-2 panel p-2">
-            <label for="composer" class="sr-only">Message</label>
-            <textarea id="composer" rows="1"
-                      placeholder="Describe what you want to build…"
-                      aria-label="Message input"
-                      style="background:transparent;border:none;resize:none;padding:6px 8px;"
-                      ></textarea>
-            <button id="btn-send" class="btn btn-primary" aria-label="Send message">
-              Send
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-                <polyline points="12 5 19 12 12 19"></polyline>
-              </svg>
-            </button>
-          </div>
-          <div id="composer-help" class="mt-2 text-[11px] text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>Orchestrator:&nbsp;<span id="help-model" class="font-mono text-text/80">—</span></span>
-            <span class="text-muted/50">·</span>
-            <span>API:&nbsp;<span id="help-api" class="font-mono text-text/80">—</span></span>
-            <span class="text-muted/50">·</span>
-            <span class="text-muted/80"><kbd class="font-mono">Enter</kbd> to send, <kbd class="font-mono">Shift+Enter</kbd> for newline</span>
-          </div>
-        </div>
-      </div>
-    </main>
+			<!-- Right: build panel (hidden in chat mode) -->
+			<div id="split-right" class="split-right" hidden>
+			  <!-- Build header -->
+			  <div class="build-header">
+				<span id="build-module-name" class="build-module-name">—</span>
+				<span id="build-badge" class="build-badge badge-draft">Draft</span>
+				<span id="build-attempts" class="attempt-counter"></span>
+				<div style="margin-left:auto;display:flex;gap:6px;">
+				  <button id="btn-build-run" class="btn btn-primary" style="font-size:12px;" disabled>Run</button>
+				  <button id="btn-build-download" class="btn" style="font-size:12px;" title="Download as zip" disabled>
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+				  </button>
+				</div>
+			  </div>
+
+			  <!-- Spec card (collapsible) -->
+			  <div id="build-spec-card" class="spec-card" hidden>
+				<button class="spec-toggle" id="spec-toggle-btn">
+				  <span class="arrow" style="font-size:10px;" aria-hidden="true">▶</span> Spec
+				  <button id="btn-edit-spec" class="btn btn-ghost" style="font-size:11px;margin-left:auto;padding:2px 8px;">Edit</button>
+				</button>
+				<div id="build-spec-body" class="spec-body"></div>
+			  </div>
+
+			  <!-- Build tabs -->
+			  <div class="build-tabs">
+				<button class="build-tab active" data-btab="code">Code</button>
+				<button class="build-tab" data-btab="tests">Tests</button>
+				<button class="build-tab" data-btab="output">Output</button>
+			  </div>
+
+			  <!-- Tab contents -->
+			  <div id="build-code" class="build-content build-code-view active" data-bcontent="code">
+				<pre><code class="language-python" id="build-code-display"></code></pre>
+			  </div>
+			  <div id="build-tests" class="build-content build-code-view" data-bcontent="tests" hidden>
+				<pre><code class="language-python" id="build-tests-display"></code></pre>
+			  </div>
+			  <div id="build-output" class="build-content build-output" data-bcontent="output" hidden>
+				<div id="build-output-display"></div>
+			  </div>
+			</div>
+		  </div>
+
+		  <!-- Composer (always at bottom) -->
+		  <div class="hairline-t p-3">
+			<div class="max-w-[920px] mx-auto">
+			  <div class="flex items-end gap-2 panel p-2">
+				<label for="composer" class="sr-only">Message</label>
+				<textarea id="composer" rows="1"
+						  placeholder="Describe what you want to build…"
+						  aria-label="Message input"
+						  style="background:transparent;border:none;resize:none;padding:6px 8px;"
+						  ></textarea>
+				<button id="btn-send" class="btn btn-primary" aria-label="Send message">
+				  Send
+				  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+					   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<line x1="5" y1="12" x2="19" y2="12"></line>
+					<polyline points="12 5 19 12 12 19"></polyline>
+				  </svg>
+				</button>
+			  </div>
+			  <div id="composer-help" class="mt-2 text-[11px] text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
+				<span>Orchestrator:&nbsp;<span id="help-model" class="font-mono text-text/80">—</span></span>
+				<span class="text-muted/50">·</span>
+				<span>API:&nbsp;<span id="help-api" class="font-mono text-text/80">—</span></span>
+				<span class="text-muted/50">·</span>
+				<span class="text-muted/80"><kbd class="font-mono">Enter</kbd> to send, <kbd class="font-mono">Shift+Enter</kbd> for newline</span>
+			  </div>
+			</div>
+		  </div>
+		</main>
   </div>
 
   <!-- ========== Status strip ========== -->
@@ -688,11 +856,34 @@ const DB = (() => {
     return { ...session, id };
   }
 
-  return {
-    init: async () => { await open(); },
-    getSettings, saveSettings,
-    listSessions, getSession, putSession, createSession,
-  };
+	// ---- Artifacts (Day 4) ----
+	  function listArtifacts() {
+		return new Promise((resolve, reject) => {
+		  const store = tx(CodeSmith.STORES.ARTIFACTS, 'readonly');
+		  const req = store.getAll();
+		  req.onsuccess = () => {
+			const arr = req.result || [];
+			arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+			resolve(arr);
+		  };
+		  req.onerror = () => reject(req.error);
+		});
+	  }
+	  function getArtifact(id) {
+		return pReq(tx(CodeSmith.STORES.ARTIFACTS, 'readonly').get(id));
+	  }
+	  function putArtifact(artifact) {
+		return pReq(tx(CodeSmith.STORES.ARTIFACTS, 'readwrite').put(artifact));
+	  }
+	  function deleteArtifact(id) {
+		return pReq(tx(CodeSmith.STORES.ARTIFACTS, 'readwrite').delete(id));
+	  }
+	return {
+		init: async () => { await open(); },
+		getSettings, saveSettings,
+		listSessions, getSession, putSession, createSession,
+		listArtifacts, getArtifact, putArtifact, deleteArtifact,
+	  };
 })();
 CodeSmith.db = DB;
 
@@ -1504,7 +1695,252 @@ const LLM = (() => {
   };
 })();
 CodeSmith.llm = LLM;
-  
+ 
+/* ============================================================================
+ * 3d. BUILDER — single-block build loop (Day 4)
+ *     Orchestrates: spec → worker → write FS → install → pytest → repair.
+ *     Emits BuildEvents consumed by the UI. No DOM access.
+ * ==========================================================================*/
+const Builder = (() => {
+  const REPAIR_MAX = 3;
+
+  const ORCH_SYSTEM = `You are a software architect inside CodeSmith. Turn the user's request into a concrete Python module specification. Output ONLY valid JSON with this exact schema:
+{"module_name":"snake_case_name","purpose":"one-line description","public_functions":[{"name":"fn_name","signature":"fn_name(arg1: type, arg2: type) -> return_type","description":"what it does"}],"dummy_inputs":[{"function":"fn_name","args":{"arg1":"value"}}],"acceptance_criteria":["criterion 1","criterion 2"],"assumptions":["assumption 1"]}
+If the request is ambiguous, make reasonable assumptions and list them. module_name must be valid Python identifier.`;
+
+  const WORKER_SYSTEM = `You are a senior Python engineer. Given a module spec, write the implementation and comprehensive pytest tests. Rules:
+- PEP 8 compliant
+- Only stdlib unless imports_needed lists extra packages
+- Tests must be self-contained and runnable with: pytest test_<module_name>.py
+- Each acceptance criterion must have at least one test
+- Return ONLY valid JSON with this exact schema:
+{"module_name":"name","code":"full python source","tests":"full pytest source","imports_needed":["pkg1"],"notes":"any notes"}`;
+
+  const REPAIR_ADDENDUM = `The previous attempt failed. Failure output:
+<pytest_output>
+{PYTEST_OUTPUT}
+</pytest_output>
+Fix ONLY the failing behavior. Do NOT change public function signatures. Return the same JSON schema. If you believe a test is wrong, note it and still provide a fix that passes.`;
+
+  // ---- build pipeline as async generator ----------------------------------
+  async function* buildBlock(userPrompt) {
+    if (!userPrompt || !userPrompt.trim()) {
+      yield { type: 'error', stage: 'init', error: new Error('Empty prompt') };
+      return;
+    }
+
+    // ---- Stage A: Orchestrator → Spec ----
+    yield { type: 'spec_start' };
+    let spec;
+    try {
+      const specResult = await CodeSmith.llm.chatComplete({
+        messages: [
+          { role: 'system', content: ORCH_SYSTEM },
+          { role: 'user', content: userPrompt },
+        ],
+        tier: 'orchestrator',
+        temperature: 0.3,
+        maxTokens: 2000,
+      });
+      spec = _parseJSON(specResult.text);
+      if (!spec || !spec.module_name) {
+        throw new Error('Spec JSON missing module_name. Raw:\n' + (specResult.text || '').slice(0, 500));
+      }
+    } catch (err) {
+      yield { type: 'error', stage: 'spec', error: err };
+      return;
+    }
+    yield { type: 'spec', spec };
+
+    // ---- Stage B: Worker → Code + Tests ----
+    let workerResult = null;
+    let attempt = 0;
+    let lastPytestOutput = '';
+
+    while (attempt <= REPAIR_MAX) {
+      attempt++;
+      const isRepair = attempt > 1;
+
+      if (isRepair) {
+        yield { type: 'repair_start', attempt };
+      } else {
+        yield { type: 'worker_start' };
+      }
+
+      let workerMessages;
+      if (isRepair) {
+        const repairMsg = REPAIR_ADDENDUM.replace('{PYTEST_OUTPUT}', lastPytestOutput);
+        workerMessages = [
+          { role: 'system', content: WORKER_SYSTEM },
+          { role: 'user', content: 'Module spec:\n' + JSON.stringify(spec, null, 2) },
+          { role: 'assistant', content: JSON.stringify(workerResult) },
+          { role: 'user', content: repairMsg },
+        ];
+      } else {
+        workerMessages = [
+          { role: 'system', content: WORKER_SYSTEM },
+          { role: 'user', content: 'Module spec:\n' + JSON.stringify(spec, null, 2) },
+        ];
+      }
+
+      // Stream the worker call
+      let workerText = '';
+      let workerError = null;
+      try {
+        for await (const ev of CodeSmith.llm.chat({
+          messages: workerMessages,
+          tier: 'worker',
+          temperature: 0.2,
+          maxTokens: 8000,
+        })) {
+          if (ev.type === 'token') {
+            workerText += ev.delta;
+            yield { type: 'worker_stream', delta: ev.delta };
+          } else if (ev.type === 'done') {
+            workerText = ev.text || workerText;
+          } else if (ev.type === 'error' && !ev.recoverable) {
+            workerError = ev.error;
+          }
+        }
+      } catch (err) {
+        workerError = err;
+      }
+
+      if (workerError) {
+        yield { type: 'error', stage: isRepair ? 'repair' : 'worker', error: workerError };
+        return;
+      }
+
+      try {
+        workerResult = _parseJSON(workerText);
+        if (!workerResult || !workerResult.code) {
+          throw new Error('Worker JSON missing code field. Raw:\n' + workerText.slice(0, 500));
+        }
+      } catch (err) {
+        yield { type: 'error', stage: 'worker_parse', error: err };
+        return;
+      }
+
+      yield { type: 'worker_done', result: workerResult, attempt };
+
+      // ---- Stage C: Write to FS ----
+      const modName = workerResult.module_name || spec.module_name;
+      try {
+        await CodeSmith.sandbox.warmUp();
+        await CodeSmith.sandbox.writeFile('/workdir/' + modName + '.py', workerResult.code);
+        if (workerResult.tests) {
+          await CodeSmith.sandbox.writeFile('/workdir/test_' + modName + '.py', workerResult.tests);
+        }
+      } catch (err) {
+        yield { type: 'error', stage: 'write_fs', error: err };
+        return;
+      }
+
+      // ---- Stage D: Install packages ----
+      const imports = workerResult.imports_needed || [];
+      for (const pkg of imports) {
+        yield { type: 'install_package', name: pkg };
+        try {
+          await CodeSmith.sandbox.installPackage(pkg);
+        } catch (err) {
+          yield { type: 'error', stage: 'install', error: err };
+          return;
+        }
+      }
+
+      // ---- Stage E: Run pytest ----
+      yield { type: 'tests_start', attempt };
+      let testResult;
+      try {
+        // Install pytest if needed
+        try { await CodeSmith.sandbox.installPackage('pytest'); } catch {}
+
+        const pytestCode = `
+import sys, os
+sys.path.insert(0, '/workdir')
+os.chdir('/workdir')
+import pytest
+exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--no-header'])
+print('\\n__EXIT_CODE__=' + str(exit_code))
+`;
+        testResult = await CodeSmith.sandbox.runPython(pytestCode, {
+          sessionGlobals: true,
+          timeoutMs: 30000,
+        });
+      } catch (err) {
+        yield { type: 'error', stage: 'tests_run', error: err };
+        return;
+      }
+
+      const pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
+      const parsed = _parsePytestOutput(pytestOutput);
+
+      yield {
+        type: 'tests_done',
+        attempt,
+        passed: parsed.allPassed,
+        passCount: parsed.passCount,
+        failCount: parsed.failCount,
+        output: pytestOutput,
+        errorOutput: testResult.error ? testResult.error.traceback : '',
+      };
+
+      // ---- Stage F: Check pass/fail ----
+      if (parsed.allPassed && parsed.passCount > 0) {
+        yield { type: 'success', attempt, moduleName: modName, spec, workerResult };
+        return;
+      }
+
+      lastPytestOutput = pytestOutput.slice(-3000); // trim for context window
+      if (attempt > REPAIR_MAX) {
+        yield { type: 'escalated', attempt, moduleName: modName, spec, workerResult, lastOutput: pytestOutput };
+        return;
+      }
+    }
+  }
+
+  // ---- helpers ----
+  function _parseJSON(text) {
+    if (!text) throw new Error('Empty response from model');
+    // Strip markdown fences if present
+    let cleaned = text.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    // Try direct parse
+    try { return JSON.parse(cleaned); } catch {}
+    // Try extracting first { ... } block
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try { return JSON.parse(cleaned.slice(start, end + 1)); } catch {}
+    }
+    throw new Error('Failed to parse JSON from model response');
+  }
+
+  function _parsePytestOutput(output) {
+    let passCount = 0;
+    let failCount = 0;
+    let allPassed = false;
+
+    // Match "X passed" / "X failed" from pytest summary
+    const passMatch = output.match(/(\d+)\s+passed/);
+    const failMatch = output.match(/(\d+)\s+failed/);
+    const errorMatch = output.match(/(\d+)\s+error/);
+
+    if (passMatch) passCount = parseInt(passMatch[1], 10);
+    if (failMatch) failCount = parseInt(failMatch[1], 10);
+    if (errorMatch) failCount += parseInt(errorMatch[1], 10);
+
+    allPassed = failCount === 0 && passCount > 0;
+    return { passCount, failCount, allPassed };
+  }
+
+  return { buildBlock };
+})();
+CodeSmith.builder = Builder; 
+ 
+ 
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
  *    No innerHTML with user content — textContent or element builders only.
@@ -1703,6 +2139,23 @@ function renderStatusStrip() {
   async function sendMessage(text) {
     const t = text.trim();
     if (!t) return;
+	// Day 4: Build mode routing
+    const isBuildRequest = _buildMode === 'build' || t.startsWith('/build ');
+    if (isBuildRequest) {
+      const prompt = t.startsWith('/build ') ? t.slice(7) : t;
+      if (CodeSmith.state.currentId == null) { await newSession(); }
+      const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+      if (sess) {
+        sess.messages.push({ role: 'user', content: t, ts: Date.now() });
+        sess.updatedAt = Date.now();
+        if (!sess.title || sess.title === 'New session') sess.title = deriveTitle(sess.messages);
+        await CodeSmith.db.putSession(sess);
+        renderChat();
+        renderSessionList();
+      }
+      runBuildPipeline(prompt);
+      return;
+    }
     if (CodeSmith.state.currentId == null) { await newSession(); }
     const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
     if (!sess) return;
@@ -2131,6 +2584,7 @@ function wireComposer() {
     });
     wireComposer();
     wireDebugPanel(); // Day 2
+	wireMode();          // Day 4
   }
 
   // ---- debug panel (Day 2) ------------------------------------------------
@@ -2312,10 +2766,360 @@ function wireComposer() {
     }
   }
 
-  return {
-    wire, refreshSessions, renderChat, renderSessionList,
-    renderStatusStrip, renderComposerHelp, newSession,
-  };
+// ---- Day 4: Build mode + panel -----------------------------------------
+  let _buildMode = 'chat';
+  let _currentBuild = null; // { spec, workerResult, attempt, status, output, moduleName }
+
+  function wireMode() {
+    for (const btn of document.querySelectorAll('.mode-btn')) {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _buildMode = btn.dataset.mode;
+        $('#split-right').hidden = _buildMode !== 'build';
+        if (_buildMode === 'build') {
+          $('#split-left').style.maxWidth = '50%';
+        } else {
+          $('#split-left').style.maxWidth = '';
+        }
+      });
+    }
+
+    // Build tabs
+    for (const tab of document.querySelectorAll('.build-tab')) {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.build-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.build-content').forEach(c => { c.hidden = true; c.classList.remove('active'); });
+        tab.classList.add('active');
+        const target = tab.dataset.btab;
+        const content = document.querySelector(`.build-content[data-bcontent="${target}"]`);
+        if (content) { content.hidden = false; content.classList.add('active'); }
+      });
+    }
+
+    // Spec toggle
+    $('#spec-toggle-btn').addEventListener('click', (ev) => {
+      if (ev.target.id === 'btn-edit-spec' || ev.target.closest('#btn-edit-spec')) return;
+      $('#spec-toggle-btn').classList.toggle('open');
+    });
+    $('#btn-edit-spec').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (_currentBuild && _currentBuild.spec) openSpecEditor(_currentBuild.spec);
+    });
+
+    // Run button
+    $('#btn-build-run').addEventListener('click', () => {
+      if (_currentBuild && _currentBuild.status === 'escalated') {
+        rerunEscalated();
+      }
+    });
+
+    // Download button
+    $('#btn-build-download').addEventListener('click', downloadArtifact);
+  }
+
+  function setBuildBadge(status) {
+    const badge = $('#build-badge');
+    badge.className = 'build-badge badge-' + status;
+    badge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+  }
+
+  function updateBuildPanel(data) {
+    if (!data) return;
+    _currentBuild = data;
+    $('#build-module-name').textContent = data.moduleName || '—';
+    setBuildBadge(data.status || 'draft');
+    $('#build-attempts').textContent = data.attempt ? 'attempt ' + data.attempt : '';
+
+    if (data.spec) {
+      $('#build-spec-card').hidden = false;
+      $('#build-spec-body').textContent = JSON.stringify(data.spec, null, 2);
+    }
+
+    if (data.code) {
+      const codeEl = $('#build-code-display');
+      codeEl.textContent = data.code;
+      if (window.hljs) hljs.highlightElement(codeEl);
+    }
+    if (data.tests) {
+      const testsEl = $('#build-tests-display');
+      testsEl.textContent = data.tests;
+      if (window.hljs) hljs.highlightElement(testsEl);
+    }
+    if (data.output != null) {
+      $('#build-output-display').textContent = data.output;
+    }
+
+    // Enable/disable buttons
+    $('#btn-build-run').disabled = !data.moduleName || data.status === 'running' || data.status === 'repairing';
+    $('#btn-build-download').disabled = !data.code;
+
+    // If escalated, make code/tests editable
+    if (data.status === 'escalated') {
+      _makeEditable();
+      $('#btn-build-run').disabled = false;
+      $('#btn-build-run').textContent = 'Rerun';
+    }
+  }
+
+  function _makeEditable() {
+    const codePane = $('#build-code');
+    const testsPane = $('#build-tests');
+    if (codePane.querySelector('.escalated-editor')) return; // already editable
+
+    codePane.replaceChildren();
+    const codeTA = el('textarea', { class: 'escalated-editor', id: 'edit-code' });
+    codeTA.value = _currentBuild.code || '';
+    codePane.appendChild(codeTA);
+
+    testsPane.replaceChildren();
+    const testsTA = el('textarea', { class: 'escalated-editor', id: 'edit-tests' });
+    testsTA.value = _currentBuild.tests || '';
+    testsPane.appendChild(testsTA);
+  }
+
+  async function rerunEscalated() {
+    if (!_currentBuild) return;
+    const codeTA = $('#edit-code');
+    const testsTA = $('#edit-tests');
+    const code = codeTA ? codeTA.value : _currentBuild.code;
+    const tests = testsTA ? testsTA.value : _currentBuild.tests;
+    const modName = _currentBuild.moduleName;
+
+    setBuildBadge('running');
+
+    // Write files
+    await CodeSmith.sandbox.writeFile('/workdir/' + modName + '.py', code);
+    await CodeSmith.sandbox.writeFile('/workdir/test_' + modName + '.py', tests);
+
+    // Run pytest
+    const pytestCode = `
+import sys, os
+sys.path.insert(0, '/workdir')
+os.chdir('/workdir')
+# Clear cached modules to pick up edits
+for mod in list(sys.modules):
+    if mod == '${modName}' or mod.startswith('${modName}.'):
+        del sys.modules[mod]
+import pytest
+exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--no-header'])
+`;
+    const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+    const output = (result.stdout || '') + (result.stderr || '');
+    const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
+
+    _currentBuild.code = code;
+    _currentBuild.tests = tests;
+    _currentBuild.output = output;
+    _currentBuild.status = passed ? 'passed' : 'failed';
+    _currentBuild.attempt++;
+    updateBuildPanel(_currentBuild);
+
+    if (passed) await saveArtifact(_currentBuild);
+  }
+
+  async function runBuildPipeline(userPrompt) {
+    // Switch to build mode
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
+    _buildMode = 'build';
+    $('#split-right').hidden = false;
+    $('#split-left').style.maxWidth = '50%';
+
+    // Reset build panel
+    _currentBuild = { status: 'running', attempt: 0, moduleName: '', spec: null, code: '', tests: '', output: '' };
+    updateBuildPanel(_currentBuild);
+
+    // Consume build events
+    for await (const ev of CodeSmith.builder.buildBlock(userPrompt)) {
+      switch (ev.type) {
+        case 'spec_start':
+          setBuildBadge('running');
+          break;
+        case 'spec':
+          _currentBuild.spec = ev.spec;
+          _currentBuild.moduleName = ev.spec.module_name;
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'worker_start':
+          setBuildBadge('running');
+          break;
+        case 'worker_stream':
+          // Could show partial JSON — skip for now
+          break;
+        case 'worker_done':
+          _currentBuild.code = ev.result.code;
+          _currentBuild.tests = ev.result.tests || '';
+          _currentBuild.attempt = ev.attempt;
+          _currentBuild.workerResult = ev.result;
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'install_package':
+          _currentBuild.output += 'Installing ' + ev.name + '…\n';
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'tests_start':
+          setBuildBadge('running');
+          _currentBuild.output += '\n--- Running tests (attempt ' + ev.attempt + ') ---\n';
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'tests_done':
+          _currentBuild.output += ev.output + '\n';
+          if (ev.errorOutput) _currentBuild.output += ev.errorOutput + '\n';
+          _currentBuild.output += 'Passed: ' + ev.passCount + '  Failed: ' + ev.failCount + '\n';
+          if (!ev.passed) setBuildBadge('failed');
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'repair_start':
+          setBuildBadge('repairing');
+          _currentBuild.output += '\n--- Repair attempt ' + ev.attempt + ' ---\n';
+          _currentBuild.attempt = ev.attempt;
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'success':
+          _currentBuild.status = 'passed';
+          setBuildBadge('passed');
+          updateBuildPanel(_currentBuild);
+          await saveArtifact(_currentBuild);
+          break;
+        case 'escalated':
+          _currentBuild.status = 'escalated';
+          _currentBuild.output += '\n--- Escalated after ' + ev.attempt + ' attempts ---\n';
+          setBuildBadge('escalated');
+          updateBuildPanel(_currentBuild);
+          break;
+        case 'error':
+          _currentBuild.status = 'failed';
+          _currentBuild.output += '\n[Error in ' + ev.stage + '] ' + (ev.error ? ev.error.message : '') + '\n';
+          setBuildBadge('failed');
+          updateBuildPanel(_currentBuild);
+          break;
+      }
+    }
+  }
+
+  async function saveArtifact(build) {
+    const artifact = {
+      id: build.moduleName + '_' + Date.now(),
+      sessionId: CodeSmith.state.currentId,
+      moduleName: build.moduleName,
+      code: build.code,
+      tests: build.tests,
+      spec: build.spec,
+      createdAt: Date.now(),
+      status: build.status,
+    };
+    await CodeSmith.db.putArtifact(artifact);
+    renderArtifactList();
+  }
+
+  async function renderArtifactList() {
+    const list = $('#artifact-list');
+    if (!list) return;
+    list.replaceChildren();
+    let artifacts;
+    try { artifacts = await CodeSmith.db.listArtifacts(); } catch { return; }
+    if (artifacts.length === 0) {
+      list.appendChild(el('div', { class: 'text-muted text-[11px] px-2 py-2 text-center' }, 'No artifacts'));
+      return;
+    }
+    for (const a of artifacts) {
+      const item = el('div', { class: 'artifact-item' }, [
+        el('span', { class: 'art-name' }, a.moduleName),
+        el('span', { class: 'art-status' }, a.status + ' · ' + fmtTime(a.createdAt)),
+      ]);
+      item.addEventListener('click', () => loadArtifact(a));
+      list.appendChild(item);
+    }
+  }
+
+  function loadArtifact(a) {
+    // Switch to build mode and populate
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
+    _buildMode = 'build';
+    $('#split-right').hidden = false;
+    $('#split-left').style.maxWidth = '50%';
+
+    _currentBuild = {
+      moduleName: a.moduleName,
+      spec: a.spec,
+      code: a.code,
+      tests: a.tests,
+      status: a.status,
+      output: '',
+      attempt: 0,
+    };
+    updateBuildPanel(_currentBuild);
+  }
+
+  async function downloadArtifact() {
+    if (!_currentBuild || !_currentBuild.code) return;
+    if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
+    const zip = new JSZip();
+    const name = _currentBuild.moduleName || 'module';
+    zip.file(name + '.py', _currentBuild.code);
+    if (_currentBuild.tests) zip.file('test_' + name + '.py', _currentBuild.tests);
+    if (_currentBuild.spec) zip.file('spec.json', JSON.stringify(_currentBuild.spec, null, 2));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name + '.zip'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function openSpecEditor(spec) {
+    const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+    const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:640px;' });
+    const header = el('div', { class: 'flex items-center justify-between mb-3' }, [
+      el('div', { class: 'text-[14px] font-semibold' }, 'Edit Spec'),
+    ]);
+    const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close' });
+    closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const ta = el('textarea', { class: 'json-editor' });
+    ta.value = JSON.stringify(spec, null, 2);
+    modal.appendChild(ta);
+
+    const errDiv = el('div', { class: 'json-error', id: 'json-edit-error' });
+    modal.appendChild(errDiv);
+
+    const actions = el('div', { class: 'flex items-center justify-end gap-2 mt-3' });
+    const cancelBtn = el('button', { class: 'btn' }, 'Cancel');
+    const saveBtn = el('button', { class: 'btn btn-primary' }, 'Save');
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    modal.appendChild(actions);
+
+    const close = () => { backdrop.remove(); modal.remove(); };
+    closeBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+
+    saveBtn.addEventListener('click', () => {
+      try {
+        const parsed = JSON.parse(ta.value);
+        if (!parsed.module_name) throw new Error('module_name is required');
+        _currentBuild.spec = parsed;
+        _currentBuild.moduleName = parsed.module_name;
+        updateBuildPanel(_currentBuild);
+        close();
+      } catch (err) {
+        errDiv.textContent = 'Invalid JSON: ' + err.message;
+      }
+    });
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(modal);
+  }
+  
+	return {
+		wire, refreshSessions, renderChat, renderSessionList,
+		renderStatusStrip, renderComposerHelp, newSession,
+		runBuildPipeline, renderArtifactList, updateBuildPanel,
+	  };
 })();
 CodeSmith.ui = UI;
 
@@ -2336,6 +3140,7 @@ CodeSmith.ui = UI;
     CodeSmith.ui.renderStatusStrip();
     CodeSmith.ui.renderComposerHelp();
     CodeSmith.ui.renderChat();
+	CodeSmith.ui.renderArtifactList();
   } catch (err) {
     // Don't leak anything sensitive; just surface a minimal error.
     console.error('[CodeSmith] boot failed:', err && err.message ? err.message : err);
