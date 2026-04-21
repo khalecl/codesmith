@@ -1,0 +1,14 @@
+# MacOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Build artifacts (if you ever add a build step)
+dist/
+node_modules/
+
+# Pyodide cache (local only)
+__pycache__/
+*.pyc
