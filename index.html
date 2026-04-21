@@ -1530,7 +1530,15 @@ const Sandbox = (() => {
 	      const s = document.createElement('script');
 	      s.src = url;
 	      s.async = true;
-	      s.onload = () => resolve();
+	      s.onload = () => {
+	        // v0.27+ exposes loadPyodide on globalThis after script load
+	        if (typeof window.loadPyodide === 'function') { resolve(); return; }
+	        // Fallback: try importing as module
+	        import(url).then((mod) => {
+	          window.loadPyodide = mod.loadPyodide;
+	          resolve();
+	        }).catch(reject);
+	      };
 	      s.onerror = () => reject(new Error('Failed to load Pyodide script from CDN'));
 	      document.head.appendChild(s);
 	    });
@@ -1550,19 +1558,27 @@ const Sandbox = (() => {
 	    _updateStatus('amber', 'loading…');
 	
 	    try {
-	      await _loadScript('https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js');
+	      // Try module import first (v0.27+), fall back to script tag
+	      if (typeof window.loadPyodide !== 'function') {
+	        try {
+	          const mod = await import('https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.mjs');
+	          window.loadPyodide = mod.loadPyodide;
+	        } catch {
+	          // Fall back to script tag for older CDN layout
+	          await _loadScript('https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js');
+	        }
+	      }
+	
+	      if (typeof window.loadPyodide !== 'function') {
+	        throw new Error('loadPyodide not available after loading script');
+	      }
 	
 	      _pyodide = await window.loadPyodide({
 	        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.7/full/',
 	      });
 	
-	      // Create /workdir
 	      _pyodide.FS.mkdir('/workdir');
-	
-	      // Load micropip for fallback package installs
 	      await _pyodide.loadPackage('micropip');
-	
-	      // Init session globals dict
 	      _pyodide.runPython('__session_globals__ = {}');
 	      _sessionGlobals = _pyodide.globals.get('__session_globals__');
 	
