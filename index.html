@@ -1227,7 +1227,7 @@
  * 1. NAMESPACE + STATE
  * ==========================================================================*/
 	const CodeSmith = {
-	  version: '0.5.0',
+	  version: '1.0.0',
 	  db: null,
 	  sandbox: null,
 	  llm: null,
@@ -1524,62 +1524,59 @@ const Sandbox = (() => {
   }
 
   // ---- Pyodide script loader ----
-  function _loadScript(url) {
-    return new Promise((resolve, reject) => {
-      if (window.loadPyodide) { resolve(); return; }
-      const s = document.createElement('script');
-      s.src = url;
-      s.async = true;
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Failed to load Pyodide script from CDN'));
-      document.head.appendChild(s);
-    });
-  }
+	function _loadScript(url) {
+	    return new Promise((resolve, reject) => {
+	      if (typeof window.loadPyodide === 'function') { resolve(); return; }
+	      const s = document.createElement('script');
+	      s.src = url;
+	      s.async = true;
+	      s.onload = () => resolve();
+	      s.onerror = () => reject(new Error('Failed to load Pyodide script from CDN'));
+	      document.head.appendChild(s);
+	    });
+	  }
 
   // ---- core loader ----
-  async function warmUp() {
-    if (_pyodide) return;
-    if (_loading) {
-      // Wait for in-progress load
-      while (_loading) await new Promise(r => setTimeout(r, 100));
-      if (_pyodide) return;
-      if (_loadError) throw _loadError;
-      return;
-    }
-    _loading = true;
-    _loadError = null;
-    _updateStatus('amber', 'loading…');
-
-    try {
-      await _loadScript('https://cdn.jsdelivr.net/npm/pyodide@0.29.3/pyodide.js');
-
-      _pyodide = await window.loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/npm/pyodide@0.29.3/',
-        stdout: () => {},  // suppress default
-        stderr: () => {},
-      });
-
-      // Create /workdir
-      _pyodide.FS.mkdir('/workdir');
-
-      // Load micropip for fallback package installs
-      await _pyodide.loadPackage('micropip');
-
-      // Init session globals dict
-      _pyodide.runPython('__session_globals__ = {}');
-      _sessionGlobals = _pyodide.globals.get('__session_globals__');
-
-      _warmUpTime = Date.now();
-      const ver = _pyodide.version || '?';
-      _updateStatus('green', 'Python ' + (_pyodide.runPython('import sys; sys.version.split()[0]') || '3.12'));
-    } catch (err) {
-      _loadError = err;
-      _updateStatus('red', 'load failed');
-      throw err;
-    } finally {
-      _loading = false;
-    }
-  }
+	async function warmUp() {
+	    if (_pyodide) return;
+	    if (_loading) {
+	      while (_loading) await new Promise(r => setTimeout(r, 100));
+	      if (_pyodide) return;
+	      if (_loadError) throw _loadError;
+	      return;
+	    }
+	    _loading = true;
+	    _loadError = null;
+	    _updateStatus('amber', 'loading…');
+	
+	    try {
+	      await _loadScript('https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js');
+	
+	      _pyodide = await window.loadPyodide({
+	        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.7/full/',
+	      });
+	
+	      // Create /workdir
+	      _pyodide.FS.mkdir('/workdir');
+	
+	      // Load micropip for fallback package installs
+	      await _pyodide.loadPackage('micropip');
+	
+	      // Init session globals dict
+	      _pyodide.runPython('__session_globals__ = {}');
+	      _sessionGlobals = _pyodide.globals.get('__session_globals__');
+	
+	      _warmUpTime = Date.now();
+	      const pyVer = _pyodide.runPython('import sys; sys.version.split()[0]');
+	      _updateStatus('green', 'Python ' + (pyVer || '3.12'));
+	    } catch (err) {
+	      _loadError = err;
+	      _updateStatus('red', 'load failed');
+	      throw err;
+	    } finally {
+	      _loading = false;
+	    }
+	  }
 
   async function ready() {
     return !!_pyodide;
