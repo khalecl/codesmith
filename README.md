@@ -1,63 +1,87 @@
-# CodeSmith
+<div align="center">
+  <h1>
+    <img src="https://raw.githubusercontent.com/khalecl/codesmith/main/assets/logo.png" width="64" height="64" alt="CodeSmith" style="vertical-align: middle; margin-right: 12px;">
+    CodeSmith
+  </h1>
+  
+  <p><strong>Browser-native AI Python code smith</strong><br>
+  Plain English → fully tested, packaged Python modules.<br>
+  <strong>100% in your browser • No install • No backend</strong></p>
 
-**Browser-native AI Python code smith**  
-Plain English → fully tested, packaged Python modules — 100% in your browser.
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/khalecl/codesmith/main/index.html">
+    <img src="https://img.shields.io/badge/🚀_Open_Live_Demo-Click_Here-blue?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Live Demo">
+  </a>
+  <a href="https://github.com/khalecl/codesmith/releases">
+    <img src="https://img.shields.io/badge/Version-0.4.0-4f8cff?style=for-the-badge" alt="Version 0.4.0">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="MIT License">
+  </a>
+  <img src="https://img.shields.io/badge/Python-in_browser-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Pyodide">
+  <img src="https://img.shields.io/badge/Powered_by-Pyodide-4B8BBE?style=for-the-badge" alt="Pyodide">
 
-![CodeSmith](https://raw.githubusercontent.com/khalecl/codesmith/main/index.html) <!-- GitHub will render the live demo link -->
+  <br><br>
+  <img src="https://raw.githubusercontent.com/khalecl/codesmith/main/assets/screenshot-hero.png" width="800" alt="CodeSmith Hero Screenshot" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+  
+  <h3>Turn natural language into production-ready Python packages — instantly</h3>
+</div>
 
-## What is CodeSmith?
+---
 
-A single-file, zero-install web app that turns natural-language descriptions into production-ready Python packages.  
-The AI writes the code, runs `pytest`, automatically repairs failures, and delivers a clean ZIP with source, tests, docs, and `requirements.txt`.
+## ✨ What is CodeSmith?
 
-**No backend • No installation • Runs instantly in Chrome/Edge/Firefox/Safari**
+**CodeSmith** is a single-file, zero-dependency web app that lets you describe what you want in plain English and instantly get a complete, tested Python package back — all running 100% inside your browser using Pyodide.
 
-## How It Works (3 Stages)
+No servers. No API keys required to start. Just open and build.
 
-1. **Stage A — Requirements**  
-   Conversational dialogue gathers exact specs.
+## 🚀 Live Demo (instant — no install)
 
-2. **Stage B — Skeleton**  
-   AI designs modular architecture + Mermaid diagram. You review & approve.
+[**👉 Open CodeSmith in your browser now**](https://htmlpreview.github.io/?https://raw.githubusercontent.com/khalecl/codesmith/main/index.html)
 
-3. **Stage C — Build**  
-   Each module is coded → tested with pytest → repaired (up to 3×) → integrated.  
-   Final artifacts include full package with `.gitignore`, `README.md`, and symbol table.
+*(Pro tip: Press `Ctrl+Shift+D` anytime for the full debug sandbox)*
 
 ## Features
 
-- Full Pyodide Python sandbox (`/workdir` virtual FS, `micropip` installs, `pytest`)
-- Live code editing, test repair loop, escalation editor
-- Mermaid skeleton diagrams
-- Session persistence (IndexedDB)
-- Debug panel (Ctrl+Shift+D) with REPL + file browser
-- One-click ZIP export of complete package
-- Onboarding, command palette, templates, telemetry
-- Dark Tailwind UI + syntax highlighting
+- 🧠 **Conversational AI builder** — Stage A requirements → Stage B architecture → Stage C code + auto-repair loop
+- 🧪 **Full pytest + micropip sandbox** — real Python execution, package installs, test fixing
+- 📊 **Live Mermaid architecture diagrams**
+- 💾 **IndexedDB persistence** — your sessions survive browser restarts
+- 📦 **One-click ZIP export** — complete package with tests, docs, and `requirements.txt`
+- 🎨 **Beautiful dark Tailwind UI** + syntax highlighting + command palette
+- 🔌 **Ready for any OpenAI-compatible endpoint** (Groq, OpenAI, etc.) — just paste your key
 
-**Day 7 milestone** — full UI + sandbox + multi-module builder complete. AI wiring (Day 3) is live via any OpenAI-compatible endpoint (Groq, NVIDIA, etc.).
+## Tech Stack (all in one file)
+
+- Vanilla JS + Tailwind CSS (CDN)
+- Pyodide 0.26+ + pytest + micropip
+- highlight.js, JSZip, Mermaid
+- **Zero build step** — the entire app *is* `index.html`
 
 ## Quick Start
 
-1. Open **[index.html](https://khalecl.github.io/codesmith/)** (or raw GitHub URL)
-2. (Optional) Enter your OpenAI-compatible API key in Settings
-3. Describe what you want → watch the magic
-4. Download the finished package
+1. Click the **Live Demo** button above
+2. (Optional) Add your API key in ⚙️ Settings
+3. Describe your idea in the chat
+4. Watch it build → download the finished package
 
-**Pro tip:** Press `Ctrl+Shift+D` anytime to open the debug sandbox.
+## Screenshots
 
-## Tech Stack
+*(Add your own screenshots here later — just drag images into the `assets/` folder and update the links)*
 
-- **Frontend:** Vanilla JS + Tailwind CSS (CDN)
-- **Runtime:** Pyodide 0.27.7 + pytest + micropip
-- **Storage:** IndexedDB
-- **Dependencies:** highlight.js, JSZip, Mermaid
-- **Zero build step** — entire app is one `index.html`
+## Roadmap
 
-## Project Roadmap (self-documented in source)
+- ✅ v0.4.0 — Full UI + Pyodide sandbox + multi-stage builder
+- ⏳ v0.5.0 — GitHub Pages + examples gallery
+- 🔜 AI model selector + VS Code extension
 
-- ✅ Day 1–2: UI + Pyodide sandbox  
-- ✅ Day 3–7: Full builder pipeline  
-- Next: GitHub Actions, VS Code extension, multi-language support
+## Contributing
 
-## Repository Structure (after these additions)
+The app is deliberately kept as a single `index.html` to preserve the “instant open” magic. PRs that keep it single-file are especially welcome!
+
+## License
+
+MIT © 2026 khalecl — see [`LICENSE`](LICENSE) file.
+
+---
+
+**Made with ❤️ for the browser-first future**
