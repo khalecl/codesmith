@@ -21,6 +21,8 @@
 -->
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -136,6 +138,52 @@
   }
   input::placeholder, textarea::placeholder { color: #5b6474; }
 
+	/* Markdown rendering inside bubbles */
+	  .md-content { font-size: 14px; line-height: 1.6; }
+	  .md-content p { margin: 0 0 8px; }
+	  .md-content p:last-child { margin-bottom: 0; }
+	  .md-content h1, .md-content h2, .md-content h3, .md-content h4 {
+	    font-weight: 600; margin: 12px 0 6px; color: #e8ecf1;
+	  }
+	  .md-content h1 { font-size: 18px; }
+	  .md-content h2 { font-size: 16px; }
+	  .md-content h3 { font-size: 14px; }
+	  .md-content h4 { font-size: 13px; }
+	  .md-content strong { color: #e8ecf1; font-weight: 600; }
+	  .md-content em { color: #e8ecf1; font-style: italic; }
+	  .md-content code {
+	    background: rgba(255,255,255,0.08); padding: 1px 6px;
+	    border-radius: 3px; font-family: "JetBrains Mono", monospace;
+	    font-size: 12px; color: #ffb86c;
+	  }
+	  .md-content pre {
+	    background: #0b0d10; border: 1px solid rgba(255,255,255,0.08);
+	    border-radius: 6px; padding: 10px 12px; margin: 8px 0;
+	    overflow-x: auto; font-size: 12px;
+	  }
+	  .md-content pre code {
+	    background: transparent; padding: 0; color: #e8ecf1;
+	    font-size: 12px;
+	  }
+	  .md-content ul, .md-content ol { margin: 6px 0 8px 20px; padding: 0; }
+	  .md-content li { margin: 2px 0; }
+	  .md-content blockquote {
+	    border-left: 3px solid #4f8cff; padding: 2px 12px;
+	    margin: 8px 0; color: #8b92a1; background: rgba(79,140,255,0.04);
+	  }
+	  .md-content a { color: #4f8cff; text-decoration: underline; }
+	  .md-content a:hover { color: #6ba3ff; }
+	  .md-content hr {
+	    border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 12px 0;
+	  }
+	  .md-content table {
+	    border-collapse: collapse; margin: 8px 0; font-size: 12px;
+	  }
+	  .md-content th, .md-content td {
+	    border: 1px solid rgba(255,255,255,0.08); padding: 4px 10px;
+	  }
+	  .md-content th { background: rgba(255,255,255,0.04); font-weight: 600; }
+		
   /* Chat bubbles */
   .bubble {
     max-width: 760px;
@@ -1235,7 +1283,30 @@
      ========================================================================= -->
 <script type="module">
 'use strict';
-
+	// Configure marked with syntax highlighting
+	if (window.marked && window.hljs) {
+	  marked.setOptions({
+	    highlight: function (code, lang) {
+	      if (lang && hljs.getLanguage(lang)) {
+	        try { return hljs.highlight(code, { language: lang }).value; } catch {}
+	      }
+	      try { return hljs.highlightAuto(code).value; } catch { return code; }
+	    },
+	    breaks: true,
+	    gfm: true,
+	  });
+	}
+	
+	function renderMarkdown(text) {
+	  if (!text) return '';
+	  if (!window.marked || !window.DOMPurify) return text;
+	  try {
+	    const html = marked.parse(text);
+	    return DOMPurify.sanitize(html);
+	  } catch {
+	    return text;
+	  }
+	}
 /* ============================================================================
  * 1. NAMESPACE + STATE
  * ==========================================================================*/
@@ -3514,14 +3585,20 @@ function renderChat() {
         col.appendChild(tb);
       }
 
-      // Bubble
-      const isError = m.isError;
-      const bubbleCls = m.role === 'user' ? 'bubble bubble-user'
-                      : isError ? 'bubble bubble-error'
-                      : 'bubble bubble-assistant';
-      const bubble = el('div', { class: bubbleCls });
-      bubble.textContent = m.content;
-      col.appendChild(bubble);
+	// Bubble
+	      const isError = m.isError;
+	      const bubbleCls = m.role === 'user' ? 'bubble bubble-user'
+	                      : isError ? 'bubble bubble-error'
+	                      : 'bubble bubble-assistant';
+	      const bubble = el('div', { class: bubbleCls });
+	      if (m.role === 'assistant' && !isError) {
+	        const md = el('div', { class: 'md-content' });
+	        md.innerHTML = renderMarkdown(m.content);
+	        bubble.appendChild(md);
+	      } else {
+	        bubble.textContent = m.content;
+	      }
+	      col.appendChild(bubble);
 
       // Usage line
       if (m.usage && m.role === 'assistant' && !isError) {
@@ -3717,10 +3794,10 @@ function renderStatusStrip() {
           }
           liveThinking.textContent = thinkingText;
           _scrollBottom();
-        } else if (ev.type === 'token') {
+			} else if (ev.type === 'token') {
           ensureLiveBubble();
           fullText += ev.delta;
-          liveBubble.textContent = fullText;
+          liveBubble.innerHTML = renderMarkdown(fullText);
           _scrollBottom();
         } else if (ev.type === 'done') {
           fullText = ev.text || fullText;
