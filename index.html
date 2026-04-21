@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%234f8cff'/><text x='16' y='22' font-size='16' font-weight='700' font-family='system-ui' text-anchor='middle' fill='%230b0d10'>CS</text></svg>" />
 <title>CodeSmith</title>
 <!--
   ============================================================================
   Project : CodeSmith
-  Version : 0.5.0
+  Version : 1.0.0
   Targets : Chrome/Edge 120+, Firefox 120+, Safari 17+
   ----------------------------------------------------------------------------
   Day 1 UI shell + Day 2 Pyodide sandbox. Provides the chat layout, settings
@@ -622,6 +623,109 @@
     border-top: 1px solid rgba(255,107,107,0.2);
     background: rgba(255,107,107,0.04);
   }
+
+/* ---- Day 7: Onboarding ------------------------------------------------- */
+  .onboarding-overlay {
+    position: fixed; inset: 0; background: rgba(11,13,16,0.92);
+    backdrop-filter: blur(6px); z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .onboarding-card {
+    width: min(520px, calc(100vw - 32px)); background: #141820;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    padding: 28px 24px; max-height: calc(100vh - 64px); overflow-y: auto;
+  }
+  .onb-step { display: none; }
+  .onb-step.active { display: block; }
+  .onb-step-dots { display: flex; gap: 6px; justify-content: center; margin: 16px 0 0; }
+  .onb-dot { width: 8px; height: 8px; border-radius: 50%; background: #5b6474; }
+  .onb-dot.active { background: #4f8cff; }
+  .preset-card {
+    padding: 10px 12px; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; cursor: pointer; transition: all 120ms;
+  }
+  .preset-card:hover { border-color: rgba(79,140,255,0.3); background: rgba(79,140,255,0.05); }
+  .preset-card.selected { border-color: #4f8cff; background: rgba(79,140,255,0.10); }
+
+  /* ---- Day 7: Templates -------------------------------------------------- */
+  .template-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+    max-width: 600px; margin: 16px auto 0;
+  }
+  .template-card {
+    padding: 14px; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; cursor: pointer; transition: all 120ms;
+    text-align: left;
+  }
+  .template-card:hover { border-color: rgba(79,140,255,0.3); background: rgba(79,140,255,0.05); }
+  .template-card .tc-title { font-size: 13px; font-weight: 600; color: #e8ecf1; margin-bottom: 4px; }
+  .template-card .tc-desc { font-size: 11px; color: #8b92a1; line-height: 1.4; }
+  .template-card .tc-icon { font-size: 20px; margin-bottom: 6px; }
+
+  /* ---- Day 7: Command palette -------------------------------------------- */
+  .cmd-palette-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 90; display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 20vh;
+  }
+  .cmd-palette {
+    width: min(480px, calc(100vw - 32px)); background: #141820;
+    border: 1px solid rgba(255,255,255,0.10); border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5); overflow: hidden;
+  }
+  .cmd-input {
+    width: 100%; padding: 12px 16px; background: transparent;
+    border: none; border-bottom: 1px solid rgba(255,255,255,0.06);
+    color: #e8ecf1; font-size: 14px; outline: none;
+  }
+  .cmd-list { max-height: 320px; overflow-y: auto; padding: 4px; }
+  .cmd-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: #8b92a1; transition: all 80ms;
+  }
+  .cmd-item:hover, .cmd-item.highlighted { background: rgba(79,140,255,0.10); color: #e8ecf1; }
+  .cmd-item .cmd-shortcut { margin-left: auto; font-size: 11px; color: #5b6474; font-family: monospace; }
+
+  /* ---- Day 7: Help modal ------------------------------------------------- */
+  .help-content { font-size: 13px; color: #8b92a1; line-height: 1.7; }
+  .help-content h3 { font-size: 14px; color: #e8ecf1; font-weight: 600; margin: 16px 0 6px; }
+  .help-content h3:first-child { margin-top: 0; }
+  .help-content p { margin: 4px 0; }
+  .help-content code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  /* ---- Day 7: Run panel -------------------------------------------------- */
+  .run-panel {
+    border-top: 1px solid rgba(255,255,255,0.06); background: #0b0d10;
+    max-height: 300px; display: flex; flex-direction: column;
+  }
+  .run-panel[hidden] { display: none; }
+  .run-terminal {
+    flex: 1; overflow-y: auto; padding: 10px 12px;
+    font-family: "JetBrains Mono",monospace; font-size: 12px;
+    color: #e8ecf1; line-height: 1.5; white-space: pre-wrap;
+    min-height: 100px; max-height: 240px;
+  }
+  .run-stdin-bar { display: flex; gap: 6px; padding: 6px 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+  .run-stdin-bar input {
+    flex: 1; font-family: monospace; font-size: 12px;
+    padding: 4px 8px; background: #141820; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 4px; color: #e8ecf1;
+  }
+
+  /* ---- Day 7: Transitions ------------------------------------------------ */
+  .fade-panel { transition: opacity 200ms ease-out; }
+  .fade-panel[hidden] { opacity: 0; pointer-events: none; }
+  .fade-panel:not([hidden]) { opacity: 1; }
+
+  /* ---- Day 7: Telemetry stats -------------------------------------------- */
+  .telem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .telem-stat {
+    padding: 10px; background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04); border-radius: 6px;
+  }
+  .telem-stat .telem-val { font-size: 20px; font-weight: 700; color: #e8ecf1; font-family: monospace; }
+  .telem-stat .telem-label { font-size: 10px; color: #5b6474; text-transform: uppercase; margin-top: 2px; }
   
 </style>
 </head>
@@ -669,6 +773,14 @@
           <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.2.4.5.8 1 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.5 1z"></path>
         </svg>
       </button>
+	  <button id="btn-help" class="iconbtn" aria-label="Help" title="Help">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -704,9 +816,32 @@
 			  <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
 				<div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
 				<div id="chat-empty" class="empty" hidden>
-				  <div class="text-[15px] text-text">No session selected</div>
-				  <div class="text-[12px]">Create a new session to start chatting.</div>
+				  <div class="text-[15px] text-text">What do you want to build?</div>
+				  <div class="text-[12px]" style="max-width:400px;">Describe a program in plain English, or pick a template to get started.</div>
+				  <div class="template-grid" id="template-grid">
+					<div class="template-card" data-tpl="cleaner">
+					  <div class="tc-icon">🧹</div>
+					  <div class="tc-title">Data cleaner</div>
+					  <div class="tc-desc">Read a CSV, remove duplicates, fill missing values, normalize columns, export clean version.</div>
+					</div>
+					<div class="template-card" data-tpl="analyzer">
+					  <div class="tc-icon">📊</div>
+					  <div class="tc-title">Text analyzer</div>
+					  <div class="tc-desc">Word count, sentence stats, readability score, most frequent terms, and a summary report.</div>
+					</div>
+					<div class="template-card" data-tpl="organizer">
+					  <div class="tc-icon">📁</div>
+					  <div class="tc-title">File organizer</div>
+					  <div class="tc-desc">CLI tool that sorts files in a directory into subfolders by type, date, or custom rules.</div>
+					</div>
+					<div class="template-card" data-tpl="custom">
+					  <div class="tc-icon">✨</div>
+					  <div class="tc-title">Custom</div>
+					  <div class="tc-desc">Describe anything you want and CodeSmith will spec, build, and test it.</div>
+					</div>
+				  </div>
 				</div>
+				
 			  </div>
 			</div>
 
@@ -987,6 +1122,77 @@
   </div>
 </div>
 
+<!-- ========= Onboarding overlay (Day 7) ========= -->
+<div id="onboarding-overlay" class="onboarding-overlay" hidden>
+  <div class="onboarding-card">
+    <div style="text-align:center;margin-bottom:16px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4f8cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;"><path d="M14.7 6.3a4.5 4.5 0 0 1 6 6L10 23H4v-6L14.7 6.3z"/><path d="M13 7l4 4"/></svg>
+      <h2 style="font-size:18px;font-weight:700;margin:8px 0 4px;">Welcome to CodeSmith</h2>
+      <p style="font-size:13px;color:#8b92a1;">Describe what you want built. AI writes the code, tests it, fixes it, and gives you a download.</p>
+    </div>
+
+    <!-- Step 1: API key -->
+    <div class="onb-step active" data-onb="1">
+      <div class="field" style="margin-bottom:12px;">
+        <label style="font-size:12px;color:#8b92a1;">API key</label>
+        <input id="onb-api-key" type="password" placeholder="nvapi-… or sk-…" autocomplete="off" />
+        <div style="font-size:11px;color:#5b6474;margin-top:6px;line-height:1.5;">
+          Get a free key from
+          <a href="https://build.nvidia.com" target="_blank" rel="noopener" style="color:#4f8cff;">build.nvidia.com</a> or
+          <a href="https://console.groq.com" target="_blank" rel="noopener" style="color:#4f8cff;">console.groq.com</a>.
+          Any OpenAI-compatible endpoint works.
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button id="onb-skip" class="btn btn-ghost" style="font-size:12px;color:#5b6474;">Skip — configure later</button>
+        <button id="onb-next-1" class="btn btn-primary" style="font-size:12px;">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Presets -->
+    <div class="onb-step" data-onb="2">
+      <div style="font-size:13px;color:#8b92a1;margin-bottom:10px;">Choose a model preset:</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="preset-card" data-preset="nvidia">
+          <div style="font-size:13px;font-weight:600;color:#e8ecf1;">NVIDIA free tier</div>
+          <div style="font-size:11px;color:#8b92a1;">Kimi-K2 orchestrator + Devstral worker. Best quality, 40 req/min.</div>
+        </div>
+        <div class="preset-card" data-preset="groq">
+          <div style="font-size:13px;font-weight:600;color:#e8ecf1;">Groq free tier</div>
+          <div style="font-size:11px;color:#8b92a1;">Llama-4 Maverick orchestrator + Qwen Coder worker. Fastest inference.</div>
+        </div>
+        <div class="preset-card" data-preset="custom">
+          <div style="font-size:13px;font-weight:600;color:#e8ecf1;">Bring your own</div>
+          <div style="font-size:11px;color:#8b92a1;">Anthropic, OpenAI, or any OpenAI-compatible endpoint.</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+        <button id="onb-back-2" class="btn btn-ghost" style="font-size:12px;">← Back</button>
+        <button id="onb-next-2" class="btn btn-primary" style="font-size:12px;">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Sandbox -->
+    <div class="onb-step" data-onb="3">
+      <div style="text-align:center;padding:16px 0;">
+        <div style="font-size:13px;color:#8b92a1;margin-bottom:12px;">Optionally warm up the Python sandbox now (downloads ~15MB).</div>
+        <button id="onb-warmup" class="btn" style="font-size:13px;">Warm up Python sandbox</button>
+        <div id="onb-warmup-status" style="font-size:11px;color:#5b6474;margin-top:8px;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <button id="onb-back-3" class="btn btn-ghost" style="font-size:12px;">← Back</button>
+        <button id="onb-finish" class="btn btn-primary" style="font-size:12px;">Get started</button>
+      </div>
+    </div>
+
+    <div class="onb-step-dots">
+      <div class="onb-dot active" data-dot="1"></div>
+      <div class="onb-dot" data-dot="2"></div>
+      <div class="onb-dot" data-dot="3"></div>
+    </div>
+  </div>
+</div>
+
 <!-- =========================================================================
      Script
      ========================================================================= -->
@@ -1025,6 +1231,32 @@
 	  },
 	};
 // expose for devtools only — not for app code
+	CodeSmith.PRESETS = {
+	  nvidia: {
+		apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
+		modelOrchestrator: 'moonshotai/kimi-k2-thinking',
+		modelWorker: 'mistralai/devstral-2-123b-instruct-2512',
+		modelFast: 'meta/llama-3.1-8b-instruct',
+	  },
+	  groq: {
+		apiUrl: 'https://api.groq.com/openai/v1',
+		modelOrchestrator: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+		modelWorker: 'qwen/qwen3-32b',
+		modelFast: 'meta-llama/llama-4-scout-17b-16e-instruct',
+	  },
+	  custom: {
+		apiUrl: '',
+		modelOrchestrator: '',
+		modelWorker: '',
+		modelFast: '',
+	  },
+	};
+	CodeSmith.TEMPLATES = {
+	  cleaner: 'Build a CSV data cleaner: reads a CSV file, removes duplicate rows, fills missing values with column mean (numeric) or mode (string), normalizes column names to snake_case, and exports a clean version. Should handle malformed rows gracefully.',
+	  analyzer: 'Build a text analyzer: given a text string or file, compute word count, sentence count, average sentence length, Flesch-Kincaid readability grade, top 10 most frequent words, and generate a formatted summary report.',
+	  organizer: 'Build a CLI file organizer: given a directory path, sort files into subfolders by file type (images/, documents/, code/, etc.), with options to organize by date instead. Should handle name conflicts with numbering, support dry-run mode, and produce a summary log.',
+	};
+
 Object.defineProperty(window, 'CodeSmith', { value: CodeSmith, enumerable: false });
 
 /* ============================================================================
@@ -3250,6 +3482,7 @@ function renderChat() {
       const scroll = $('#chat-scroll');
       scroll.scrollTop = scroll.scrollHeight;
     });
+	updatePageTitle();
   }
 
 function renderStatusStrip() {
@@ -3757,6 +3990,13 @@ function wireComposer() {
 	wireMode();          // Day 4
 	wireStepper();       // Day 5
 	wireStageC();       // Day 6
+	wireOnboarding();   // Day 7
+    wireTemplates();    // Day 7
+    wireKeyboardShortcuts(); // Day 7
+    wireErrorRecovery(); // Day 7
+    // Help button
+    const helpBtn = $('#btn-help');
+    if (helpBtn) helpBtn.addEventListener('click', openHelp);
   }
 
   // ---- debug panel (Day 2) ------------------------------------------------
@@ -4896,19 +5136,20 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
               ev.passed ? 'log-pass' : 'log-fail'
             );
             break;
-          case 'build_complete':
-            _scLog('BUILD COMPLETE — ' + ev.modules + ' modules', 'log-pass');
-            $('#btn-sc-download-all').hidden = false;
-            break;
-          case 'build_paused':
-            _scLog('Build paused at ' + ev.moduleId, 'log-warn');
-            break;
-          case 'build_stopped':
-            _scLog('Build stopped by user', 'log-warn');
-            break;
-          case 'error':
-            _scLog('[' + ev.stage + '] ' + (ev.error ? ev.error.message : 'Unknown error'), 'log-fail');
-            break;
+			case 'build_complete':
+				_scLog('BUILD COMPLETE — ' + ev.modules + ' modules', 'log-pass');
+				$('#btn-sc-download-all').hidden = false;
+				// Add Run button
+				const runBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;', id: 'btn-sc-run' }, '▶ Run it');
+				runBtn.addEventListener('click', () => {
+				  const skel = CodeSmith.stageB.getSkeleton();
+				  const lastMod = skel && skel.build_order ? skel.build_order[skel.build_order.length - 1] : null;
+				  const mod = skel ? skel.modules.find(m => m.id === lastMod) : null;
+				  if (mod) runInBrowser(mod.name);
+				});
+				const controls = document.querySelector('.stage-c-controls');
+				if (controls && !$('#btn-sc-run')) controls.appendChild(runBtn);
+				break;
         }
       }
     } finally {
@@ -4966,31 +5207,76 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     document.body.appendChild(modal);
   }
 
-  async function _scDownloadAll() {
-    const arts = CodeSmith.stageC.getModuleArtifacts();
-    if (arts.length === 0) return;
-    if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
-    const zip = new JSZip();
-    for (const a of arts) {
-      zip.file((a.moduleName || a.id) + '.py', a.code || '');
-      if (a.tests) zip.file('test_' + (a.moduleName || a.id) + '.py', a.tests);
-    }
-    // Add integration test if exists
-    try {
-      const integCode = await CodeSmith.sandbox.readFile('/workdir/test_integration.py');
-      if (integCode) zip.file('test_integration.py', integCode);
-    } catch {}
-    // Add spec
-    const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
-    if (spec) zip.file('spec.json', JSON.stringify(spec, null, 2));
-    // Add symbol table
-    zip.file('symbol_table.json', JSON.stringify(SymbolTable.get(), null, 2));
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'codesmith_build.zip'; a.click();
-    URL.revokeObjectURL(url);
-  }
+	  async function _scDownloadAll() {
+		const arts = CodeSmith.stageC.getModuleArtifacts();
+		if (arts.length === 0) return;
+		if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
+		const zip = new JSZip();
+		const testsDir = zip.folder('tests');
+		const allImports = new Set();
+
+		for (const a of arts) {
+		  const name = a.moduleName || a.id;
+		  zip.file(name + '.py', a.code || '');
+		  if (a.tests) testsDir.file('test_' + name + '.py', a.tests);
+		  // Collect imports
+		  const matches = (a.code || '').matchAll(/^(?:import|from)\s+(\w+)/gm);
+		  for (const m of matches) {
+			const pkg = m[1];
+			if (!['sys','os','json','re','math','datetime','collections','itertools','functools',
+				  'pathlib','typing','dataclasses','enum','abc','io','csv','string','textwrap',
+				  'unittest','pytest','copy','operator','contextlib','warnings'].includes(pkg)) {
+			  allImports.add(pkg);
+			}
+		  }
+		}
+
+		// Integration test
+		try {
+		  const integCode = await CodeSmith.sandbox.readFile('/workdir/test_integration.py');
+		  if (integCode) testsDir.file('test_integration.py', integCode);
+		} catch {}
+
+		// Spec + skeleton
+		const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
+		if (spec) zip.file('spec.json', JSON.stringify(spec, null, 2));
+		const skel = CodeSmith.stageB.getSkeleton();
+		if (skel) zip.file('skeleton.json', JSON.stringify(skel, null, 2));
+
+		// Symbol table
+		zip.file('symbol_table.json', JSON.stringify(SymbolTable.get(), null, 2));
+
+		// requirements.txt
+		const reqs = Array.from(allImports).sort().map(p => p).join('\n');
+		zip.file('requirements.txt', reqs || '# no external dependencies\n');
+
+		// .gitignore
+		zip.file('.gitignore', `__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n*.egg-info/\ndist/\nbuild/\n.env\nvenv/\n`);
+
+		// README.md — generate via fast model
+		let readme = '# ' + (spec && spec.goal ? spec.goal : 'CodeSmith Project') + '\n\nGenerated by CodeSmith.\n';
+		try {
+		  const result = await CodeSmith.llm.chatComplete({
+			messages: [
+			  { role: 'system', content: 'Write a concise README.md for a Python project. Include: summary, installation, usage, modules list, known limitations. Output ONLY markdown.' },
+			  { role: 'user', content: 'Spec: ' + JSON.stringify(spec || {}) + '\nModules: ' + arts.map(a => a.moduleName).join(', ') },
+			],
+			tier: 'fast',
+			temperature: 0.3,
+			maxTokens: 1500,
+		  });
+		  if (result.text) readme = result.text;
+		} catch {}
+		zip.file('README.md', readme);
+
+		const blob = await zip.generateAsync({ type: 'blob' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url; a.download = (spec && spec.goal ? spec.goal.replace(/\W+/g, '_').slice(0, 30) : 'codesmith_build') + '.zip';
+		a.click();
+		URL.revokeObjectURL(url);
+	  }
+	  
 
   function _scEditAndRerun() {
     // Make code/tests editable for the escalated module
@@ -5028,15 +5314,15 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', tests);
 
       const pytestCode = `
-import sys, os
-sys.path.insert(0, '/workdir')
-os.chdir('/workdir')
-for mn in list(sys.modules):
-    if mn == '${mod.name}' or mn.startswith('${mod.name}.'):
-        del sys.modules[mn]
-import pytest
-exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
-`;
+		import sys, os
+		sys.path.insert(0, '/workdir')
+		os.chdir('/workdir')
+		for mn in list(sys.modules):
+			if mn == '${mod.name}' or mn.startswith('${mod.name}.'):
+				del sys.modules[mn]
+		import pytest
+		exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
+		`;
       const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
       const output = (result.stdout || '') + (result.stderr || '');
       const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
@@ -5073,12 +5359,383 @@ exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--
     escBar.appendChild(rerunBtn);
   }
   
-	return {
-		wire, refreshSessions, renderChat, renderSessionList,
-		renderStatusStrip, renderComposerHelp, newSession,
-		runBuildPipeline, renderArtifactList, updateBuildPanel,
-		startBuildMode,
-	  };
+	  // ---- Day 7: Onboarding -------------------------------------------------
+	  let _onbPreset = 'nvidia';
+
+	  function wireOnboarding() {
+		// Step navigation
+		function showOnbStep(n) {
+		  document.querySelectorAll('.onb-step').forEach(s => s.classList.remove('active'));
+		  const step = document.querySelector(`.onb-step[data-onb="${n}"]`);
+		  if (step) step.classList.add('active');
+		  document.querySelectorAll('.onb-dot').forEach(d => d.classList.toggle('active', d.dataset.dot === String(n)));
+		}
+		$('#onb-next-1').addEventListener('click', () => showOnbStep(2));
+		$('#onb-back-2').addEventListener('click', () => showOnbStep(1));
+		$('#onb-next-2').addEventListener('click', () => showOnbStep(3));
+		$('#onb-back-3').addEventListener('click', () => showOnbStep(2));
+
+		// Presets
+		for (const card of document.querySelectorAll('.preset-card')) {
+		  card.addEventListener('click', () => {
+			document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+			card.classList.add('selected');
+			_onbPreset = card.dataset.preset;
+		  });
+		}
+
+		// Skip
+		$('#onb-skip').addEventListener('click', () => dismissOnboarding());
+
+		// Warm up
+		$('#onb-warmup').addEventListener('click', async () => {
+		  const st = $('#onb-warmup-status');
+		  st.textContent = 'Loading Pyodide…';
+		  st.style.color = '#f59e0b';
+		  try {
+			await CodeSmith.sandbox.warmUp();
+			st.textContent = 'Python sandbox ready.';
+			st.style.color = '#4ade80';
+		  } catch (err) {
+			st.textContent = 'Failed: ' + (err.message || err);
+			st.style.color = '#ff6b6b';
+		  }
+		});
+
+		// Finish
+		$('#onb-finish').addEventListener('click', async () => {
+		  const apiKey = $('#onb-api-key').value.trim();
+		  const preset = CodeSmith.PRESETS[_onbPreset] || CodeSmith.PRESETS.nvidia;
+		  const settings = {
+			...CodeSmith.DEFAULTS,
+			...preset,
+			apiKey: apiKey,
+			onboardingDone: true,
+		  };
+		  await CodeSmith.db.saveSettings(settings);
+		  CodeSmith.state.settings = { ...settings, id: 'app' };
+		  renderStatusStrip();
+		  renderComposerHelp();
+		  dismissOnboarding();
+		});
+	  }
+
+	  function dismissOnboarding() {
+		const overlay = $('#onboarding-overlay');
+		if (overlay) overlay.remove();
+		// Mark as done even if skipped
+		if (CodeSmith.state.settings) {
+		  CodeSmith.state.settings.onboardingDone = true;
+		  CodeSmith.db.saveSettings(CodeSmith.state.settings).catch(() => {});
+		}
+	  }
+
+	  function checkOnboarding() {
+		const s = CodeSmith.state.settings;
+		if (!s || (!s.apiKey && !s.onboardingDone)) {
+		  $('#onboarding-overlay').hidden = false;
+		}
+	  }
+
+	  // ---- Day 7: Templates --------------------------------------------------
+	  function wireTemplates() {
+		const grid = $('#template-grid');
+		if (!grid) return;
+		grid.addEventListener('click', (ev) => {
+		  const card = ev.target.closest('.template-card');
+		  if (!card) return;
+		  const tpl = card.dataset.tpl;
+		  const composer = $('#composer');
+		  if (tpl === 'custom') {
+			composer.focus();
+			return;
+		  }
+		  const prompt = CodeSmith.TEMPLATES[tpl];
+		  if (prompt) {
+			composer.value = prompt;
+			composer.focus();
+			composer.dispatchEvent(new Event('input'));
+		  }
+		});
+	  }
+
+	  // ---- Day 7: Command palette --------------------------------------------
+	  let _cmdOpen = false;
+
+	  const CMD_ACTIONS = [
+		{ id: 'new-session', label: 'New session', shortcut: '', action: () => newSession() },
+		{ id: 'settings', label: 'Settings', shortcut: 'Ctrl+,', action: () => openSettings() },
+		{ id: 'mode-chat', label: 'Switch to Chat mode', shortcut: '', action: () => { document.querySelector('.mode-btn[data-mode="chat"]').click(); } },
+		{ id: 'mode-build', label: 'Switch to Build mode', shortcut: '', action: () => { document.querySelector('.mode-btn[data-mode="build"]').click(); } },
+		{ id: 'warmup', label: 'Warm up Python sandbox', shortcut: '', action: async () => { try { await CodeSmith.sandbox.warmUp(); } catch {} } },
+		{ id: 'export', label: 'Export current artifact', shortcut: '', action: () => { const dl = $('#btn-build-download') || $('#btn-sc-download-all'); if (dl) dl.click(); } },
+		{ id: 'debug', label: 'Debug panel', shortcut: 'Ctrl+Shift+D', action: () => { const p = $('#debug-panel'); p.hidden = !p.hidden; } },
+		{ id: 'help', label: 'Help', shortcut: '?', action: () => openHelp() },
+		{ id: 'clear-session', label: 'Clear current session messages', shortcut: '', action: async () => {
+		  const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+		  if (sess) { sess.messages = []; await CodeSmith.db.putSession(sess); renderChat(); }
+		}},
+		{ id: 'clear-all', label: 'Clear all data (destructive)', shortcut: '', action: async () => {
+		  if (confirm('Delete ALL sessions, artifacts, and settings? This cannot be undone.')) {
+			const dbs = await indexedDB.databases?.() || [];
+			indexedDB.deleteDatabase(CodeSmith.DB_NAME);
+			location.reload();
+		  }
+		}},
+	  ];
+
+	  function openCommandPalette() {
+		if (_cmdOpen) return;
+		_cmdOpen = true;
+		const backdrop = document.createElement('div');
+		backdrop.className = 'cmd-palette-backdrop';
+		const palette = document.createElement('div');
+		palette.className = 'cmd-palette';
+		const input = document.createElement('input');
+		input.className = 'cmd-input';
+		input.placeholder = 'Type a command…';
+		input.setAttribute('aria-label', 'Command palette search');
+		palette.appendChild(input);
+		const list = document.createElement('div');
+		list.className = 'cmd-list';
+		list.setAttribute('role', 'listbox');
+		palette.appendChild(list);
+		backdrop.appendChild(palette);
+		document.body.appendChild(backdrop);
+
+		let highlighted = 0;
+		function render(filter) {
+		  list.replaceChildren();
+		  const q = (filter || '').toLowerCase();
+		  const filtered = CMD_ACTIONS.filter(a => a.label.toLowerCase().includes(q));
+		  highlighted = Math.min(highlighted, Math.max(0, filtered.length - 1));
+		  filtered.forEach((a, i) => {
+			const item = document.createElement('div');
+			item.className = 'cmd-item' + (i === highlighted ? ' highlighted' : '');
+			item.setAttribute('role', 'option');
+			item.textContent = a.label;
+			if (a.shortcut) {
+			  const sc = document.createElement('span');
+			  sc.className = 'cmd-shortcut';
+			  sc.textContent = a.shortcut;
+			  item.appendChild(sc);
+			}
+			item.addEventListener('click', () => { close(); a.action(); });
+			item.addEventListener('mouseenter', () => {
+			  list.querySelectorAll('.cmd-item').forEach(c => c.classList.remove('highlighted'));
+			  item.classList.add('highlighted');
+			  highlighted = i;
+			});
+			list.appendChild(item);
+		  });
+		}
+		render('');
+		input.focus();
+
+		input.addEventListener('input', () => { highlighted = 0; render(input.value); });
+		input.addEventListener('keydown', (ev) => {
+		  const items = list.querySelectorAll('.cmd-item');
+		  if (ev.key === 'ArrowDown') { ev.preventDefault(); highlighted = Math.min(highlighted + 1, items.length - 1); render(input.value); }
+		  else if (ev.key === 'ArrowUp') { ev.preventDefault(); highlighted = Math.max(highlighted - 1, 0); render(input.value); }
+		  else if (ev.key === 'Enter') {
+			ev.preventDefault();
+			const q = input.value.toLowerCase();
+			const filtered = CMD_ACTIONS.filter(a => a.label.toLowerCase().includes(q));
+			if (filtered[highlighted]) { close(); filtered[highlighted].action(); }
+		  }
+		  else if (ev.key === 'Escape') { close(); }
+		});
+
+		function close() {
+		  _cmdOpen = false;
+		  backdrop.remove();
+		}
+		backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) close(); });
+	  }
+
+	  // ---- Day 7: Help modal -------------------------------------------------
+	  function openHelp() {
+		const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+		const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:560px;' });
+		const header = el('div', { class: 'flex items-center justify-between mb-3' });
+		header.appendChild(el('div', { class: 'text-[15px] font-semibold' }, 'CodeSmith Help'));
+		const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close' });
+		closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+		header.appendChild(closeBtn);
+		modal.appendChild(header);
+
+		const content = el('div', { class: 'help-content' });
+		content.innerHTML = `
+		  <h3>What CodeSmith Is</h3>
+		  <p>A browser-based tool that turns plain-English descriptions into working Python programs. AI writes the code, tests it, fixes failures automatically, and packages the result for download.</p>
+		  <h3>How It Works</h3>
+		  <p><strong>1. Requirements</strong> — Answer a few questions so the AI understands what you need.</p>
+		  <p><strong>2. Skeleton</strong> — AI designs the module architecture. You review and approve.</p>
+		  <p><strong>3. Build</strong> — Each module is coded, tested, and repaired until all tests pass.</p>
+		  <p><strong>4. Download</strong> — Get a zip with source, tests, docs, and requirements.txt.</p>
+		  <h3>Keyboard Shortcuts</h3>
+		  <p><code>Ctrl+K</code> Command palette &nbsp; <code>Ctrl+,</code> Settings &nbsp; <code>Ctrl+Shift+D</code> Debug panel &nbsp; <code>Esc</code> Close modal</p>
+		  <h3>Known Limitations</h3>
+		  <p>Pyodide (WASM Python) cannot run C extensions, filesystem I/O, networking, or GUIs. Builds on the free tier take 5-10 minutes. Memory is limited to ~100MB.</p>
+		  <h3>Privacy</h3>
+		  <p>Your code and prompts go only to the AI endpoint you configure. Nothing is stored on servers we control. All session data lives in your browser's IndexedDB.</p>
+		  <h3>Links</h3>
+		  <p><a href="#" style="color:#4f8cff;">GitHub repository (coming soon)</a></p>
+		`;
+		modal.appendChild(content);
+
+		const close = () => { backdrop.remove(); modal.remove(); };
+		closeBtn.addEventListener('click', close);
+		backdrop.addEventListener('click', close);
+		document.body.appendChild(backdrop);
+		document.body.appendChild(modal);
+	  }
+
+	  // ---- Day 7: Keyboard shortcuts -----------------------------------------
+	  function wireKeyboardShortcuts() {
+		document.addEventListener('keydown', (ev) => {
+		  const mod = ev.ctrlKey || ev.metaKey;
+		  // Ctrl+K: command palette
+		  if (mod && ev.key === 'k') { ev.preventDefault(); openCommandPalette(); return; }
+		  // Ctrl+,: settings
+		  if (mod && ev.key === ',') { ev.preventDefault(); openSettings(); return; }
+		  // Esc: close topmost modal
+		  if (ev.key === 'Escape') {
+			if (_cmdOpen) return; // handled internally
+			const modals = document.querySelectorAll('.modal-backdrop');
+			if (modals.length > 0) modals[modals.length - 1].click();
+		  }
+		});
+	  }
+
+	  // ---- Day 7: Run in browser ---------------------------------------------
+	  function wireRunPanel() {
+		// Run button appears after successful build in Stage C
+		// We'll inject it dynamically when build completes
+	  }
+
+	  async function runInBrowser(entryModule) {
+		// Find or create run panel
+		let runPanel = $('#run-panel');
+		if (!runPanel) {
+		  runPanel = el('div', { class: 'run-panel', id: 'run-panel' });
+		  const header = el('div', { style: 'display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.06);' });
+		  header.appendChild(el('span', { style: 'font-size:12px;font-weight:600;color:#e8ecf1;' }, 'Output'));
+		  const closeBtn = el('button', { class: 'btn btn-ghost', style: 'font-size:11px;margin-left:auto;' }, 'Close');
+		  closeBtn.addEventListener('click', () => { runPanel.hidden = true; });
+		  header.appendChild(closeBtn);
+		  runPanel.appendChild(header);
+
+		  const terminal = el('div', { class: 'run-terminal', id: 'run-terminal' });
+		  runPanel.appendChild(terminal);
+
+		  const stdinBar = el('div', { class: 'run-stdin-bar', id: 'run-stdin-bar' });
+		  const stdinInput = el('input', { type: 'text', id: 'run-stdin-input', placeholder: 'stdin input…' });
+		  const stdinBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Send');
+		  stdinBar.appendChild(stdinInput);
+		  stdinBar.appendChild(stdinBtn);
+		  runPanel.appendChild(stdinBar);
+
+		  // Insert before composer
+		  const composer = document.querySelector('.hairline-t.p-3');
+		  if (composer) composer.parentNode.insertBefore(runPanel, composer);
+		}
+
+		runPanel.hidden = false;
+		const terminal = $('#run-terminal');
+		terminal.textContent = '$ python ' + entryModule + '.py\n';
+
+		const code = `
+	import sys, os
+	sys.path.insert(0, '/workdir')
+	os.chdir('/workdir')
+	exec(open('/workdir/${entryModule}.py').read())
+	`;
+		const result = await CodeSmith.sandbox.runPython(code, { sessionGlobals: false, timeoutMs: 30000 });
+		if (result.stdout) terminal.textContent += result.stdout;
+		if (result.stderr) terminal.textContent += '\n[stderr]\n' + result.stderr;
+		if (result.error) terminal.textContent += '\n[error] ' + result.error.type + ': ' + result.error.message;
+		terminal.textContent += '\n[exit]';
+	  }
+
+	  // ---- Day 7: Page title --------------------------------------------------
+	  function updatePageTitle() {
+		const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+		const title = sess ? sess.title : '';
+		const step = _currentStep ? ' — Stage ' + _currentStep.toUpperCase() : '';
+		document.title = (title ? title + step + ' · ' : '') + 'CodeSmith';
+	  }
+
+	  // ---- Day 7: Telemetry (local only) -------------------------------------
+	  async function getTelemetry() {
+		const sessions = await CodeSmith.db.listSessions();
+		const artifacts = await CodeSmith.db.listArtifacts();
+		const budget = CodeSmith.llm ? CodeSmith.llm.getBudget() : { tokensIn: 0, tokensOut: 0, calls: 0 };
+		const passed = artifacts.filter(a => a.status === 'passed');
+		const rate = artifacts.length > 0 ? Math.round((passed.length / artifacts.length) * 100) : 0;
+		return {
+		  totalSessions: sessions.length,
+		  modulesBuilt: artifacts.length,
+		  modulesPassed: passed.length,
+		  successRate: rate,
+		  tokensIn: budget.tokensIn,
+		  tokensOut: budget.tokensOut,
+		  totalCalls: budget.calls,
+		};
+	  }
+
+	  // ---- Day 7: Error recovery ---------------------------------------------
+	  function wireErrorRecovery() {
+		window.addEventListener('error', (ev) => {
+		  console.error('[CodeSmith] Uncaught:', ev.error);
+		});
+		window.addEventListener('unhandledrejection', (ev) => {
+		  console.error('[CodeSmith] Unhandled rejection:', ev.reason);
+		});
+	  }
+
+	  async function checkIncompleteBuilds() {
+		const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+		if (!sess || !sess.stageB) return;
+		const skel = sess.stageB.skeleton;
+		if (!skel) return;
+		// Check if we have some but not all artifacts
+		let artifacts;
+		try { artifacts = await CodeSmith.db.listArtifacts(); } catch { return; }
+		const sessionArts = artifacts.filter(a => a.sessionId === sess.id);
+		const total = skel.build_order ? skel.build_order.length : 0;
+		if (sessionArts.length > 0 && sessionArts.length < total) {
+		  // Show resume prompt in chat
+		  const chatList = $('#chat-list');
+		  if (!chatList) return;
+		  const row = el('div', { class: 'flex justify-center', style: 'padding:12px;' });
+		  const card = el('div', { class: 'panel', style: 'padding:12px 16px;text-align:center;max-width:400px;' });
+		  card.appendChild(el('div', { style: 'font-size:13px;color:#e8ecf1;margin-bottom:8px;' },
+			'Incomplete build detected (' + sessionArts.length + '/' + total + ' modules)'));
+		  const resumeBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;margin-right:6px;' }, 'Resume build');
+		  const dismissBtn = el('button', { class: 'btn', style: 'font-size:12px;' }, 'Dismiss');
+		  resumeBtn.addEventListener('click', () => {
+			row.remove();
+			// Switch to build mode and Stage C
+			document.querySelector('.mode-btn[data-mode="build"]').click();
+			_showStep('c');
+		  });
+		  dismissBtn.addEventListener('click', () => row.remove());
+		  card.appendChild(resumeBtn);
+		  card.appendChild(dismissBtn);
+		  row.appendChild(card);
+		  chatList.prepend(row);
+		}
+	  }
+  
+		return {
+			wire, refreshSessions, renderChat, renderSessionList,
+			renderStatusStrip, renderComposerHelp, newSession,
+			runBuildPipeline, renderArtifactList, updateBuildPanel,
+			startBuildMode, checkOnboarding, checkIncompleteBuilds,
+			updatePageTitle, openHelp, openCommandPalette, getTelemetry,
+			runInBrowser,
+		  };
 })();
 CodeSmith.ui = UI;
 
@@ -5100,6 +5757,9 @@ CodeSmith.ui = UI;
     CodeSmith.ui.renderComposerHelp();
     CodeSmith.ui.renderChat();
 	CodeSmith.ui.renderArtifactList();
+	CodeSmith.ui.checkOnboarding();
+    CodeSmith.ui.checkIncompleteBuilds();
+    CodeSmith.ui.updatePageTitle();
   } catch (err) {
     // Don't leak anything sensitive; just surface a minimal error.
     console.error('[CodeSmith] boot failed:', err && err.message ? err.message : err);
