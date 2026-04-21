@@ -7,7 +7,7 @@
 <!--
   ============================================================================
   Project : CodeSmith
-  Version : 0.3.0
+  Version : 0.4.0
   Targets : Chrome/Edge 120+, Firefox 120+, Safari 17+
   ----------------------------------------------------------------------------
   Day 1 UI shell + Day 2 Pyodide sandbox. Provides the chat layout, settings
@@ -23,6 +23,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
 <script>
   // Tailwind config must be set before the runtime script renders anything.
   tailwind.config = {
@@ -448,6 +450,98 @@
   }
   .json-error { color: #ff6b6b; font-size: 11px; margin-top: 4px; }
 
+/* ---- Day 5: Stepper ---------------------------------------------------- */
+  .build-stepper {
+    display: flex; align-items: center; gap: 0; padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+  .step-item {
+    display: flex; align-items: center; gap: 6px; padding: 5px 12px;
+    font-size: 12px; color: #5b6474; cursor: default; border-radius: 6px;
+    transition: all 120ms;
+  }
+  .step-item.active { color: #4f8cff; background: rgba(79,140,255,0.08); font-weight: 600; }
+  .step-item.done { color: #4ade80; }
+  .step-arrow { color: #5b6474; font-size: 10px; margin: 0 2px; }
+  .step-num {
+    width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+    border: 1.5px solid #5b6474; color: #5b6474;
+  }
+  .step-item.active .step-num { border-color: #4f8cff; color: #4f8cff; }
+  .step-item.done .step-num { border-color: #4ade80; color: #4ade80; }
+
+  /* ---- Day 5: Stage A ---------------------------------------------------- */
+  .stage-a-layout { display: flex; flex: 1; min-height: 0; }
+  .stage-a-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid rgba(255,255,255,0.06); }
+  .stage-a-spec { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }
+
+  .stage-a-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .stage-a-input-bar { padding: 8px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; gap: 6px; }
+  .stage-a-input-bar textarea {
+    flex: 1; resize: none; min-height: 36px; max-height: 120px;
+    font-size: 13px; padding: 8px 10px;
+  }
+
+  .spec-live-card { padding: 12px; }
+  .spec-field { margin-bottom: 10px; }
+  .spec-field-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: #5b6474; margin-bottom: 3px; font-weight: 600;
+  }
+  .spec-field-value { font-size: 13px; color: #e8ecf1; line-height: 1.5; }
+  .spec-field-value.empty { color: #3a3f4a; font-style: italic; }
+  .spec-assumed-tag {
+    font-size: 9px; color: #f59e0b; background: rgba(245,158,11,0.12);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px; cursor: pointer;
+  }
+  .spec-assumed-tag:hover { background: rgba(245,158,11,0.20); }
+
+  .summary-card {
+    margin: 6px 12px; padding: 8px 10px; border-radius: 6px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    font-size: 12px; color: #8b92a1; cursor: pointer;
+  }
+  .summary-card:hover { background: rgba(255,255,255,0.04); }
+
+  /* ---- Day 5: Stage B ---------------------------------------------------- */
+  .stage-b-layout { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .mermaid-container {
+    flex: 1; min-height: 200px; overflow: auto; padding: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: #0b0d10; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .mermaid-container svg { max-width: 100%; height: auto; }
+
+  .module-list { flex: 1; overflow-y: auto; padding: 8px 12px; min-height: 120px; max-height: 300px; }
+  .module-row {
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; margin-bottom: 4px;
+    transition: all 120ms;
+  }
+  .module-row:hover { background: rgba(255,255,255,0.03); }
+  .module-row.highlighted { border-color: rgba(79,140,255,0.3); background: rgba(79,140,255,0.06); }
+  .module-row-header { display: flex; align-items: center; gap: 8px; }
+  .module-row-name { font-family: monospace; font-size: 13px; color: #e8ecf1; font-weight: 600; }
+  .module-row-purpose { font-size: 12px; color: #8b92a1; }
+  .module-row-meta { font-size: 11px; color: #5b6474; margin-top: 2px; }
+  .module-row-details {
+    display: none; margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.04); font-size: 12px; color: #8b92a1;
+  }
+  .module-row.expanded .module-row-details { display: block; }
+  .module-fn-item { padding: 2px 0; font-family: monospace; font-size: 11px; color: #e8ecf1; }
+
+  .stage-b-actions {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+
+  .large-skeleton-warn {
+    font-size: 11px; color: #f59e0b; padding: 4px 12px;
+    background: rgba(245,158,11,0.08); border-bottom: 1px solid rgba(245,158,11,0.15);
+  }
+  
 </style>
 </head>
 <body class="bg-bg text-text">
@@ -537,44 +631,104 @@
 
 			<!-- Right: build panel (hidden in chat mode) -->
 			<div id="split-right" class="split-right" hidden>
-			  <!-- Build header -->
-			  <div class="build-header">
-				<span id="build-module-name" class="build-module-name">—</span>
-				<span id="build-badge" class="build-badge badge-draft">Draft</span>
-				<span id="build-attempts" class="attempt-counter"></span>
-				<div style="margin-left:auto;display:flex;gap:6px;">
-				  <button id="btn-build-run" class="btn btn-primary" style="font-size:12px;" disabled>Run</button>
-				  <button id="btn-build-download" class="btn" style="font-size:12px;" title="Download as zip" disabled>
-					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-				  </button>
+
+			  <!-- Stepper -->
+			  <div class="build-stepper" id="build-stepper">
+				<div class="step-item active" data-step="a">
+				  <span class="step-num">A</span> <span>Requirements</span>
+				</div>
+				<span class="step-arrow">→</span>
+				<div class="step-item" data-step="b">
+				  <span class="step-num">B</span> <span>Skeleton</span>
+				</div>
+				<span class="step-arrow">→</span>
+				<div class="step-item" data-step="c">
+				  <span class="step-num">C</span> <span>Build</span>
+				</div>
+				<div style="margin-left:auto;">
+				  <button id="btn-quick-build" class="btn btn-ghost" style="font-size:11px;" title="Skip to single-block build (Day 4 mode)">Quick build</button>
 				</div>
 			  </div>
 
-			  <!-- Spec card (collapsible) -->
-			  <div id="build-spec-card" class="spec-card" hidden>
-				<button class="spec-toggle" id="spec-toggle-btn">
-				  <span class="arrow" style="font-size:10px;" aria-hidden="true">▶</span> Spec
-				  <button id="btn-edit-spec" class="btn btn-ghost" style="font-size:11px;margin-left:auto;padding:2px 8px;">Edit</button>
-				</button>
-				<div id="build-spec-body" class="spec-body"></div>
+			  <!-- Stage A: Requirements -->
+			  <div id="stage-a-panel" class="stage-a-layout" style="flex:1;min-height:0;">
+				<!-- A: conversation -->
+				<div class="stage-a-chat">
+				  <div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+					<span class="text-[12px] text-muted font-semibold">Requirements Interview</span>
+					<button id="btn-skip-to-skeleton" class="btn btn-ghost" style="font-size:11px;margin-left:auto;">Skip to skeleton →</button>
+				  </div>
+				  <div id="stage-a-messages" class="stage-a-messages"></div>
+				  <div class="stage-a-input-bar">
+					<textarea id="stage-a-input" rows="1" placeholder="Answer the question…"></textarea>
+					<button id="btn-stage-a-send" class="btn btn-primary" style="font-size:12px;">Send</button>
+				  </div>
+				</div>
+				<!-- A: live spec -->
+				<div class="stage-a-spec">
+				  <div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+					<span class="text-[12px] text-muted font-semibold">Live Spec</span>
+					<button id="btn-edit-spec-a" class="btn btn-ghost" style="font-size:11px;margin-left:auto;">Edit spec</button>
+				  </div>
+				  <div id="stage-a-spec-card" class="spec-live-card"></div>
+				</div>
 			  </div>
 
-			  <!-- Build tabs -->
-			  <div class="build-tabs">
-				<button class="build-tab active" data-btab="code">Code</button>
-				<button class="build-tab" data-btab="tests">Tests</button>
-				<button class="build-tab" data-btab="output">Output</button>
+			  <!-- Stage B: Skeleton -->
+			  <div id="stage-b-panel" class="stage-b-layout" hidden>
+				<div id="stage-b-warn" class="large-skeleton-warn" hidden>Large skeleton (10+ modules). Consider splitting.</div>
+				<div id="mermaid-container" class="mermaid-container">
+				  <div class="text-muted text-[13px]">Generating skeleton…</div>
+				</div>
+				<div id="stage-b-module-list" class="module-list"></div>
+				<div class="stage-b-actions">
+				  <button id="btn-b-changes" class="btn" style="font-size:12px;">Request changes</button>
+				  <button id="btn-b-regenerate" class="btn" style="font-size:12px;">Regenerate</button>
+				  <button id="btn-b-approve" class="btn btn-primary" style="font-size:12px;margin-left:auto;">Approve &amp; build</button>
+				</div>
 			  </div>
 
-			  <!-- Tab contents -->
-			  <div id="build-code" class="build-content build-code-view active" data-bcontent="code">
-				<pre><code class="language-python" id="build-code-display"></code></pre>
-			  </div>
-			  <div id="build-tests" class="build-content build-code-view" data-bcontent="tests" hidden>
-				<pre><code class="language-python" id="build-tests-display"></code></pre>
-			  </div>
-			  <div id="build-output" class="build-content build-output" data-bcontent="output" hidden>
-				<div id="build-output-display"></div>
+			  <!-- Stage C: Build (existing Day 4 panel) -->
+			  <div id="stage-c-panel" hidden>
+				<!-- Build header -->
+				<div class="build-header">
+				  <span id="build-module-name" class="build-module-name">—</span>
+				  <span id="build-badge" class="build-badge badge-draft">Draft</span>
+				  <span id="build-attempts" class="attempt-counter"></span>
+				  <div style="margin-left:auto;display:flex;gap:6px;">
+					<button id="btn-build-run" class="btn btn-primary" style="font-size:12px;" disabled>Run</button>
+					<button id="btn-build-download" class="btn" style="font-size:12px;" title="Download as zip" disabled>
+					  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					</button>
+				  </div>
+				</div>
+
+				<!-- Spec card (collapsible) -->
+				<div id="build-spec-card" class="spec-card" hidden>
+				  <button class="spec-toggle" id="spec-toggle-btn">
+					<span class="arrow" style="font-size:10px;" aria-hidden="true">▶</span> Spec
+					<button id="btn-edit-spec" class="btn btn-ghost" style="font-size:11px;margin-left:auto;padding:2px 8px;">Edit</button>
+				  </button>
+				  <div id="build-spec-body" class="spec-body"></div>
+				</div>
+
+				<!-- Build tabs -->
+				<div class="build-tabs">
+				  <button class="build-tab active" data-btab="code">Code</button>
+				  <button class="build-tab" data-btab="tests">Tests</button>
+				  <button class="build-tab" data-btab="output">Output</button>
+				</div>
+
+				<!-- Tab contents -->
+				<div id="build-code" class="build-content build-code-view active" data-bcontent="code">
+				  <pre><code class="language-python" id="build-code-display"></code></pre>
+				</div>
+				<div id="build-tests" class="build-content build-code-view" data-bcontent="tests" hidden>
+				  <pre><code class="language-python" id="build-tests-display"></code></pre>
+				</div>
+				<div id="build-output" class="build-content build-output" data-bcontent="output" hidden>
+				  <div id="build-output-display"></div>
+				</div>
 			  </div>
 			</div>
 		  </div>
@@ -748,17 +902,20 @@
  * 1. NAMESPACE + STATE
  * ==========================================================================*/
 const CodeSmith = {
-  version: '0.3.0',
-  db: null,        // filled by DB section
-  sandbox: null,   // filled by PYODIDE SANDBOX section (Day 2)
-  llm: null,       // filled by LLM section (Day 3)
+  version: '0.4.0',
+  db: null,
+  sandbox: null,
+  llm: null,
+  builder: null,
+  stageA: null,    // Day 5: requirements dialogue
+  stageB: null,    // Day 5: skeleton visualization
   state: {
     settings: null,
     sessions: [],
     currentId: null,
   },
   DB_NAME: 'codesmith_v1',
-  DB_VERSION: 1,
+  DB_VERSION: 2,
   STORES: { SETTINGS: 'settings', SESSIONS: 'sessions', ARTIFACTS: 'artifacts' },
   DEFAULTS: {
     id: 'app',
@@ -784,20 +941,21 @@ const DB = (() => {
   function open() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open(CodeSmith.DB_NAME, CodeSmith.DB_VERSION);
-      req.onupgradeneeded = (ev) => {
-        const db = ev.target.result;
-        if (!db.objectStoreNames.contains(CodeSmith.STORES.SETTINGS)) {
-          db.createObjectStore(CodeSmith.STORES.SETTINGS, { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains(CodeSmith.STORES.SESSIONS)) {
-          const s = db.createObjectStore(CodeSmith.STORES.SESSIONS,
-            { keyPath: 'id', autoIncrement: true });
-          s.createIndex('updatedAt', 'updatedAt', { unique: false });
-        }
-        if (!db.objectStoreNames.contains(CodeSmith.STORES.ARTIFACTS)) {
-          db.createObjectStore(CodeSmith.STORES.ARTIFACTS, { keyPath: 'id' });
-        }
-      };
+		req.onupgradeneeded = (ev) => {
+			const db = ev.target.result;
+			if (!db.objectStoreNames.contains(CodeSmith.STORES.SETTINGS)) {
+			  db.createObjectStore(CodeSmith.STORES.SETTINGS, { keyPath: 'id' });
+			}
+			if (!db.objectStoreNames.contains(CodeSmith.STORES.SESSIONS)) {
+			  const s = db.createObjectStore(CodeSmith.STORES.SESSIONS,
+				{ keyPath: 'id', autoIncrement: true });
+			  s.createIndex('updatedAt', 'updatedAt', { unique: false });
+			}
+			if (!db.objectStoreNames.contains(CodeSmith.STORES.ARTIFACTS)) {
+			  db.createObjectStore(CodeSmith.STORES.ARTIFACTS, { keyPath: 'id' });
+			}
+			// Day 5: no new stores needed — stage state saved inside session objects
+		  };
       req.onsuccess = () => { _db = req.result; resolve(_db); };
       req.onerror   = () => reject(req.error);
       req.onblocked = () => reject(new Error('IndexedDB open blocked'));
@@ -1940,7 +2098,357 @@ print('\\n__EXIT_CODE__=' + str(exit_code))
 })();
 CodeSmith.builder = Builder; 
  
+/* ============================================================================
+ * 4. SPEC SCHEMA + STAGE A — Requirements Dialogue (Day 5)
+ *    Pure module. Manages conversational requirements gathering via the
+ *    orchestrator, parsing <spec_update> and <ready_for_skeleton> tags.
+ * ==========================================================================*/
+
+/**
+ * @typedef {Object} CodeSmithSpec
+ * @property {string} goal
+ * @property {{ format: string, example: string, size_estimate: string }} inputs
+ * @property {{ format: string, example: string }} outputs
+ * @property {string[]} core_operations
+ * @property {{ libraries_allowed: string, performance: string }} constraints
+ * @property {string[]} non_goals
+ * @property {string[]} acceptance_criteria
+ */
+const EMPTY_SPEC = Object.freeze({
+  goal: '',
+  inputs:  { format: '', example: '', size_estimate: '' },
+  outputs: { format: '', example: '' },
+  core_operations: [],
+  constraints: { libraries_allowed: '', performance: '' },
+  non_goals: [],
+  acceptance_criteria: [],
+});
+
+const STAGE_A_SYSTEM = `You are a senior software architect conducting a requirements interview for a user building a Python program.
+
+Each turn:
+1. Read the current spec state (JSON provided).
+2. Identify the SINGLE most important missing or underspecified field.
+3. Ask ONE focused question to fill it. Prefer asking for concrete examples over abstract descriptions. NEVER ask more than one question.
+4. After your question, output JSON inside <spec_update> tags showing fields you can update from the user's latest message. Mark inferred fields with "(assumed)".
+
+If the spec is complete enough to design a clean skeleton, instead output:
+<ready_for_skeleton>{"rationale":"..."}</ready_for_skeleton>
+
+If the user indicates impatience ("just build it", "skip", "go", "enough"), immediately output <ready_for_skeleton> with best-guess assumptions.
+
+NEVER ask about implementation details (libraries, class names). Focus on WHAT, not HOW.
+
+Current spec:
+{spec_json}`;
+
+const StageA = (() => {
+  let _spec = null;
+  let _messages = [];     // Stage A conversation history (separate from main chat)
+  let _assumptions = {};  // field paths marked "(assumed)"
+  let _ready = false;
+
+  function start(initialPrompt) {
+    _spec = JSON.parse(JSON.stringify(EMPTY_SPEC));
+    _messages = [];
+    _assumptions = {};
+    _ready = false;
+    // Seed goal from user's initial request
+    if (initialPrompt) _spec.goal = initialPrompt;
+  }
+
+  function getSpec() { return JSON.parse(JSON.stringify(_spec || EMPTY_SPEC)); }
+  function getMessages() { return _messages.slice(); }
+  function isReady() { return _ready; }
+  function getAssumptions() { return { ..._assumptions }; }
+
+  function setSpec(newSpec) {
+    _spec = JSON.parse(JSON.stringify(newSpec));
+  }
+
+  async function* userTurn(userText) {
+    _messages.push({ role: 'user', content: userText });
+    yield { type: 'user_sent' };
+
+    const systemContent = STAGE_A_SYSTEM.replace('{spec_json}', JSON.stringify(_spec, null, 2));
+    const apiMessages = [
+      { role: 'system', content: systemContent },
+      ..._messages,
+    ];
+
+    let fullText = '';
+    let retried = false;
+
+    for (let tryCount = 0; tryCount < 2; tryCount++) {
+      fullText = '';
+      let error = null;
+
+      try {
+        const result = await CodeSmith.llm.chatComplete({
+          messages: apiMessages,
+          tier: 'orchestrator',
+          temperature: 0.3,
+          maxTokens: 2000,
+        });
+        fullText = result.text || '';
+      } catch (err) {
+        error = err;
+      }
+
+      if (error) {
+        yield { type: 'error', error };
+        return;
+      }
+
+      // Parse spec_update
+      const specUpdateMatch = fullText.match(/<spec_update>([\s\S]*?)<\/spec_update>/);
+      // Parse ready_for_skeleton
+      const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/);
+
+      // Extract natural language (everything outside tags)
+      let question = fullText
+        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
+        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
+        .trim();
+
+      // Validate: should have at least a question or a ready signal
+      if (!question && !readyMatch && !specUpdateMatch && tryCount === 0) {
+        // Retry with corrective message
+        _messages.push({
+          role: 'assistant', content: fullText,
+        });
+        _messages.push({
+          role: 'user',
+          content: 'Your response was malformed. Please ask ONE question and include a <spec_update> JSON block or <ready_for_skeleton> if the spec is complete.',
+        });
+        retried = true;
+        continue;
+      }
+
+      // Apply spec update
+      if (specUpdateMatch) {
+        try {
+          const update = JSON.parse(specUpdateMatch[1]);
+          _mergeSpec(update);
+          yield { type: 'spec_updated', spec: getSpec() };
+        } catch (parseErr) {
+          if (tryCount === 0 && !retried) {
+            _messages.push({ role: 'assistant', content: fullText });
+            _messages.push({
+              role: 'user',
+              content: 'The <spec_update> JSON was malformed. Please re-send with valid JSON inside <spec_update> tags.',
+            });
+            continue;
+          }
+          yield { type: 'parse_error', error: parseErr };
+        }
+      }
+
+      // Store assistant message (clean version)
+      _messages.push({ role: 'assistant', content: fullText });
+
+      // Yield the question for the UI
+      if (question) {
+        yield { type: 'question', text: question };
+      }
+
+      // Check ready
+      if (readyMatch) {
+        _ready = true;
+        let rationale = '';
+        try {
+          const r = JSON.parse(readyMatch[1]);
+          rationale = r.rationale || '';
+        } catch {}
+        yield { type: 'ready', rationale };
+      }
+
+      return; // success
+    }
+
+    // Both attempts failed
+    yield { type: 'error', error: new Error('Failed to get valid response after retry') };
+  }
+
+  function requestAdvance() {
+    _ready = true;
+  }
+
+  function _mergeSpec(update) {
+    for (const key of Object.keys(update)) {
+      if (!(key in _spec)) continue;
+      const val = update[key];
+
+      if (typeof val === 'string') {
+        const isAssumed = val.includes('(assumed)');
+        _spec[key] = val.replace(/\s*\(assumed\)\s*/g, '').trim();
+        if (isAssumed) _assumptions[key] = true;
+        else delete _assumptions[key];
+      } else if (Array.isArray(val)) {
+        _spec[key] = val.map(v => {
+          if (typeof v === 'string') {
+            const isa = v.includes('(assumed)');
+            const clean = v.replace(/\s*\(assumed\)\s*/g, '').trim();
+            if (isa) _assumptions[key + '.' + clean] = true;
+            return clean;
+          }
+          return v;
+        });
+      } else if (typeof val === 'object' && val !== null) {
+        if (typeof _spec[key] !== 'object') continue;
+        for (const subKey of Object.keys(val)) {
+          if (!(subKey in _spec[key])) continue;
+          const sv = val[subKey];
+          if (typeof sv === 'string') {
+            const isa = sv.includes('(assumed)');
+            _spec[key][subKey] = sv.replace(/\s*\(assumed\)\s*/g, '').trim();
+            if (isa) _assumptions[key + '.' + subKey] = true;
+            else delete _assumptions[key + '.' + subKey];
+          } else {
+            _spec[key][subKey] = sv;
+          }
+        }
+      }
+    }
+  }
+
+  return { start, getSpec, setSpec, getMessages, isReady, getAssumptions, userTurn, requestAdvance };
+})();
+CodeSmith.stageA = StageA;
  
+ /* ============================================================================
+ * 5. STAGE B — Skeleton Visualization (Day 5)
+ *    Generates modular architecture from approved spec, validates
+ *    topology, produces Mermaid flowchart definition.
+ * ==========================================================================*/
+
+const STAGE_B_SYSTEM = `You are a senior software architect. The user approved this specification. Design a modular Python architecture.
+
+Output STRICT JSON (no prose, no markdown fences):
+{
+  "summary": "one-line architecture summary",
+  "modules": [
+    {
+      "id": "snake_case_id",
+      "name": "module_name",
+      "purpose": "one-line purpose",
+      "public_functions": [
+        { "name": "fn_name", "signature": "fn_name(arg: type) -> type", "description": "what it does", "raises": ["ValueError"] }
+      ],
+      "depends_on": ["other_module_id"],
+      "notes": "optional"
+    }
+  ],
+  "shared_types": { "TypeName": "definition" },
+  "data_flow": [ { "from": "module_id", "to": "module_id", "data": "description" } ],
+  "build_order": ["module_id_1", "module_id_2"]
+}
+
+Rules:
+- Distinct snake_case module ids
+- build_order topologically valid (no cycles)
+- Prefer 3-7 modules
+- Complete type hints on all public function signatures
+- shared_types for anything crossing module boundaries
+
+Specification:
+{spec_json}`;
+
+const StageB = (() => {
+  let _skeleton = null;
+  let _approvedSpec = null;
+  let _mermaidDef = '';
+
+  async function generate(spec) {
+    _approvedSpec = JSON.parse(JSON.stringify(spec));
+    _skeleton = null;
+    _mermaidDef = '';
+
+    const systemContent = STAGE_B_SYSTEM.replace('{spec_json}', JSON.stringify(spec, null, 2));
+
+    const result = await CodeSmith.llm.chatComplete({
+      messages: [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: 'Design the architecture.' },
+      ],
+      tier: 'orchestrator',
+      temperature: 0.2,
+      maxTokens: 6000,
+    });
+
+    // Parse JSON
+    let parsed;
+    const raw = result.text || '';
+    let cleaned = raw.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    try { parsed = JSON.parse(cleaned); } catch {
+      const s = cleaned.indexOf('{');
+      const e = cleaned.lastIndexOf('}');
+      if (s >= 0 && e > s) {
+        try { parsed = JSON.parse(cleaned.slice(s, e + 1)); } catch {
+          throw new Error('Failed to parse skeleton JSON from model');
+        }
+      } else {
+        throw new Error('Failed to parse skeleton JSON from model');
+      }
+    }
+
+    if (!parsed.modules || !Array.isArray(parsed.modules)) {
+      throw new Error('Skeleton JSON missing modules array');
+    }
+
+    _skeleton = parsed;
+    _mermaidDef = _buildMermaid(parsed);
+    return parsed;
+  }
+
+  function getSkeleton() { return _skeleton ? JSON.parse(JSON.stringify(_skeleton)) : null; }
+  function getApprovedSpec() { return _approvedSpec ? JSON.parse(JSON.stringify(_approvedSpec)) : null; }
+  function getMermaidDef() { return _mermaidDef; }
+
+  function approve() {
+    // Returns the skeleton for the builder to consume
+    return getSkeleton();
+  }
+
+  function _buildMermaid(skel) {
+    const lines = ['flowchart TD'];
+
+    for (const mod of skel.modules) {
+      const fnNames = (mod.public_functions || []).map(f => f.name).join('\\n');
+      const label = mod.name + (fnNames ? '\\n---\\n' + fnNames : '');
+      lines.push(`  subgraph ${mod.id} ["${mod.name}"]`);
+      lines.push(`    direction TB`);
+      if (mod.public_functions) {
+        for (const fn of mod.public_functions) {
+          const nodeId = mod.id + '_' + fn.name;
+          lines.push(`    ${nodeId}["${fn.name}"]`);
+        }
+      }
+      lines.push(`  end`);
+    }
+
+    // Data flow edges
+    if (skel.data_flow) {
+      for (const df of skel.data_flow) {
+        const label = df.data || '';
+        lines.push(`  ${df.from} -- "${label}" --> ${df.to}`);
+      }
+    }
+
+    // Style
+    lines.push('');
+    lines.push('  classDef default fill:#1a1f2a,stroke:#4f8cff,stroke-width:1px,color:#e8ecf1');
+
+    return lines.join('\n');
+  }
+
+  return { generate, getSkeleton, getApprovedSpec, getMermaidDef, approve };
+})();
+CodeSmith.stageB = StageB;
+
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
  *    No innerHTML with user content — textContent or element builders only.
@@ -2139,23 +2647,30 @@ function renderStatusStrip() {
   async function sendMessage(text) {
     const t = text.trim();
     if (!t) return;
-	// Day 4: Build mode routing
-    const isBuildRequest = _buildMode === 'build' || t.startsWith('/build ');
-    if (isBuildRequest) {
-      const prompt = t.startsWith('/build ') ? t.slice(7) : t;
-      if (CodeSmith.state.currentId == null) { await newSession(); }
-      const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
-      if (sess) {
-        sess.messages.push({ role: 'user', content: t, ts: Date.now() });
-        sess.updatedAt = Date.now();
-        if (!sess.title || sess.title === 'New session') sess.title = deriveTitle(sess.messages);
-        await CodeSmith.db.putSession(sess);
-        renderChat();
-        renderSessionList();
-      }
-      runBuildPipeline(prompt);
-      return;
-    }
+		// Day 4/5: Build mode routing
+			const isBuildRequest = _buildMode === 'build' || t.startsWith('/build ');
+			if (isBuildRequest) {
+			  const prompt = t.startsWith('/build ') ? t.slice(7) : t;
+			  if (CodeSmith.state.currentId == null) { await newSession(); }
+			  const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+			  if (sess) {
+				sess.messages.push({ role: 'user', content: t, ts: Date.now() });
+				sess.updatedAt = Date.now();
+				if (!sess.title || sess.title === 'New session') sess.title = deriveTitle(sess.messages);
+				await CodeSmith.db.putSession(sess);
+				renderChat();
+				renderSessionList();
+			  }
+			  if (_quickBuildMode) {
+				// Day 4 direct pipeline
+				_quickBuildMode = false;
+				runBuildPipeline(prompt);
+			  } else {
+				// Day 5: start Stage A requirements dialogue
+				startBuildMode(prompt);
+			  }
+			  return;
+			}
     if (CodeSmith.state.currentId == null) { await newSession(); }
     const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
     if (!sess) return;
@@ -2585,6 +3100,7 @@ function wireComposer() {
     wireComposer();
     wireDebugPanel(); // Day 2
 	wireMode();          // Day 4
+	wireStepper();       // Day 5
   }
 
   // ---- debug panel (Day 2) ------------------------------------------------
@@ -2770,53 +3286,61 @@ function wireComposer() {
   let _buildMode = 'chat';
   let _currentBuild = null; // { spec, workerResult, attempt, status, output, moduleName }
 
-  function wireMode() {
-    for (const btn of document.querySelectorAll('.mode-btn')) {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        _buildMode = btn.dataset.mode;
-        $('#split-right').hidden = _buildMode !== 'build';
-        if (_buildMode === 'build') {
-          $('#split-left').style.maxWidth = '50%';
-        } else {
-          $('#split-left').style.maxWidth = '';
-        }
-      });
-    }
+	function wireMode() {
+		for (const btn of document.querySelectorAll('.mode-btn')) {
+		  btn.addEventListener('click', () => {
+			document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+			btn.classList.add('active');
+			_buildMode = btn.dataset.mode;
+			$('#split-right').hidden = _buildMode !== 'build';
+			if (_buildMode === 'build') {
+			  $('#split-left').style.maxWidth = '50%';
+			  // Restore last visible step
+			  _showStep(_currentStep);
+			} else {
+			  $('#split-left').style.maxWidth = '';
+			}
+		  });
+		}
 
-    // Build tabs
-    for (const tab of document.querySelectorAll('.build-tab')) {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.build-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.build-content').forEach(c => { c.hidden = true; c.classList.remove('active'); });
-        tab.classList.add('active');
-        const target = tab.dataset.btab;
-        const content = document.querySelector(`.build-content[data-bcontent="${target}"]`);
-        if (content) { content.hidden = false; content.classList.add('active'); }
-      });
-    }
+		// Build tabs (Day 4 - Stage C tabs)
+		for (const tab of document.querySelectorAll('.build-tab')) {
+		  tab.addEventListener('click', () => {
+			document.querySelectorAll('.build-tab').forEach(t => t.classList.remove('active'));
+			document.querySelectorAll('.build-content').forEach(c => { c.hidden = true; c.classList.remove('active'); });
+			tab.classList.add('active');
+			const target = tab.dataset.btab;
+			const content = document.querySelector(`.build-content[data-bcontent="${target}"]`);
+			if (content) { content.hidden = false; content.classList.add('active'); }
+		  });
+		}
 
-    // Spec toggle
-    $('#spec-toggle-btn').addEventListener('click', (ev) => {
-      if (ev.target.id === 'btn-edit-spec' || ev.target.closest('#btn-edit-spec')) return;
-      $('#spec-toggle-btn').classList.toggle('open');
-    });
-    $('#btn-edit-spec').addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      if (_currentBuild && _currentBuild.spec) openSpecEditor(_currentBuild.spec);
-    });
+		// Spec toggle (Day 4 - Stage C)
+		const specBtn = $('#spec-toggle-btn');
+		if (specBtn) {
+		  specBtn.addEventListener('click', (ev) => {
+			if (ev.target.id === 'btn-edit-spec' || ev.target.closest('#btn-edit-spec')) return;
+			specBtn.classList.toggle('open');
+		  });
+		}
+		const editSpecBtn = $('#btn-edit-spec');
+		if (editSpecBtn) {
+		  editSpecBtn.addEventListener('click', (ev) => {
+			ev.stopPropagation();
+			if (_currentBuild && _currentBuild.spec) openSpecEditor(_currentBuild.spec);
+		  });
+		}
 
-    // Run button
-    $('#btn-build-run').addEventListener('click', () => {
-      if (_currentBuild && _currentBuild.status === 'escalated') {
-        rerunEscalated();
-      }
-    });
+		// Run button (Day 4 - Stage C)
+		$('#btn-build-run').addEventListener('click', () => {
+		  if (_currentBuild && _currentBuild.status === 'escalated') {
+			rerunEscalated();
+		  }
+		});
 
-    // Download button
-    $('#btn-build-download').addEventListener('click', downloadArtifact);
-  }
+		// Download button
+		$('#btn-build-download').addEventListener('click', downloadArtifact);
+	  }
 
   function setBuildBadge(status) {
     const badge = $('#build-badge');
@@ -3098,27 +3622,405 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     cancelBtn.addEventListener('click', close);
     backdrop.addEventListener('click', close);
 
-    saveBtn.addEventListener('click', () => {
-      try {
-        const parsed = JSON.parse(ta.value);
-        if (!parsed.module_name) throw new Error('module_name is required');
-        _currentBuild.spec = parsed;
-        _currentBuild.moduleName = parsed.module_name;
-        updateBuildPanel(_currentBuild);
-        close();
-      } catch (err) {
-        errDiv.textContent = 'Invalid JSON: ' + err.message;
-      }
-    });
+	saveBtn.addEventListener('click', () => {
+		  try {
+			const parsed = JSON.parse(ta.value);
+			if (!parsed.module_name && !parsed.goal) throw new Error('module_name or goal is required');
+			// Update Stage A spec if we're in requirements phase
+			if (_currentStep === 'a' && CodeSmith.stageA) {
+			  CodeSmith.stageA.setSpec(parsed);
+			  _renderSpecCard(parsed, CodeSmith.stageA.getAssumptions());
+			}
+			// Also update current build if present
+			if (_currentBuild) {
+			  _currentBuild.spec = parsed;
+			  if (parsed.module_name) _currentBuild.moduleName = parsed.module_name;
+			  updateBuildPanel(_currentBuild);
+			}
+			close();
+		  } catch (err) {
+			errDiv.textContent = 'Invalid JSON: ' + err.message;
+		  }
+		});
 
     document.body.appendChild(backdrop);
     document.body.appendChild(modal);
   }
   
+	  // ---- Day 5: Stage A/B UI wiring ----------------------------------------
+	  let _currentStep = 'a';  // 'a' | 'b' | 'c'
+	  let _stageARunning = false;
+	  let _quickBuildMode = false;
+	  function wireStepper() {
+		// Quick build button
+		$('#btn-quick-build').addEventListener('click', () => {
+			  _quickBuildMode = true;
+			  _showStep('c');
+			  // Prompt is taken from composer; next sendMessage in build mode goes straight to Day 4 pipeline
+			});
+
+		// Skip to skeleton
+		$('#btn-skip-to-skeleton').addEventListener('click', () => {
+		  CodeSmith.stageA.requestAdvance();
+		  _transitionToB();
+		});
+
+		// Stage A send
+		$('#btn-stage-a-send').addEventListener('click', () => _stageASend());
+		$('#stage-a-input').addEventListener('keydown', (ev) => {
+		  if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); _stageASend(); }
+		});
+
+		// Stage A edit spec
+		$('#btn-edit-spec-a').addEventListener('click', () => {
+		  openSpecEditor(CodeSmith.stageA.getSpec());
+		});
+
+		// Stage B buttons
+		$('#btn-b-approve').addEventListener('click', async () => {
+		  const skel = CodeSmith.stageB.approve();
+		  if (!skel) return;
+		  await _persistStageState();
+		  _showStep('c');
+		  // Auto-start build for first module in build_order
+		  if (skel.build_order && skel.build_order.length > 0) {
+			const firstId = skel.build_order[0];
+			const mod = skel.modules.find(m => m.id === firstId);
+			if (mod) {
+			  const prompt = _moduleToBuildPrompt(mod, skel);
+			  runBuildPipeline(prompt);
+			}
+		  }
+		});
+
+		$('#btn-b-regenerate').addEventListener('click', () => {
+		  _generateSkeleton();
+		});
+
+		$('#btn-b-changes').addEventListener('click', () => {
+		  const changePrompt = prompt('What would you like to change?');
+		  if (!changePrompt) return;
+		  // Go back to A with the change request
+		  _showStep('a');
+		  CodeSmith.stageA.setSpec(CodeSmith.stageA.getSpec()); // keep current
+		  _stageAHandleUserInput(changePrompt);
+		});
+	  }
+
+	  function _showStep(step) {
+		_currentStep = step;
+		// Update stepper visual
+		document.querySelectorAll('.step-item').forEach(si => {
+		  si.classList.remove('active', 'done');
+		  const s = si.dataset.step;
+		  if (s === step) si.classList.add('active');
+		  else if (s < step) si.classList.add('done');
+		});
+
+		$('#stage-a-panel').hidden = step !== 'a';
+		$('#stage-a-panel').style.display = step === 'a' ? '' : 'none';
+		$('#stage-b-panel').hidden = step !== 'b';
+		$('#stage-c-panel').hidden = step !== 'c';
+		$('#stage-c-panel').style.display = step === 'c' ? '' : 'none';
+	  }
+
+	  function startBuildMode(userPrompt) {
+		// Switch to build mode
+		document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+		document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
+		_buildMode = 'build';
+		$('#split-right').hidden = false;
+		$('#split-left').style.maxWidth = '50%';
+
+		// Start Stage A
+		CodeSmith.stageA.start(userPrompt);
+		_showStep('a');
+		_renderSpecCard(CodeSmith.stageA.getSpec(), CodeSmith.stageA.getAssumptions());
+
+		// Add initial system question
+		const initMsg = el('div', { class: 'flex justify-start' });
+		const bubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;' });
+		bubble.textContent = 'I\'ll help you define the requirements. Let me start by understanding what you want to build.';
+		initMsg.appendChild(bubble);
+		$('#stage-a-messages').replaceChildren(initMsg);
+
+		// Send the initial prompt as the first user turn
+		_stageAHandleUserInput(userPrompt);
+	  }
+
+	  async function _stageASend() {
+		const input = $('#stage-a-input');
+		const text = input.value.trim();
+		if (!text || _stageARunning) return;
+		input.value = '';
+		_stageAHandleUserInput(text);
+	  }
+
+	  async function _stageAHandleUserInput(text) {
+		_stageARunning = true;
+		const msgArea = $('#stage-a-messages');
+
+		// Show user bubble
+		const userRow = el('div', { class: 'flex justify-end' });
+		const userBubble = el('div', { class: 'bubble bubble-user', style: 'font-size:13px;max-width:400px;' });
+		userBubble.textContent = text;
+		userRow.appendChild(userBubble);
+		msgArea.appendChild(userRow);
+
+		// Typing indicator
+		const typingRow = el('div', { class: 'flex justify-start' });
+		const typingEl = el('div', { class: 'typing-indicator' });
+		typingEl.innerHTML = '<span></span><span></span><span></span>';
+		typingRow.appendChild(typingEl);
+		msgArea.appendChild(typingRow);
+		msgArea.scrollTop = msgArea.scrollHeight;
+
+		// Process turn
+		for await (const ev of CodeSmith.stageA.userTurn(text)) {
+		  if (ev.type === 'spec_updated') {
+			_renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
+		  } else if (ev.type === 'question') {
+			typingRow.remove();
+			const aiRow = el('div', { class: 'flex justify-start' });
+			const aiBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;' });
+			aiBubble.textContent = ev.text;
+			aiRow.appendChild(aiBubble);
+			msgArea.appendChild(aiRow);
+			msgArea.scrollTop = msgArea.scrollHeight;
+		  } else if (ev.type === 'ready') {
+			typingRow.remove();
+			const readyRow = el('div', { class: 'flex justify-start' });
+			const readyBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;border-color:rgba(74,222,128,0.3);' });
+			readyBubble.textContent = 'Spec looks complete! ' + (ev.rationale || 'Ready to generate skeleton.');
+			readyRow.appendChild(readyBubble);
+			msgArea.appendChild(readyRow);
+
+			// Add advance button
+			const advRow = el('div', { class: 'flex justify-center', style: 'margin-top:8px;' });
+			const advBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;' }, 'Continue to Skeleton →');
+			advBtn.addEventListener('click', () => _transitionToB());
+			advRow.appendChild(advBtn);
+			msgArea.appendChild(advRow);
+			msgArea.scrollTop = msgArea.scrollHeight;
+		  } else if (ev.type === 'error') {
+			typingRow.remove();
+			const errRow = el('div', { class: 'flex justify-start' });
+			const errBubble = el('div', { class: 'bubble bubble-error', style: 'font-size:13px;max-width:400px;' });
+			errBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
+			errRow.appendChild(errBubble);
+
+			const retryBtn = el('button', { class: 'btn', style: 'font-size:11px;margin-top:4px;' }, 'Retry');
+			retryBtn.addEventListener('click', () => { errRow.remove(); _stageAHandleUserInput(text); });
+			errRow.appendChild(retryBtn);
+			msgArea.appendChild(errRow);
+		  } else if (ev.type === 'parse_error') {
+			// Non-fatal, just note it
+		  }
+		}
+
+		// Remove typing if still there
+		if (typingRow.parentNode) typingRow.remove();
+		_stageARunning = false;
+		await _persistStageState();
+	  }
+
+	  function _renderSpecCard(spec, assumptions) {
+		const container = $('#stage-a-spec-card');
+		container.replaceChildren();
+
+		const fields = [
+		  { key: 'goal', label: 'Goal', type: 'string' },
+		  { key: 'inputs', label: 'Inputs', type: 'object', subkeys: ['format', 'example', 'size_estimate'] },
+		  { key: 'outputs', label: 'Outputs', type: 'object', subkeys: ['format', 'example'] },
+		  { key: 'core_operations', label: 'Core Operations', type: 'array' },
+		  { key: 'constraints', label: 'Constraints', type: 'object', subkeys: ['libraries_allowed', 'performance'] },
+		  { key: 'non_goals', label: 'Non-goals', type: 'array' },
+		  { key: 'acceptance_criteria', label: 'Acceptance Criteria', type: 'array' },
+		];
+
+		for (const field of fields) {
+		  const div = el('div', { class: 'spec-field' });
+		  const label = el('div', { class: 'spec-field-label' }, field.label);
+		  div.appendChild(label);
+
+		  if (field.type === 'string') {
+			const val = spec[field.key] || '';
+			const valEl = el('div', { class: 'spec-field-value' + (val ? '' : ' empty') });
+			valEl.textContent = val || '—';
+			if (assumptions[field.key]) {
+			  const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
+			  valEl.appendChild(tag);
+			}
+			div.appendChild(valEl);
+		  } else if (field.type === 'array') {
+			const arr = spec[field.key] || [];
+			if (arr.length === 0) {
+			  div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+			} else {
+			  for (const item of arr) {
+				const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
+				itemEl.textContent = '• ' + item;
+				const aKey = field.key + '.' + item;
+				if (assumptions[aKey]) {
+				  const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
+				  itemEl.appendChild(tag);
+				}
+				div.appendChild(itemEl);
+			  }
+			}
+		  } else if (field.type === 'object') {
+			const obj = spec[field.key] || {};
+			for (const sk of (field.subkeys || [])) {
+			  const sv = obj[sk] || '';
+			  const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
+			  row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
+			  const svEl = el('span', { class: 'spec-field-value' + (sv ? '' : ' empty'), style: 'font-size:12px;' });
+			  svEl.textContent = sv || '—';
+			  const aKey = field.key + '.' + sk;
+			  if (assumptions[aKey]) {
+				const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
+				svEl.appendChild(tag);
+			  }
+			  row.appendChild(svEl);
+			  div.appendChild(row);
+			}
+		  }
+
+		  container.appendChild(div);
+		}
+	  }
+
+	  async function _transitionToB() {
+		const spec = CodeSmith.stageA.getSpec();
+		_showStep('b');
+		await _generateSkeleton();
+	  }
+
+	  async function _generateSkeleton() {
+		const spec = CodeSmith.stageA.getSpec();
+		const container = $('#mermaid-container');
+		const moduleList = $('#stage-b-module-list');
+		container.innerHTML = '<div class="text-muted text-[13px]">Generating architecture…</div>';
+		moduleList.replaceChildren();
+
+		try {
+		  const skeleton = await CodeSmith.stageB.generate(spec);
+		  // Warn if too many modules
+		  $('#stage-b-warn').hidden = !skeleton.modules || skeleton.modules.length <= 10;
+
+		  // Render Mermaid
+		  const mermaidDef = CodeSmith.stageB.getMermaidDef();
+		  container.innerHTML = '';
+		  const mermaidDiv = el('div', { class: 'mermaid' });
+		  mermaidDiv.textContent = mermaidDef;
+		  container.appendChild(mermaidDiv);
+		  try {
+			await mermaid.run({ nodes: [mermaidDiv] });
+		  } catch (mErr) {
+			container.innerHTML = '<pre style="color:#ff6b6b;font-size:11px;white-space:pre-wrap;">Mermaid render error:\n' + (mErr.message || mErr) + '\n\nDefinition:\n' + mermaidDef + '</pre>';
+		  }
+
+		  // Render module list
+		  _renderModuleList(skeleton);
+		  await _persistStageState();
+		} catch (err) {
+		  container.innerHTML = '<div style="color:#ff6b6b;padding:16px;font-size:13px;">Error: ' + (err.message || err) + '</div>';
+		}
+	  }
+
+	  function _renderModuleList(skeleton) {
+		const list = $('#stage-b-module-list');
+		list.replaceChildren();
+
+		for (const mod of skeleton.modules) {
+		  const row = el('div', { class: 'module-row', dataset: { moduleId: mod.id } });
+
+		  const header = el('div', { class: 'module-row-header' });
+		  header.appendChild(el('span', { class: 'module-row-name' }, mod.name || mod.id));
+		  const fnCount = (mod.public_functions || []).length;
+		  const deps = (mod.depends_on || []).length;
+		  header.appendChild(el('span', { class: 'module-row-meta' },
+			fnCount + ' fn' + (fnCount !== 1 ? 's' : '') + (deps ? ' · ' + deps + ' dep' + (deps !== 1 ? 's' : '') : '')));
+		  row.appendChild(header);
+
+		  row.appendChild(el('div', { class: 'module-row-purpose' }, mod.purpose || ''));
+
+		  // Expandable details
+		  const details = el('div', { class: 'module-row-details' });
+		  if (mod.public_functions) {
+			details.appendChild(el('div', { style: 'font-size:11px;color:#5b6474;margin-bottom:4px;' }, 'Public functions:'));
+			for (const fn of mod.public_functions) {
+			  const fnEl = el('div', { class: 'module-fn-item' });
+			  fnEl.textContent = fn.signature || fn.name;
+			  if (fn.description) {
+				fnEl.appendChild(el('span', { style: 'color:#5b6474;margin-left:8px;font-family:inherit;' }, '— ' + fn.description));
+			  }
+			  details.appendChild(fnEl);
+			}
+		  }
+		  if (mod.depends_on && mod.depends_on.length > 0) {
+			details.appendChild(el('div', { style: 'font-size:11px;color:#5b6474;margin-top:6px;' }, 'Depends on: ' + mod.depends_on.join(', ')));
+		  }
+		  if (mod.notes) {
+			details.appendChild(el('div', { style: 'font-size:11px;color:#8b92a1;margin-top:4px;font-style:italic;' }, mod.notes));
+		  }
+		  row.appendChild(details);
+
+		  row.addEventListener('click', () => {
+			row.classList.toggle('expanded');
+			// Highlight in Mermaid
+			document.querySelectorAll('.module-row').forEach(r => {
+			  if (r !== row) r.classList.remove('highlighted');
+			});
+			row.classList.toggle('highlighted');
+		  });
+
+		  list.appendChild(row);
+		}
+	  }
+
+	  function _moduleToBuildPrompt(mod, skeleton) {
+		// Convert a module from the skeleton into a build prompt for the Day 4 builder
+		const sharedTypes = skeleton.shared_types ? '\n\nShared types:\n' + JSON.stringify(skeleton.shared_types, null, 2) : '';
+		const deps = (mod.depends_on || []).map(d => {
+		  const dep = skeleton.modules.find(m => m.id === d);
+		  return dep ? dep.name : d;
+		});
+		const depsNote = deps.length > 0 ? '\nDependencies (assume available): ' + deps.join(', ') : '';
+
+		return `Build Python module "${mod.name}": ${mod.purpose}
+
+	Public functions:
+	${(mod.public_functions || []).map(f => `- ${f.signature}: ${f.description}`).join('\n')}
+	${depsNote}${sharedTypes}
+	${mod.notes ? '\nNotes: ' + mod.notes : ''}`;
+	  }
+
+	  async function _persistStageState() {
+		const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+		if (!sess) return;
+		sess.stageA = {
+		  spec: CodeSmith.stageA.getSpec(),
+		  messages: CodeSmith.stageA.getMessages(),
+		  assumptions: CodeSmith.stageA.getAssumptions(),
+		  ready: CodeSmith.stageA.isReady(),
+		};
+		const skel = CodeSmith.stageB.getSkeleton();
+		if (skel) {
+		  sess.stageB = {
+			skeleton: skel,
+			approvedSpec: CodeSmith.stageB.getApprovedSpec(),
+			mermaidDef: CodeSmith.stageB.getMermaidDef(),
+		  };
+		}
+		await CodeSmith.db.putSession(sess);
+	  }
+  
 	return {
 		wire, refreshSessions, renderChat, renderSessionList,
 		renderStatusStrip, renderComposerHelp, newSession,
 		runBuildPipeline, renderArtifactList, updateBuildPanel,
+		startBuildMode,
 	  };
 })();
 CodeSmith.ui = UI;
