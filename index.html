@@ -1551,10 +1551,10 @@ const Sandbox = (() => {
     _updateStatus('amber', 'loading…');
 
     try {
-      await _loadScript('https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js');
+      await _loadScript('https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.js');
 
       _pyodide = await window.loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/',
         stdout: () => {},  // suppress default
         stderr: () => {},
       });
