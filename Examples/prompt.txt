@@ -1,0 +1,18 @@
+Build a complete, installable Python package called "enzyme_kinetics" for fitting experimental Michaelis-Menten enzyme kinetics data.
+
+Core requirements (scientist-ready):
+- Use numpy, scipy, pandas, matplotlib (auto-install via micropip).
+- Main function: fit_michaelis_menten(data: pd.DataFrame | str) → returns fitted Km, Vmax, kcat (if Et given), standard errors from covariance matrix, and R².
+- Accepts CSV with columns "substrate_conc_mM" and "velocity_umol_min" (or path to CSV).
+- Generates two publication-ready plots (saved as PNG): 
+  1. "michaelis_menten_fit.png" — raw data points + fitted curve + error bars
+  2. "lineweaver_burk.png" — linear transform for visual sanity check
+- Includes synthetic data generator for testing: generate_synthetic_data(Km_true=2.5, Vmax_true=100, noise=0.05).
+- Full package structure: __init__.py, enzyme_kinetics.py, test_enzyme_kinetics.py, requirements.txt, README.md, example_data.csv.
+- Tests must verify (within 10% tolerance on noisy data):
+  1. Recovers Km and Vmax within statistical error
+  2. R² > 0.95 on synthetic data
+  3. Both plot files are created in /workdir
+  4. Handles invalid input gracefully
+
+Add type hints, comprehensive docstrings (NumPy style), and error handling. Make it ready for real lab use — this should be the tool every biochemist reaches for.
