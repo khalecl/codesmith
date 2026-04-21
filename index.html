@@ -230,6 +230,19 @@
 
   /* Sidebar collapse */
   .sidebar { width: 280px; transition: width 120ms ease-out; }
+			/* Build mode: full-screen wizard */
+		body.build-mode #split-left { display: none; }
+		body.build-mode #split-right { flex: 1; border-left: none; }
+		body.build-mode .hairline-t:has(#composer) { display: none; }
+		
+		/* Sidebar truncation fix */
+		.sidebar { min-width: 260px; }
+		.sess-title, .art-name {
+		  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
+		
+		/* Stage A: remove hardcoded bubble width cap */
+		.stage-a-messages .bubble { max-width: 100% !important; }
   .sidebar.collapsed { width: 0; border-right-width: 0 !important; overflow: hidden; }
 
   /* Inline test-connection result */
@@ -2531,109 +2544,92 @@ const StageA = (() => {
     _spec = JSON.parse(JSON.stringify(newSpec));
   }
 
-  async function* userTurn(userText) {
-    _messages.push({ role: 'user', content: userText });
-    yield { type: 'user_sent' };
-
-    const systemContent = STAGE_A_SYSTEM.replace('{spec_json}', JSON.stringify(_spec, null, 2));
-    const apiMessages = [
-      { role: 'system', content: systemContent },
-      ..._messages,
-    ];
-
-    let fullText = '';
-    let retried = false;
-
-    for (let tryCount = 0; tryCount < 2; tryCount++) {
-      fullText = '';
-      let error = null;
-
-      try {
-        const result = await CodeSmith.llm.chatComplete({
-          messages: apiMessages,
-          tier: 'orchestrator',
-          temperature: 0.3,
-          maxTokens: 2000,
-        });
-        fullText = result.text || '';
-      } catch (err) {
-        error = err;
-      }
-
-      if (error) {
-        yield { type: 'error', error };
-        return;
-      }
-
-      // Parse spec_update
-      const specUpdateMatch = fullText.match(/<spec_update>([\s\S]*?)<\/spec_update>/);
-      // Parse ready_for_skeleton
-      const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/);
-
-      // Extract natural language (everything outside tags)
-      let question = fullText
-        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
-        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
-        .trim();
-
-      // Validate: should have at least a question or a ready signal
-      if (!question && !readyMatch && !specUpdateMatch && tryCount === 0) {
-        // Retry with corrective message
-        _messages.push({
-          role: 'assistant', content: fullText,
-        });
-        _messages.push({
-          role: 'user',
-          content: 'Your response was malformed. Please ask ONE question and include a <spec_update> JSON block or <ready_for_skeleton> if the spec is complete.',
-        });
-        retried = true;
-        continue;
-      }
-
-      // Apply spec update
-      if (specUpdateMatch) {
-        try {
-          const update = JSON.parse(specUpdateMatch[1]);
-          _mergeSpec(update);
-          yield { type: 'spec_updated', spec: getSpec() };
-        } catch (parseErr) {
-          if (tryCount === 0 && !retried) {
-            _messages.push({ role: 'assistant', content: fullText });
-            _messages.push({
-              role: 'user',
-              content: 'The <spec_update> JSON was malformed. Please re-send with valid JSON inside <spec_update> tags.',
-            });
-            continue;
-          }
-          yield { type: 'parse_error', error: parseErr };
-        }
-      }
-
-      // Store assistant message (clean version)
-      _messages.push({ role: 'assistant', content: fullText });
-
-      // Yield the question for the UI
-      if (question) {
-        yield { type: 'question', text: question };
-      }
-
-      // Check ready
-      if (readyMatch) {
-        _ready = true;
-        let rationale = '';
-        try {
-          const r = JSON.parse(readyMatch[1]);
-          rationale = r.rationale || '';
-        } catch {}
-        yield { type: 'ready', rationale };
-      }
-
-      return; // success
-    }
-
-    // Both attempts failed
-    yield { type: 'error', error: new Error('Failed to get valid response after retry') };
-  }
+	async function* userTurn(userText) {
+	    _messages.push({ role: 'user', content: userText });
+	    yield { type: 'user_sent' };
+	
+	    const systemContent = STAGE_A_SYSTEM.replace('{spec_json}', JSON.stringify(_spec, null, 2));
+	    const apiMessages = [
+	      { role: 'system', content: systemContent },
+	      ..._messages,
+	    ];
+	
+	    for (let tryCount = 0; tryCount < 2; tryCount++) {
+	      let fullText = '';
+	      let thinkingText = '';
+	      let errorHit = null;
+	
+	      try {
+	        for await (const ev of CodeSmith.llm.chat({
+	          messages: apiMessages,
+	          tier: 'orchestrator',
+	          temperature: 0.3,
+	          maxTokens: 2000,
+	        })) {
+	          if (ev.type === 'thinking') {
+	            thinkingText += ev.delta;
+	            yield { type: 'thinking_delta', delta: ev.delta };
+	          } else if (ev.type === 'token') {
+	            fullText += ev.delta;
+	            yield { type: 'token_delta', delta: ev.delta };
+	          } else if (ev.type === 'done') {
+	            fullText = ev.text || fullText;
+	            thinkingText = ev.thinking || thinkingText;
+	          } else if (ev.type === 'error' && !ev.recoverable) {
+	            errorHit = ev.error;
+	          }
+	        }
+	      } catch (err) { errorHit = err; }
+	
+	      if (errorHit) { yield { type: 'error', error: errorHit }; return; }
+	
+	      // Parse the completed response
+	      const specUpdateMatch = fullText.match(/<spec_update>([\s\S]*?)<\/spec_update>/);
+	      const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/);
+	      const question = fullText
+	        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
+	        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
+	        .trim();
+	
+	      if (!question && !readyMatch && !specUpdateMatch && tryCount === 0) {
+	        _messages.push({ role: 'assistant', content: fullText });
+	        _messages.push({
+	          role: 'user',
+	          content: 'Your response was malformed. Please ask ONE question and include a <spec_update> JSON block or <ready_for_skeleton>.',
+	        });
+	        continue;
+	      }
+	
+	      if (specUpdateMatch) {
+	        try {
+	          const update = JSON.parse(specUpdateMatch[1]);
+	          _mergeSpec(update);
+	          yield { type: 'spec_updated', spec: getSpec() };
+	        } catch (parseErr) {
+	          if (tryCount === 0) {
+	            _messages.push({ role: 'assistant', content: fullText });
+	            _messages.push({ role: 'user', content: 'The <spec_update> JSON was malformed. Re-send with valid JSON.' });
+	            continue;
+	          }
+	          yield { type: 'parse_error', error: parseErr };
+	        }
+	      }
+	
+	      _messages.push({ role: 'assistant', content: fullText });
+	
+	      if (question) yield { type: 'question_final', text: question };
+	
+	      if (readyMatch) {
+	        _ready = true;
+	        let rationale = '';
+	        try { rationale = (JSON.parse(readyMatch[1]).rationale) || ''; } catch {}
+	        yield { type: 'ready', rationale };
+	      }
+	      return;
+	    }
+	
+	    yield { type: 'error', error: new Error('Failed to get valid response after retry') };
+	}
 
   function requestAdvance() {
     _ready = true;
@@ -4221,19 +4217,18 @@ function wireComposer() {
 
 	function wireMode() {
 		for (const btn of document.querySelectorAll('.mode-btn')) {
-		  btn.addEventListener('click', () => {
-			document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-			btn.classList.add('active');
-			_buildMode = btn.dataset.mode;
-			$('#split-right').hidden = _buildMode !== 'build';
-			if (_buildMode === 'build') {
-			  $('#split-left').style.maxWidth = '50%';
-			  // Restore last visible step
-			  _showStep(_currentStep);
-			} else {
-			  $('#split-left').style.maxWidth = '';
-			}
-		  });
+		    btn.addEventListener('click', () => {
+		      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+		      btn.classList.add('active');
+		      _buildMode = btn.dataset.mode;
+		      $('#split-right').hidden = _buildMode !== 'build';
+		      document.body.classList.toggle('build-mode', _buildMode === 'build');
+		      if (_buildMode === 'build') {
+		        _showStep(_currentStep);
+		        // Auto-focus Stage A input if we're on Stage A
+		        if (_currentStep === 'a') setTimeout(() => $('#stage-a-input').focus(), 100);
+		      }
+		    });
 		}
 
 		// Build tabs (Day 4 - Stage C tabs)
@@ -4379,9 +4374,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     // Switch to build mode
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
-    _buildMode = 'build';
-    $('#split-right').hidden = false;
-    $('#split-left').style.maxWidth = '50%';
+	_buildMode = 'build';
+	$('#split-right').hidden = false;
+	document.body.classList.add('build-mode');
 
     // Reset build panel
     _currentBuild = { status: 'running', attempt: 0, moduleName: '', spec: null, code: '', tests: '', output: '' };
@@ -4702,47 +4697,70 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		msgArea.scrollTop = msgArea.scrollHeight;
 
 		// Process turn
-		for await (const ev of CodeSmith.stageA.userTurn(text)) {
-		  if (ev.type === 'spec_updated') {
-			_renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
-		  } else if (ev.type === 'question') {
-			typingRow.remove();
-			const aiRow = el('div', { class: 'flex justify-start' });
-			const aiBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;' });
-			aiBubble.textContent = ev.text;
-			aiRow.appendChild(aiBubble);
-			msgArea.appendChild(aiRow);
-			msgArea.scrollTop = msgArea.scrollHeight;
-		  } else if (ev.type === 'ready') {
-			typingRow.remove();
-			const readyRow = el('div', { class: 'flex justify-start' });
-			const readyBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;border-color:rgba(74,222,128,0.3);' });
-			readyBubble.textContent = 'Spec looks complete! ' + (ev.rationale || 'Ready to generate skeleton.');
-			readyRow.appendChild(readyBubble);
-			msgArea.appendChild(readyRow);
-
-			// Add advance button
-			const advRow = el('div', { class: 'flex justify-center', style: 'margin-top:8px;' });
-			const advBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;' }, 'Continue to Skeleton →');
-			advBtn.addEventListener('click', () => _transitionToB());
-			advRow.appendChild(advBtn);
-			msgArea.appendChild(advRow);
-			msgArea.scrollTop = msgArea.scrollHeight;
-		  } else if (ev.type === 'error') {
-			typingRow.remove();
-			const errRow = el('div', { class: 'flex justify-start' });
-			const errBubble = el('div', { class: 'bubble bubble-error', style: 'font-size:13px;max-width:400px;' });
-			errBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
-			errRow.appendChild(errBubble);
-
-			const retryBtn = el('button', { class: 'btn', style: 'font-size:11px;margin-top:4px;' }, 'Retry');
-			retryBtn.addEventListener('click', () => { errRow.remove(); _stageAHandleUserInput(text); });
-			errRow.appendChild(retryBtn);
-			msgArea.appendChild(errRow);
-		  } else if (ev.type === 'parse_error') {
-			// Non-fatal, just note it
-		  }
-		}
+			let liveRow = null;
+			let liveBubble = null;
+			let liveThinking = null;
+			let liveThinkingText = '';
+			let liveText = '';
+			
+			function ensureLive() {
+			  if (liveRow) return;
+			  typingRow.remove();
+			  liveRow = el('div', { class: 'flex justify-start', style: 'flex-direction:column;' });
+			  liveBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;' });
+			  liveRow.appendChild(liveBubble);
+			  msgArea.appendChild(liveRow);
+			}
+			
+			for await (const ev of CodeSmith.stageA.userTurn(text)) {
+			  if (ev.type === 'thinking_delta') {
+			    ensureLive();
+			    if (!liveThinking) {
+			      const tb = el('div', { class: 'thinking-block' });
+			      const toggle = el('button', { class: 'thinking-toggle open' });
+			      toggle.innerHTML = '<span class="arrow" aria-hidden="true">▶</span> Reasoning…';
+			      const body = el('div', { class: 'thinking-body' });
+			      toggle.addEventListener('click', () => toggle.classList.toggle('open'));
+			      tb.appendChild(toggle); tb.appendChild(body);
+			      liveRow.insertBefore(tb, liveBubble);
+			      liveThinking = body;
+			    }
+			    liveThinkingText += ev.delta;
+			    liveThinking.textContent = liveThinkingText;
+			    msgArea.scrollTop = msgArea.scrollHeight;
+			  } else if (ev.type === 'token_delta') {
+			    ensureLive();
+			    liveText += ev.delta;
+			    // Strip tags for live display
+			    const clean = liveText
+			      .replace(/<spec_update>[\s\S]*?(<\/spec_update>|$)/g, '')
+			      .replace(/<ready_for_skeleton>[\s\S]*?(<\/ready_for_skeleton>|$)/g, '')
+			      .trim();
+			    liveBubble.textContent = clean;
+			    msgArea.scrollTop = msgArea.scrollHeight;
+			  } else if (ev.type === 'spec_updated') {
+			    _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
+			  } else if (ev.type === 'question_final') {
+			    // Replace live bubble content with final clean question
+			    if (liveBubble) liveBubble.textContent = ev.text;
+			  } else if (ev.type === 'ready') {
+			    const readyBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;border-color:rgba(74,222,128,0.3);margin-top:4px;' });
+			    readyBubble.textContent = 'Spec looks complete! ' + (ev.rationale || 'Ready to generate skeleton.');
+			    msgArea.appendChild(readyBubble);
+			
+			    const advBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;margin-top:6px;align-self:flex-start;' }, 'Continue to Skeleton →');
+			    advBtn.addEventListener('click', () => _transitionToB());
+			    msgArea.appendChild(advBtn);
+			    msgArea.scrollTop = msgArea.scrollHeight;
+			  } else if (ev.type === 'error') {
+			    if (typingRow.parentNode) typingRow.remove();
+			    const errBubble = el('div', { class: 'bubble bubble-error', style: 'font-size:13px;' });
+			    errBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
+			    msgArea.appendChild(errBubble);
+			  }
+			}
+			
+			if (typingRow.parentNode) typingRow.remove();
 
 		// Remove typing if still there
 		if (typingRow.parentNode) typingRow.remove();
