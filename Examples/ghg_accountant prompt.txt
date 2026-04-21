@@ -1,0 +1,9 @@
+Build a complete installable Python package called "ghg_accountant" for corporate carbon accounting following GHG Protocol.
+
+Use numpy, pandas, matplotlib (auto-install).  
+Main functions: calculate_scope1(emission_factors: dict, activity_data: pd.DataFrame), calculate_scope2(electricity_kwh, grid_factor), calculate_scope3(purchased_goods, business_travel_km, etc.).  
+Accept CSV input with columns for fuel use, electricity, travel, waste.  
+Output total tCO2e, breakdown pie chart ("ghg_breakdown.png"), and emissions report table.  
+Include default emission factors (IPCC/DEFRA style) + synthetic test data.  
+Tests must verify: mass balance (total = sum scopes), R²-like accuracy on synthetic data >0.98, and plots created.
+Make it production-ready for sustainability reports with type hints and docstrings.
