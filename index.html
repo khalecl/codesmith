@@ -928,33 +928,57 @@
 					  </div>
 
 					  <!-- Center: active module code/tests/output -->
-					  <div class="stage-c-center">
-						<div class="build-header" style="padding:6px 10px;">
-						  <span id="sc-active-name" class="build-module-name" style="font-size:13px;">—</span>
-						  <span id="sc-active-badge" class="build-badge badge-draft" style="font-size:9px;">Pending</span>
-						  <span id="sc-active-attempt" class="attempt-counter"></span>
-						</div>
-						<div class="build-tabs">
-						  <button class="build-tab active" data-sctab="code">Code</button>
-						  <button class="build-tab" data-sctab="tests">Tests</button>
-						  <button class="build-tab" data-sctab="output">Output</button>
-						</div>
-						<div id="sc-code" class="build-content build-code-view active" data-sccontent="code">
-						  <pre><code class="language-python" id="sc-code-display"></code></pre>
-						</div>
-						<div id="sc-tests" class="build-content build-code-view" data-sccontent="tests" hidden>
-						  <pre><code class="language-python" id="sc-tests-display"></code></pre>
-						</div>
-						<div id="sc-output" class="build-content build-output" data-sccontent="output" hidden>
-						  <div id="sc-output-display"></div>
-						</div>
-						<!-- Escalation actions (hidden unless escalated) -->
-						<div id="sc-escalation-bar" class="escalation-bar" hidden>
-						  <button id="btn-sc-edit-rerun" class="btn" style="font-size:11px;">Edit &amp; rerun</button>
-						  <button id="btn-sc-regen" class="btn" style="font-size:11px;">Regenerate</button>
-						  <button id="btn-sc-back-b" class="btn" style="font-size:11px;">Back to skeleton</button>
-						</div>
-					  </div>
+						<div class="stage-c-center">
+			                <div class="build-header" style="padding:6px 10px;">
+			                  <span id="build-module-name" class="build-module-name" style="font-size:13px;">—</span>
+			                  <span id="build-badge" class="build-badge badge-draft" style="font-size:9px;">Pending</span>
+			                  <span id="build-attempts" class="attempt-counter"></span>
+			                  <div style="margin-left:auto;display:flex;gap:6px;">
+			                    <button id="btn-build-run" class="btn btn-primary" style="font-size:12px;" disabled>Run</button>
+			                    <button id="btn-build-download" class="btn" style="font-size:12px;" title="Download as zip" disabled>
+			                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+			                    </button>
+			                  </div>
+			                </div>
+			
+			                <div id="build-spec-card" class="spec-card" hidden>
+			                  <div style="display:flex;align-items:center;">
+			                    <button class="spec-toggle" id="spec-toggle-btn" style="flex:1;">
+			                      <span class="arrow" style="font-size:10px;" aria-hidden="true">▶</span> Spec
+			                    </button>
+			                    <button id="btn-edit-spec" class="btn btn-ghost" style="font-size:11px;padding:2px 8px;">Edit</button>
+			                  </div>
+			                  <div id="build-spec-body" class="spec-body"></div>
+			                </div>
+			
+			                <div class="build-header" style="padding:6px 10px;">
+			                  <span id="sc-active-name" class="build-module-name" style="font-size:13px;">—</span>
+			                  <span id="sc-active-badge" class="build-badge badge-draft" style="font-size:9px;">Pending</span>
+			                  <span id="sc-active-attempt" class="attempt-counter"></span>
+			                </div>
+			                <div class="build-tabs">
+			                  <button class="build-tab active" data-sctab="code">Code</button>
+			                  <button class="build-tab" data-sctab="tests">Tests</button>
+			                  <button class="build-tab" data-sctab="output">Output</button>
+			                </div>
+			                <div id="sc-code" class="build-content build-code-view active" data-sccontent="code">
+			                  <pre><code class="language-python" id="sc-code-display"></code></pre>
+			                  <pre><code class="language-python" id="build-code-display" hidden></code></pre>
+			                </div>
+			                <div id="sc-tests" class="build-content build-code-view" data-sccontent="tests" hidden>
+			                  <pre><code class="language-python" id="sc-tests-display"></code></pre>
+			                  <pre><code class="language-python" id="build-tests-display" hidden></code></pre>
+			                </div>
+			                <div id="sc-output" class="build-content build-output" data-sccontent="output" hidden>
+			                  <div id="sc-output-display"></div>
+			                  <div id="build-output-display" hidden></div>
+			                </div>
+			                <div id="sc-escalation-bar" class="escalation-bar" hidden>
+			                  <button id="btn-sc-edit-rerun" class="btn" style="font-size:11px;">Edit &amp; rerun</button>
+			                  <button id="btn-sc-regen" class="btn" style="font-size:11px;">Regenerate</button>
+			                  <button id="btn-sc-back-b" class="btn" style="font-size:11px;">Back to skeleton</button>
+			                </div>
+			              </div>
 
 					  <!-- Right: live log -->
 					  <div id="sc-log" class="stage-c-log"></div>
