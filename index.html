@@ -7,7 +7,7 @@
 <!--
   ============================================================================
   Project : CodeSmith
-  Version : 0.4.0
+  Version : 0.5.0
   Targets : Chrome/Edge 120+, Firefox 120+, Safari 17+
   ----------------------------------------------------------------------------
   Day 1 UI shell + Day 2 Pyodide sandbox. Provides the chat layout, settings
@@ -541,6 +541,87 @@
     font-size: 11px; color: #f59e0b; padding: 4px 12px;
     background: rgba(245,158,11,0.08); border-bottom: 1px solid rgba(245,158,11,0.15);
   }
+
+/* ---- Day 6: Stage C multi-module --------------------------------------- */
+  .stage-c-layout { display: flex; flex: 1; min-height: 0; }
+
+  .stage-c-modules {
+    width: 200px; min-width: 160px; border-right: 1px solid rgba(255,255,255,0.06);
+    overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column;
+  }
+  .stage-c-modules-header {
+    padding: 8px 10px; font-size: 11px; color: #5b6474;
+    text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .sc-mod-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; cursor: pointer; font-size: 12px;
+    border-left: 3px solid transparent; transition: all 120ms;
+  }
+  .sc-mod-item:hover { background: rgba(255,255,255,0.03); }
+  .sc-mod-item.active { background: rgba(79,140,255,0.06); border-left-color: #4f8cff; }
+  .sc-mod-item .sc-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .sc-dot.pending   { background: #5b6474; }
+  .sc-dot.building  { background: #f59e0b; animation: pulse-dot 1.2s infinite; }
+  .sc-dot.testing   { background: #f59e0b; }
+  .sc-dot.passed    { background: #4ade80; }
+  .sc-dot.failed    { background: #ff6b6b; }
+  .sc-dot.escalated { background: #ff6b6b; box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .sc-mod-name { font-family: monospace; color: #e8ecf1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sc-mod-status { font-size: 10px; color: #5b6474; margin-left: auto; white-space: nowrap; }
+
+  .stage-c-center {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .stage-c-log {
+    width: 260px; min-width: 200px; overflow-y: auto; flex-shrink: 0;
+    font-size: 11px; font-family: "JetBrains Mono",monospace;
+    color: #8b92a1; line-height: 1.6; padding: 8px;
+  }
+  .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .log-entry .log-time { color: #5b6474; margin-right: 6px; }
+  .log-entry.log-diff { color: #a855f7; }
+  .log-entry.log-pass { color: #4ade80; }
+  .log-entry.log-fail { color: #ff6b6b; }
+  .log-entry.log-info { color: #8b92a1; }
+  .log-entry.log-warn { color: #f59e0b; }
+
+  .stage-c-controls {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+  .sc-progress {
+    flex: 1; height: 6px; background: rgba(255,255,255,0.06);
+    border-radius: 3px; overflow: hidden;
+  }
+  .sc-progress-bar {
+    height: 100%; background: #4f8cff; border-radius: 3px;
+    transition: width 300ms ease-out;
+  }
+  .sc-progress-text { font-size: 11px; color: #8b92a1; white-space: nowrap; }
+
+  /* Symbol table modal */
+  .symtable-modal-content {
+    background: #0b0d10; border-radius: 6px; padding: 12px;
+    font-family: "JetBrains Mono",monospace; font-size: 11px;
+    max-height: 60vh; overflow: auto; white-space: pre-wrap;
+    word-break: break-all; color: #8b92a1;
+  }
+  .sym-declared { color: #f59e0b; }
+  .sym-implemented { color: #4ade80; }
+
+  /* Escalation actions */
+  .escalation-bar {
+    display: flex; gap: 6px; padding: 8px 12px;
+    border-top: 1px solid rgba(255,107,107,0.2);
+    background: rgba(255,107,107,0.04);
+  }
   
 </style>
 </head>
@@ -688,48 +769,62 @@
 				</div>
 			  </div>
 
-			  <!-- Stage C: Build (existing Day 4 panel) -->
-			  <div id="stage-c-panel" hidden>
-				<!-- Build header -->
-				<div class="build-header">
-				  <span id="build-module-name" class="build-module-name">—</span>
-				  <span id="build-badge" class="build-badge badge-draft">Draft</span>
-				  <span id="build-attempts" class="attempt-counter"></span>
-				  <div style="margin-left:auto;display:flex;gap:6px;">
-					<button id="btn-build-run" class="btn btn-primary" style="font-size:12px;" disabled>Run</button>
-					<button id="btn-build-download" class="btn" style="font-size:12px;" title="Download as zip" disabled>
-					  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-					</button>
+				<div id="stage-c-panel" hidden style="display:flex;flex-direction:column;flex:1;min-height:0;">
+					<!-- Controls bar -->
+					<div class="stage-c-controls">
+					  <button id="btn-sc-start" class="btn btn-primary" style="font-size:12px;">Start build</button>
+					  <button id="btn-sc-pause" class="btn" style="font-size:12px;" hidden>Pause</button>
+					  <button id="btn-sc-resume" class="btn btn-primary" style="font-size:12px;" hidden>Resume</button>
+					  <button id="btn-sc-stop" class="btn" style="font-size:12px;color:#ff6b6b;" hidden>Stop</button>
+					  <button id="btn-sc-symtable" class="btn btn-ghost" style="font-size:11px;" title="View symbol table">Symbols</button>
+					  <div class="sc-progress"><div id="sc-progress-bar" class="sc-progress-bar" style="width:0%;"></div></div>
+					  <span id="sc-progress-text" class="sc-progress-text">0 / 0</span>
+					  <button id="btn-sc-download-all" class="btn" style="font-size:12px;margin-left:auto;" hidden title="Download all as zip">
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> All
+					  </button>
+					</div>
+
+					<!-- 3-column layout -->
+					<div class="stage-c-layout" style="flex:1;min-height:0;">
+					  <!-- Left: module list -->
+					  <div class="stage-c-modules">
+						<div class="stage-c-modules-header">Modules</div>
+						<div id="sc-module-list" style="flex:1;overflow-y:auto;padding:4px 0;"></div>
+					  </div>
+
+					  <!-- Center: active module code/tests/output -->
+					  <div class="stage-c-center">
+						<div class="build-header" style="padding:6px 10px;">
+						  <span id="sc-active-name" class="build-module-name" style="font-size:13px;">—</span>
+						  <span id="sc-active-badge" class="build-badge badge-draft" style="font-size:9px;">Pending</span>
+						  <span id="sc-active-attempt" class="attempt-counter"></span>
+						</div>
+						<div class="build-tabs">
+						  <button class="build-tab active" data-sctab="code">Code</button>
+						  <button class="build-tab" data-sctab="tests">Tests</button>
+						  <button class="build-tab" data-sctab="output">Output</button>
+						</div>
+						<div id="sc-code" class="build-content build-code-view active" data-sccontent="code">
+						  <pre><code class="language-python" id="sc-code-display"></code></pre>
+						</div>
+						<div id="sc-tests" class="build-content build-code-view" data-sccontent="tests" hidden>
+						  <pre><code class="language-python" id="sc-tests-display"></code></pre>
+						</div>
+						<div id="sc-output" class="build-content build-output" data-sccontent="output" hidden>
+						  <div id="sc-output-display"></div>
+						</div>
+						<!-- Escalation actions (hidden unless escalated) -->
+						<div id="sc-escalation-bar" class="escalation-bar" hidden>
+						  <button id="btn-sc-edit-rerun" class="btn" style="font-size:11px;">Edit &amp; rerun</button>
+						  <button id="btn-sc-regen" class="btn" style="font-size:11px;">Regenerate</button>
+						  <button id="btn-sc-back-b" class="btn" style="font-size:11px;">Back to skeleton</button>
+						</div>
+					  </div>
+
+					  <!-- Right: live log -->
+					  <div id="sc-log" class="stage-c-log"></div>
+					</div>
 				  </div>
-				</div>
-
-				<!-- Spec card (collapsible) -->
-				<div id="build-spec-card" class="spec-card" hidden>
-				  <button class="spec-toggle" id="spec-toggle-btn">
-					<span class="arrow" style="font-size:10px;" aria-hidden="true">▶</span> Spec
-					<button id="btn-edit-spec" class="btn btn-ghost" style="font-size:11px;margin-left:auto;padding:2px 8px;">Edit</button>
-				  </button>
-				  <div id="build-spec-body" class="spec-body"></div>
-				</div>
-
-				<!-- Build tabs -->
-				<div class="build-tabs">
-				  <button class="build-tab active" data-btab="code">Code</button>
-				  <button class="build-tab" data-btab="tests">Tests</button>
-				  <button class="build-tab" data-btab="output">Output</button>
-				</div>
-
-				<!-- Tab contents -->
-				<div id="build-code" class="build-content build-code-view active" data-bcontent="code">
-				  <pre><code class="language-python" id="build-code-display"></code></pre>
-				</div>
-				<div id="build-tests" class="build-content build-code-view" data-bcontent="tests" hidden>
-				  <pre><code class="language-python" id="build-tests-display"></code></pre>
-				</div>
-				<div id="build-output" class="build-content build-output" data-bcontent="output" hidden>
-				  <div id="build-output-display"></div>
-				</div>
-			  </div>
 			</div>
 		  </div>
 
@@ -901,33 +996,34 @@
 /* ============================================================================
  * 1. NAMESPACE + STATE
  * ==========================================================================*/
-const CodeSmith = {
-  version: '0.4.0',
-  db: null,
-  sandbox: null,
-  llm: null,
-  builder: null,
-  stageA: null,    // Day 5: requirements dialogue
-  stageB: null,    // Day 5: skeleton visualization
-  state: {
-    settings: null,
-    sessions: [],
-    currentId: null,
-  },
-  DB_NAME: 'codesmith_v1',
-  DB_VERSION: 2,
-  STORES: { SETTINGS: 'settings', SESSIONS: 'sessions', ARTIFACTS: 'artifacts' },
-  DEFAULTS: {
-    id: 'app',
-    apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
-    apiKey: '',
-    modelOrchestrator: 'moonshotai/kimi-k2-thinking',
-    modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
-    modelFast:         'meta/llama-3.1-8b-instruct',
-    tokenBudgetCap: 100000,
-    rateLimitRpm: 40,
-  },
-};
+	const CodeSmith = {
+	  version: '0.5.0',
+	  db: null,
+	  sandbox: null,
+	  llm: null,
+	  builder: null,
+	  stageA: null,
+	  stageB: null,
+	  stageC: null,     // Day 6: multi-module build
+	  state: {
+		settings: null,
+		sessions: [],
+		currentId: null,
+	  },
+	  DB_NAME: 'codesmith_v1',
+	  DB_VERSION: 2,
+	  STORES: { SETTINGS: 'settings', SESSIONS: 'sessions', ARTIFACTS: 'artifacts' },
+	  DEFAULTS: {
+		id: 'app',
+		apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
+		apiKey: '',
+		modelOrchestrator: 'moonshotai/kimi-k2-thinking',
+		modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
+		modelFast:         'meta/llama-3.1-8b-instruct',
+		tokenBudgetCap: 100000,
+		rateLimitRpm: 40,
+	  },
+	};
 // expose for devtools only — not for app code
 Object.defineProperty(window, 'CodeSmith', { value: CodeSmith, enumerable: false });
 
@@ -2449,6 +2545,565 @@ const StageB = (() => {
 })();
 CodeSmith.stageB = StageB;
 
+
+/* ============================================================================
+ * 5b. SYMBOL TABLE — orchestrator-owned shared symbol registry (Day 6)
+ *     Tracks types, functions, constants, exceptions across modules.
+ *     apply() validates and emits diff events.
+ * ==========================================================================*/
+const SymbolTable = (() => {
+  let _table = { version: 1, types: {}, functions: {}, constants: {}, exceptions: {} };
+  let _listeners = [];
+
+  function get() { return JSON.parse(JSON.stringify(_table)); }
+
+  function initFromSkeleton(skeleton) {
+    _table = { version: 1, types: {}, functions: {}, constants: {}, exceptions: {} };
+
+    // shared_types → types
+    if (skeleton.shared_types) {
+      for (const [name, def] of Object.entries(skeleton.shared_types)) {
+        _table.types[name] = {
+          definition: typeof def === 'string' ? def : JSON.stringify(def),
+          origin_module: '_shared',
+          description: '',
+        };
+        _emit({ op: 'add', section: 'types', name, value: _table.types[name] });
+      }
+    }
+
+    // modules → functions + exceptions
+    for (const mod of (skeleton.modules || [])) {
+      for (const fn of (mod.public_functions || [])) {
+        _table.functions[mod.id + '.' + fn.name] = {
+          signature: fn.signature || fn.name,
+          module: mod.id,
+          status: 'declared',
+          description: fn.description || '',
+        };
+        _emit({ op: 'add', section: 'functions', name: mod.id + '.' + fn.name });
+        // raises → exceptions
+        for (const exc of (fn.raises || [])) {
+          if (!_table.exceptions[exc]) {
+            _table.exceptions[exc] = { module: mod.id, description: 'from ' + fn.name };
+            _emit({ op: 'add', section: 'exceptions', name: exc });
+          }
+        }
+      }
+    }
+  }
+
+  function apply(operation) {
+    // operation: { op: 'add'|'update'|'remove', section, name, value?, field?, fieldValue? }
+    const { op, section, name } = operation;
+    if (!_table[section]) return { ok: false, error: 'Unknown section: ' + section };
+
+    if (op === 'add') {
+      _table[section][name] = operation.value || {};
+      _emit(operation);
+      return { ok: true };
+    }
+    if (op === 'update') {
+      if (!_table[section][name]) return { ok: false, error: name + ' not found in ' + section };
+      if (operation.field) {
+        _table[section][name][operation.field] = operation.fieldValue;
+      } else if (operation.value) {
+        Object.assign(_table[section][name], operation.value);
+      }
+      _emit(operation);
+      return { ok: true };
+    }
+    if (op === 'remove') {
+      if (!_table[section][name]) return { ok: false, error: name + ' not found' };
+      delete _table[section][name];
+      _emit(operation);
+      return { ok: true };
+    }
+    return { ok: false, error: 'Unknown op: ' + op };
+  }
+
+  function markImplemented(moduleId) {
+    for (const [name, fn] of Object.entries(_table.functions)) {
+      if (fn.module === moduleId && fn.status === 'declared') {
+        fn.status = 'implemented';
+        _emit({ op: 'update', section: 'functions', name, field: 'status', fieldValue: 'implemented' });
+      }
+    }
+  }
+
+  function getDependencyCode(moduleId, skeleton, artifacts) {
+    // Collect source code of implemented dependencies
+    const mod = (skeleton.modules || []).find(m => m.id === moduleId);
+    if (!mod) return '';
+    const deps = mod.depends_on || [];
+    const parts = [];
+    for (const depId of deps) {
+      const art = artifacts.find(a => a.moduleName === depId && a.status === 'passed');
+      if (art && art.code) {
+        parts.push('# IMPLEMENTED — do not modify\n# Module: ' + depId + '\n' + art.code);
+      }
+    }
+    return parts.join('\n\n');
+  }
+
+  function onDiff(listener) { _listeners.push(listener); }
+  function offDiff(listener) { _listeners = _listeners.filter(l => l !== listener); }
+  function _emit(diff) { for (const l of _listeners) try { l(diff); } catch {} }
+
+  function reset() {
+    _table = { version: 1, types: {}, functions: {}, constants: {}, exceptions: {} };
+    _listeners = [];
+  }
+
+  return { get, initFromSkeleton, apply, markImplemented, getDependencyCode, onDiff, offDiff, reset };
+})();
+
+/* ============================================================================
+ * 5c. STAGE C — multi-module build engine (Day 6)
+ *     Walks build_order, sends work orders to worker, manages repair
+ *     loops, symbol negotiation, integration tests.
+ * ==========================================================================*/
+const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE module. Rules:
+1. Only define public names listed in your module spec.
+2. Use exact signatures from the symbol table for dependency calls.
+3. If you genuinely need a symbol not in the table, list it in requested_symbols. Do not use it until approved.
+4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises.
+5. PEP 8; type hints on public functions.
+6. Do not catch exceptions you cannot handle meaningfully.
+
+Output ONLY valid JSON:
+{"code":"full source","tests":"full pytest source","imports_needed":["pkg"],"requested_symbols":[{"kind":"function|type|constant","name":"symbol_name","why":"reason"}],"notes":"optional"}`;
+
+const STAGE_C_REPAIR_ADDENDUM = `The previous attempt failed. Pytest output:
+<pytest_output>
+{PYTEST_OUTPUT}
+</pytest_output>
+Must not change public signatures in the symbol table. If a test itself is wrong, note it and propose a correction — the user must approve test changes. Return the same JSON schema.`;
+
+const STAGE_C_SYMBOL_PROMPT = `A worker module requested new symbols not in the current symbol table.
+Current symbol table:
+{SYMBOL_TABLE}
+Requested symbols:
+{REQUESTED}
+For each requested symbol decide:
+- APPROVE: add it to the table (provide definition)
+- REJECT: worker must find another approach
+- MODIFY_SKELETON: this changes architecture (warn user)
+Output ONLY valid JSON:
+{"decisions":[{"name":"symbol_name","action":"approve|reject|modify_skeleton","definition":"if approved","reason":"why"}]}`;
+
+const STAGE_C_INTEGRATION_PROMPT = `Generate a pytest integration test file. Import each module and exercise the data flow end-to-end.
+Modules (all implemented):
+{MODULES_JSON}
+Data flow:
+{DATA_FLOW_JSON}
+Dummy inputs:
+{DUMMY_INPUTS}
+Acceptance criteria:
+{CRITERIA}
+Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). The file must be runnable with: pytest test_integration.py -v`;
+
+const StageC = (() => {
+  let _state = 'idle'; // idle|running|paused|stopped|complete
+  let _skeleton = null;
+  let _spec = null;
+  let _moduleStates = {};  // { moduleId: 'pending'|'building'|'testing'|'passed'|'failed'|'escalated' }
+  let _moduleArtifacts = []; // accumulated artifacts
+  let _currentModuleId = null;
+  let _aborted = false;
+  let _paused = false;
+
+  const REPAIR_MAX = 3;
+  const INTEGRATION_REPAIR_MAX = 2;
+
+  function getState() { return _state; }
+  function getModuleStates() { return { ..._moduleStates }; }
+  function getModuleArtifacts() { return _moduleArtifacts.slice(); }
+  function getCurrentModuleId() { return _currentModuleId; }
+
+  async function* run(skeleton, spec) {
+    _skeleton = JSON.parse(JSON.stringify(skeleton));
+    _spec = JSON.parse(JSON.stringify(spec));
+    _state = 'running';
+    _aborted = false;
+    _paused = false;
+    _moduleArtifacts = [];
+    _currentModuleId = null;
+
+    // Init module states
+    _moduleStates = {};
+    for (const modId of _skeleton.build_order) {
+      _moduleStates[modId] = 'pending';
+    }
+
+    // Init symbol table from skeleton
+    SymbolTable.initFromSkeleton(_skeleton);
+    yield { type: 'symbols_init', table: SymbolTable.get() };
+
+    // Ensure Pyodide is ready
+    try { await CodeSmith.sandbox.warmUp(); } catch (err) {
+      yield { type: 'error', stage: 'sandbox', error: err };
+      _state = 'stopped';
+      return;
+    }
+    try { await CodeSmith.sandbox.installPackage('pytest'); } catch {}
+
+    const totalModules = _skeleton.build_order.length;
+    let completedModules = 0;
+
+    // ---- Build each module ----
+    for (const modId of _skeleton.build_order) {
+      if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+      if (_paused) {
+        _state = 'paused';
+        yield { type: 'build_paused', moduleId: modId };
+        // Wait for resume
+        while (_paused && !_aborted) await _sleep(200);
+        if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+        _state = 'running';
+      }
+
+      const mod = _skeleton.modules.find(m => m.id === modId);
+      if (!mod) continue;
+
+      _currentModuleId = modId;
+      _moduleStates[modId] = 'building';
+      yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules };
+
+      // Build work order
+      const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
+      const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
+      const workOrder = {
+        module_spec: mod,
+        symbol_table: SymbolTable.get(),
+        dependency_code: depCode,
+        dummy_inputs: dummyInputs,
+      };
+
+      let workerResult = null;
+      let passed = false;
+
+      for (let attempt = 1; attempt <= REPAIR_MAX + 1; attempt++) {
+        if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+
+        const isRepair = attempt > 1;
+        if (isRepair) {
+          _moduleStates[modId] = 'building';
+          yield { type: 'repair_start', moduleId: modId, attempt };
+        }
+
+        // ---- Call worker ----
+        let workerMessages;
+        if (isRepair && workerResult) {
+          const repairMsg = STAGE_C_REPAIR_ADDENDUM.replace('{PYTEST_OUTPUT}', workerResult._lastPytestOutput || '');
+          workerMessages = [
+            { role: 'system', content: STAGE_C_WORKER_SYSTEM },
+            { role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+            { role: 'assistant', content: JSON.stringify({ code: workerResult.code, tests: workerResult.tests }) },
+            { role: 'user', content: repairMsg },
+          ];
+        } else {
+          workerMessages = [
+            { role: 'system', content: STAGE_C_WORKER_SYSTEM },
+            { role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+          ];
+        }
+
+        let workerText = '';
+        let workerError = null;
+        try {
+          for await (const ev of CodeSmith.llm.chat({
+            messages: workerMessages,
+            tier: 'worker',
+            temperature: 0.2,
+            maxTokens: 8000,
+          })) {
+            if (ev.type === 'token') {
+              workerText += ev.delta;
+              yield { type: 'worker_stream', moduleId: modId, delta: ev.delta };
+            } else if (ev.type === 'done') {
+              workerText = ev.text || workerText;
+            } else if (ev.type === 'error' && !ev.recoverable) {
+              workerError = ev.error;
+            }
+          }
+        } catch (err) { workerError = err; }
+
+        if (workerError) {
+          yield { type: 'error', stage: 'worker', moduleId: modId, error: workerError };
+          _moduleStates[modId] = 'failed';
+          break;
+        }
+
+        try {
+          workerResult = _parseJSON(workerText);
+          if (!workerResult || !workerResult.code) throw new Error('Missing code in worker response');
+        } catch (err) {
+          yield { type: 'error', stage: 'worker_parse', moduleId: modId, error: err };
+          _moduleStates[modId] = 'failed';
+          break;
+        }
+
+        yield { type: 'worker_done', moduleId: modId, result: workerResult, attempt };
+
+        // ---- Symbol negotiation ----
+        if (workerResult.requested_symbols && workerResult.requested_symbols.length > 0) {
+          yield { type: 'symbols_requested', moduleId: modId, symbols: workerResult.requested_symbols };
+
+          const decisions = await _negotiateSymbols(workerResult.requested_symbols);
+          yield { type: 'symbols_decision', moduleId: modId, decisions };
+
+          for (const dec of (decisions || [])) {
+            if (dec.action === 'approve') {
+              SymbolTable.apply({
+                op: 'add', section: dec.kind === 'function' ? 'functions' : dec.kind === 'type' ? 'types' : 'constants',
+                name: dec.name,
+                value: { definition: dec.definition || '', module: modId, status: 'declared', description: dec.reason || '' },
+              });
+            }
+            // reject / modify_skeleton: worker proceeds without the symbol
+          }
+        }
+
+        // ---- Write files ----
+        try {
+          await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', workerResult.code);
+          if (workerResult.tests) {
+            await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', workerResult.tests);
+          }
+        } catch (err) {
+          yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
+          break;
+        }
+
+        // ---- Install packages ----
+        for (const pkg of (workerResult.imports_needed || [])) {
+          try { await CodeSmith.sandbox.installPackage(pkg); } catch (err) {
+            yield { type: 'error', stage: 'install', moduleId: modId, error: err };
+          }
+        }
+
+        // ---- Run pytest ----
+        _moduleStates[modId] = 'testing';
+        yield { type: 'tests_start', moduleId: modId, attempt };
+
+        const pytestCode = `
+import sys, os
+sys.path.insert(0, '/workdir')
+os.chdir('/workdir')
+for mod_name in list(sys.modules):
+    if mod_name == '${mod.name}' or mod_name.startswith('${mod.name}.'):
+        del sys.modules[mod_name]
+import pytest
+exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
+`;
+        let testResult;
+        try {
+          testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+        } catch (err) {
+          yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
+          _moduleStates[modId] = 'failed';
+          break;
+        }
+
+        const pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
+        const parsedTest = _parsePytest(pytestOutput);
+        workerResult._lastPytestOutput = pytestOutput.slice(-3000);
+
+        yield {
+          type: 'tests_result', moduleId: modId, attempt,
+          passed: parsedTest.allPassed, passCount: parsedTest.passCount,
+          failCount: parsedTest.failCount, output: pytestOutput,
+        };
+
+        if (parsedTest.allPassed && parsedTest.passCount > 0) {
+          passed = true;
+          break;
+        }
+
+        if (attempt > REPAIR_MAX) break;
+      }
+
+      if (passed) {
+        _moduleStates[modId] = 'passed';
+        SymbolTable.markImplemented(modId);
+        const artifact = {
+          id: modId + '_' + Date.now(),
+          sessionId: CodeSmith.state.currentId,
+          moduleName: modId,
+          code: workerResult.code,
+          tests: workerResult.tests || '',
+          spec: mod,
+          createdAt: Date.now(),
+          status: 'passed',
+        };
+        _moduleArtifacts.push(artifact);
+        try { await CodeSmith.db.putArtifact(artifact); } catch {}
+        completedModules++;
+        yield { type: 'module_passed', moduleId: modId, progress: completedModules + '/' + totalModules, table: SymbolTable.get() };
+      } else {
+        _moduleStates[modId] = 'escalated';
+        yield {
+          type: 'module_escalated', moduleId: modId,
+          code: workerResult ? workerResult.code : '',
+          tests: workerResult ? workerResult.tests : '',
+          output: workerResult ? workerResult._lastPytestOutput : '',
+          table: SymbolTable.get(),
+        };
+        // Pause build on escalation
+        _state = 'paused';
+        return; // Caller must handle resume
+      }
+    }
+
+    // ---- Integration test ----
+    yield { type: 'integration_start' };
+
+    let integrationPassed = false;
+    for (let intAttempt = 1; intAttempt <= INTEGRATION_REPAIR_MAX + 1; intAttempt++) {
+      const integCode = await _generateIntegrationTest(intAttempt > 1);
+      if (!integCode) {
+        yield { type: 'error', stage: 'integration_gen', error: new Error('Failed to generate integration test') };
+        break;
+      }
+
+      try {
+        await CodeSmith.sandbox.writeFile('/workdir/test_integration.py', integCode);
+      } catch {}
+
+      const integPytest = `
+import sys, os
+sys.path.insert(0, '/workdir')
+os.chdir('/workdir')
+import pytest
+exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--no-header'])
+`;
+      let integResult;
+      try {
+        integResult = await CodeSmith.sandbox.runPython(integPytest, { sessionGlobals: true, timeoutMs: 45000 });
+      } catch (err) {
+        yield { type: 'error', stage: 'integration_run', error: err };
+        break;
+      }
+
+      const integOutput = (integResult.stdout || '') + (integResult.stderr || '');
+      const integParsed = _parsePytest(integOutput);
+
+      yield {
+        type: 'integration_result', attempt: intAttempt,
+        passed: integParsed.allPassed, passCount: integParsed.passCount,
+        failCount: integParsed.failCount, output: integOutput,
+      };
+
+      if (integParsed.allPassed && integParsed.passCount > 0) {
+        integrationPassed = true;
+        break;
+      }
+
+      if (intAttempt > INTEGRATION_REPAIR_MAX) break;
+
+      // Targeted repair: let orchestrator pick culprit
+      // (simplified: just retry with error context)
+    }
+
+    if (integrationPassed) {
+      _state = 'complete';
+      yield { type: 'build_complete', modules: _moduleArtifacts.length, table: SymbolTable.get() };
+    } else {
+      _state = 'stopped';
+      yield { type: 'error', stage: 'integration', error: new Error('Integration tests failed after retries') };
+    }
+  }
+
+  async function _generateIntegrationTest(isRetry) {
+    const modsJson = JSON.stringify(_skeleton.modules.map(m => ({
+      id: m.id, name: m.name, public_functions: (m.public_functions || []).map(f => f.signature),
+    })), null, 2);
+    const dataFlowJson = JSON.stringify(_skeleton.data_flow || [], null, 2);
+    const dummyInputs = _spec.inputs ? JSON.stringify(_spec.inputs) : '{}';
+    const criteria = JSON.stringify(_spec.acceptance_criteria || []);
+
+    const prompt = STAGE_C_INTEGRATION_PROMPT
+      .replace('{MODULES_JSON}', modsJson)
+      .replace('{DATA_FLOW_JSON}', dataFlowJson)
+      .replace('{DUMMY_INPUTS}', dummyInputs)
+      .replace('{CRITERIA}', criteria);
+
+    try {
+      const result = await CodeSmith.llm.chatComplete({
+        messages: [
+          { role: 'system', content: 'You are a senior Python test engineer. Output ONLY valid Python code.' },
+          { role: 'user', content: prompt },
+        ],
+        tier: 'orchestrator',
+        temperature: 0.2,
+        maxTokens: 4000,
+      });
+      let code = (result.text || '').trim();
+      if (code.startsWith('```')) code = code.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      return code;
+    } catch { return null; }
+  }
+
+  async function _negotiateSymbols(requested) {
+    const prompt = STAGE_C_SYMBOL_PROMPT
+      .replace('{SYMBOL_TABLE}', JSON.stringify(SymbolTable.get(), null, 2))
+      .replace('{REQUESTED}', JSON.stringify(requested, null, 2));
+
+    try {
+      const result = await CodeSmith.llm.chatComplete({
+        messages: [
+          { role: 'system', content: 'You are the orchestrator managing a shared symbol table.' },
+          { role: 'user', content: prompt },
+        ],
+        tier: 'orchestrator',
+        temperature: 0.1,
+        maxTokens: 2000,
+      });
+      const parsed = _parseJSON(result.text);
+      return parsed.decisions || [];
+    } catch { return []; }
+  }
+
+  function pause() { _paused = true; }
+  function resume() { _paused = false; }
+  function stop() { _aborted = true; _paused = false; }
+
+  function resumeAfterEscalation(moduleId, editedCode, editedTests) {
+    // Returns data needed to re-attempt the escalated module
+    return { moduleId, code: editedCode, tests: editedTests };
+  }
+
+  function _parseJSON(text) {
+    if (!text) throw new Error('Empty response');
+    let cleaned = text.trim();
+    if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    try { return JSON.parse(cleaned); } catch {}
+    const s = cleaned.indexOf('{');
+    const e = cleaned.lastIndexOf('}');
+    if (s >= 0 && e > s) {
+      try { return JSON.parse(cleaned.slice(s, e + 1)); } catch {}
+    }
+    throw new Error('Failed to parse JSON');
+  }
+
+  function _parsePytest(output) {
+    let passCount = 0, failCount = 0;
+    const pm = output.match(/(\d+)\s+passed/);
+    const fm = output.match(/(\d+)\s+failed/);
+    const em = output.match(/(\d+)\s+error/);
+    if (pm) passCount = parseInt(pm[1], 10);
+    if (fm) failCount = parseInt(fm[1], 10);
+    if (em) failCount += parseInt(em[1], 10);
+    return { passCount, failCount, allPassed: failCount === 0 && passCount > 0 };
+  }
+
+  function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  return { run, getState, getModuleStates, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation };
+})();
+CodeSmith.stageC = StageC;
+
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
  *    No innerHTML with user content — textContent or element builders only.
@@ -3101,6 +3756,7 @@ function wireComposer() {
     wireDebugPanel(); // Day 2
 	wireMode();          // Day 4
 	wireStepper();       // Day 5
+	wireStageC();       // Day 6
   }
 
   // ---- debug panel (Day 2) ------------------------------------------------
@@ -3678,20 +4334,14 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		// Stage B buttons
 		$('#btn-b-approve').addEventListener('click', async () => {
-		  const skel = CodeSmith.stageB.approve();
-		  if (!skel) return;
-		  await _persistStageState();
-		  _showStep('c');
-		  // Auto-start build for first module in build_order
-		  if (skel.build_order && skel.build_order.length > 0) {
-			const firstId = skel.build_order[0];
-			const mod = skel.modules.find(m => m.id === firstId);
-			if (mod) {
-			  const prompt = _moduleToBuildPrompt(mod, skel);
-			  runBuildPipeline(prompt);
-			}
-		  }
-		});
+			  const skel = CodeSmith.stageB.approve();
+			  if (!skel) return;
+			  await _persistStageState();
+			  _showStep('c');
+			  // Day 6: Stage C handles multi-module build; auto-start
+			  _scRenderModuleList();
+			  _scUpdateProgress();
+			});
 
 		$('#btn-b-regenerate').addEventListener('click', () => {
 		  _generateSkeleton();
@@ -3707,22 +4357,21 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		});
 	  }
 
-	  function _showStep(step) {
-		_currentStep = step;
-		// Update stepper visual
-		document.querySelectorAll('.step-item').forEach(si => {
-		  si.classList.remove('active', 'done');
-		  const s = si.dataset.step;
-		  if (s === step) si.classList.add('active');
-		  else if (s < step) si.classList.add('done');
-		});
+	 function _showStep(step) {
+			_currentStep = step;
+			document.querySelectorAll('.step-item').forEach(si => {
+			  si.classList.remove('active', 'done');
+			  const s = si.dataset.step;
+			  if (s === step) si.classList.add('active');
+			  else if (s < step) si.classList.add('done');
+			});
 
-		$('#stage-a-panel').hidden = step !== 'a';
-		$('#stage-a-panel').style.display = step === 'a' ? '' : 'none';
-		$('#stage-b-panel').hidden = step !== 'b';
-		$('#stage-c-panel').hidden = step !== 'c';
-		$('#stage-c-panel').style.display = step === 'c' ? '' : 'none';
-	  }
+			$('#stage-a-panel').hidden = step !== 'a';
+			$('#stage-a-panel').style.display = step === 'a' ? '' : 'none';
+			$('#stage-b-panel').hidden = step !== 'b';
+			$('#stage-c-panel').hidden = step !== 'c';
+			$('#stage-c-panel').style.display = step === 'c' ? 'flex' : 'none';
+		  }
 
 	  function startBuildMode(userPrompt) {
 		// Switch to build mode
@@ -4015,6 +4664,414 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		}
 		await CodeSmith.db.putSession(sess);
 	  }
+	  // ---- Day 6: Stage C multi-module UI wiring ------------------------------
+  let _scBuildGenerator = null;
+  let _scActiveModuleId = null;
+  let _scModuleData = {};  // { moduleId: { code, tests, output } }
+
+  function wireStageC() {
+    // Tab switching
+    for (const tab of document.querySelectorAll('[data-sctab]')) {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('[data-sctab]').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('[data-sccontent]').forEach(c => { c.hidden = true; c.classList.remove('active'); });
+        tab.classList.add('active');
+        const tgt = tab.dataset.sctab;
+        const content = document.querySelector(`[data-sccontent="${tgt}"]`);
+        if (content) { content.hidden = false; content.classList.add('active'); }
+      });
+    }
+
+    // Controls
+    $('#btn-sc-start').addEventListener('click', () => _scStartBuild());
+    $('#btn-sc-pause').addEventListener('click', () => {
+      CodeSmith.stageC.pause();
+      $('#btn-sc-pause').hidden = true;
+      $('#btn-sc-resume').hidden = false;
+    });
+    $('#btn-sc-resume').addEventListener('click', () => {
+      CodeSmith.stageC.resume();
+      $('#btn-sc-resume').hidden = true;
+      $('#btn-sc-pause').hidden = false;
+    });
+    $('#btn-sc-stop').addEventListener('click', () => {
+      CodeSmith.stageC.stop();
+    });
+    $('#btn-sc-symtable').addEventListener('click', _showSymbolTable);
+    $('#btn-sc-download-all').addEventListener('click', _scDownloadAll);
+
+    // Escalation buttons
+    $('#btn-sc-edit-rerun').addEventListener('click', _scEditAndRerun);
+    $('#btn-sc-regen').addEventListener('click', () => {
+      // Re-start build from current module
+      _scStartBuild();
+    });
+    $('#btn-sc-back-b').addEventListener('click', () => {
+      _showStep('b');
+    });
+  }
+
+  function _scLog(text, cls) {
+    const log = $('#sc-log');
+    const entry = el('div', { class: 'log-entry ' + (cls || 'log-info') });
+    const time = el('span', { class: 'log-time' });
+    const now = new Date();
+    time.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    entry.appendChild(time);
+    entry.appendChild(document.createTextNode(text));
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function _scRenderModuleList() {
+    const list = $('#sc-module-list');
+    list.replaceChildren();
+    const states = CodeSmith.stageC.getModuleStates();
+    const skeleton = CodeSmith.stageB.getSkeleton();
+    if (!skeleton) return;
+
+    for (const modId of skeleton.build_order) {
+      const mod = skeleton.modules.find(m => m.id === modId);
+      const state = states[modId] || 'pending';
+      const item = el('div', {
+        class: 'sc-mod-item' + (modId === _scActiveModuleId ? ' active' : ''),
+        dataset: { modId: modId },
+      });
+
+      const dot = el('span', { class: 'sc-dot ' + state });
+      item.appendChild(dot);
+
+      const name = el('span', { class: 'sc-mod-name' }, mod ? mod.name : modId);
+      item.appendChild(name);
+
+      let statusText = state;
+      if (state === 'building') statusText = 'building…';
+      if (state === 'testing') statusText = 'testing…';
+      const statusSpan = el('span', { class: 'sc-mod-status' }, statusText);
+      item.appendChild(statusSpan);
+
+      item.addEventListener('click', () => _scSelectModule(modId));
+      list.appendChild(item);
+    }
+  }
+
+  function _scSelectModule(modId) {
+    _scActiveModuleId = modId;
+    _scRenderModuleList();
+    const data = _scModuleData[modId] || {};
+    const skeleton = CodeSmith.stageB.getSkeleton();
+    const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+    const states = CodeSmith.stageC.getModuleStates();
+    const state = states[modId] || 'pending';
+
+    $('#sc-active-name').textContent = mod ? mod.name : modId;
+    const badge = $('#sc-active-badge');
+    badge.className = 'build-badge badge-' + (state === 'building' || state === 'testing' ? 'running' : state);
+    badge.textContent = state;
+
+    const codeEl = $('#sc-code-display');
+    codeEl.textContent = data.code || '';
+    if (data.code && window.hljs) hljs.highlightElement(codeEl);
+
+    const testsEl = $('#sc-tests-display');
+    testsEl.textContent = data.tests || '';
+    if (data.tests && window.hljs) hljs.highlightElement(testsEl);
+
+    $('#sc-output-display').textContent = data.output || '';
+
+    // Show escalation bar if escalated
+    $('#sc-escalation-bar').hidden = state !== 'escalated';
+  }
+
+  function _scUpdateProgress() {
+    const states = CodeSmith.stageC.getModuleStates();
+    const total = Object.keys(states).length;
+    const passed = Object.values(states).filter(s => s === 'passed').length;
+    const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
+    $('#sc-progress-bar').style.width = pct + '%';
+    $('#sc-progress-text').textContent = passed + ' / ' + total;
+  }
+
+  async function _scStartBuild() {
+    const skeleton = CodeSmith.stageB.getSkeleton();
+    const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
+    if (!skeleton) { _scLog('No skeleton available', 'log-fail'); return; }
+
+    // Show controls
+    $('#btn-sc-start').hidden = true;
+    $('#btn-sc-pause').hidden = false;
+    $('#btn-sc-stop').hidden = false;
+    $('#sc-escalation-bar').hidden = true;
+    _scModuleData = {};
+
+    // Clear log
+    $('#sc-log').replaceChildren();
+    _scLog('Build started — ' + skeleton.build_order.length + ' modules');
+
+    _scRenderModuleList();
+    _scUpdateProgress();
+
+    // Symbol table diff listener
+    const diffListener = (diff) => {
+      const label = diff.op + ' ' + diff.section + '.' + diff.name;
+      _scLog('Δ ' + label, 'log-diff');
+    };
+    SymbolTable.onDiff(diffListener);
+
+    try {
+      for await (const ev of CodeSmith.stageC.run(skeleton, spec)) {
+        switch (ev.type) {
+          case 'symbols_init':
+            _scLog('Symbol table initialized');
+            break;
+          case 'module_start':
+            _scActiveModuleId = ev.moduleId;
+            _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
+            _scRenderModuleList();
+            _scSelectModule(ev.moduleId);
+            _scLog('▶ ' + ev.moduleId + ' (' + ev.progress + ')');
+            break;
+          case 'worker_stream':
+            // Accumulate for display
+            if (_scModuleData[ev.moduleId]) {
+              _scModuleData[ev.moduleId]._rawWorker = (_scModuleData[ev.moduleId]._rawWorker || '') + ev.delta;
+            }
+            break;
+          case 'worker_done':
+            if (_scModuleData[ev.moduleId]) {
+              _scModuleData[ev.moduleId].code = ev.result.code || '';
+              _scModuleData[ev.moduleId].tests = ev.result.tests || '';
+            }
+            _scSelectModule(ev.moduleId);
+            _scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
+            break;
+          case 'symbols_requested':
+            _scLog('Symbols requested: ' + ev.symbols.map(s => s.name).join(', '), 'log-warn');
+            break;
+          case 'symbols_decision':
+            for (const d of (ev.decisions || [])) {
+              _scLog('Symbol ' + d.name + ': ' + d.action, d.action === 'approve' ? 'log-pass' : 'log-warn');
+            }
+            break;
+          case 'tests_start':
+            _scLog('Testing ' + ev.moduleId + ' (attempt ' + ev.attempt + ')…');
+            _scRenderModuleList();
+            break;
+          case 'tests_result':
+            if (_scModuleData[ev.moduleId]) {
+              _scModuleData[ev.moduleId].output += ev.output + '\n';
+            }
+            _scSelectModule(ev.moduleId);
+            _scLog(
+              ev.passed ? '✓ ' + ev.moduleId + ' passed (' + ev.passCount + ')' : '✗ ' + ev.moduleId + ' failed (' + ev.failCount + ' failures)',
+              ev.passed ? 'log-pass' : 'log-fail'
+            );
+            break;
+          case 'repair_start':
+            _scLog('Repair ' + ev.moduleId + ' attempt ' + ev.attempt, 'log-warn');
+            break;
+          case 'module_passed':
+            _scRenderModuleList();
+            _scUpdateProgress();
+            _scLog('✓ ' + ev.moduleId + ' implemented', 'log-pass');
+            break;
+          case 'module_escalated':
+            if (_scModuleData[ev.moduleId]) {
+              _scModuleData[ev.moduleId].code = ev.code;
+              _scModuleData[ev.moduleId].tests = ev.tests;
+              _scModuleData[ev.moduleId].output += ev.output + '\n';
+            }
+            _scRenderModuleList();
+            _scSelectModule(ev.moduleId);
+            _scLog('⚠ ' + ev.moduleId + ' ESCALATED — build paused', 'log-fail');
+            $('#btn-sc-pause').hidden = true;
+            $('#btn-sc-resume').hidden = true;
+            break;
+          case 'integration_start':
+            _scLog('Integration test starting…');
+            break;
+          case 'integration_result':
+            _scLog(
+              ev.passed ? '✓ Integration passed' : '✗ Integration failed (attempt ' + ev.attempt + ')',
+              ev.passed ? 'log-pass' : 'log-fail'
+            );
+            break;
+          case 'build_complete':
+            _scLog('BUILD COMPLETE — ' + ev.modules + ' modules', 'log-pass');
+            $('#btn-sc-download-all').hidden = false;
+            break;
+          case 'build_paused':
+            _scLog('Build paused at ' + ev.moduleId, 'log-warn');
+            break;
+          case 'build_stopped':
+            _scLog('Build stopped by user', 'log-warn');
+            break;
+          case 'error':
+            _scLog('[' + ev.stage + '] ' + (ev.error ? ev.error.message : 'Unknown error'), 'log-fail');
+            break;
+        }
+      }
+    } finally {
+      SymbolTable.offDiff(diffListener);
+      // Reset controls
+      $('#btn-sc-start').hidden = false;
+      $('#btn-sc-start').textContent = 'Restart build';
+      $('#btn-sc-pause').hidden = true;
+      $('#btn-sc-stop').hidden = true;
+      $('#btn-sc-resume').hidden = true;
+      _scRenderModuleList();
+      _scUpdateProgress();
+      // Refresh artifacts list
+      renderArtifactList();
+    }
+  }
+
+  function _showSymbolTable() {
+    const table = SymbolTable.get();
+    const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+    const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:700px;' });
+    const header = el('div', { class: 'flex items-center justify-between mb-3' });
+    header.appendChild(el('div', { class: 'text-[14px] font-semibold' }, 'Symbol Table'));
+    const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close' });
+    closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    const content = el('div', { class: 'symtable-modal-content' });
+    // Render with color coding
+    for (const section of ['functions', 'types', 'exceptions', 'constants']) {
+      const entries = Object.entries(table[section] || {});
+      if (entries.length === 0) continue;
+      const sectionHeader = el('div', { style: 'color:#4f8cff;font-weight:600;margin-top:8px;margin-bottom:4px;' }, section.toUpperCase());
+      content.appendChild(sectionHeader);
+      for (const [name, val] of entries) {
+        const row = el('div', { style: 'padding:1px 0;' });
+        const nameSpan = el('span');
+        const status = val.status || '';
+        nameSpan.className = status === 'implemented' ? 'sym-implemented' : 'sym-declared';
+        nameSpan.textContent = name;
+        row.appendChild(nameSpan);
+        if (val.signature) row.appendChild(document.createTextNode('  ' + val.signature));
+        if (val.module) row.appendChild(el('span', { style: 'color:#5b6474;margin-left:6px;' }, '[' + val.module + ']'));
+        if (status) row.appendChild(el('span', { style: 'margin-left:6px;font-size:10px;color:' + (status === 'implemented' ? '#4ade80' : '#f59e0b') }, status));
+        content.appendChild(row);
+      }
+    }
+    modal.appendChild(content);
+
+    const close = () => { backdrop.remove(); modal.remove(); };
+    closeBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    document.body.appendChild(backdrop);
+    document.body.appendChild(modal);
+  }
+
+  async function _scDownloadAll() {
+    const arts = CodeSmith.stageC.getModuleArtifacts();
+    if (arts.length === 0) return;
+    if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
+    const zip = new JSZip();
+    for (const a of arts) {
+      zip.file((a.moduleName || a.id) + '.py', a.code || '');
+      if (a.tests) zip.file('test_' + (a.moduleName || a.id) + '.py', a.tests);
+    }
+    // Add integration test if exists
+    try {
+      const integCode = await CodeSmith.sandbox.readFile('/workdir/test_integration.py');
+      if (integCode) zip.file('test_integration.py', integCode);
+    } catch {}
+    // Add spec
+    const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
+    if (spec) zip.file('spec.json', JSON.stringify(spec, null, 2));
+    // Add symbol table
+    zip.file('symbol_table.json', JSON.stringify(SymbolTable.get(), null, 2));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'codesmith_build.zip'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function _scEditAndRerun() {
+    // Make code/tests editable for the escalated module
+    const modId = _scActiveModuleId;
+    if (!modId) return;
+    const data = _scModuleData[modId] || {};
+
+    const codePane = $('#sc-code');
+    const testsPane = $('#sc-tests');
+
+    codePane.replaceChildren();
+    const codeTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-code' });
+    codeTA.value = data.code || '';
+    codePane.appendChild(codeTA);
+
+    testsPane.replaceChildren();
+    const testsTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-tests' });
+    testsTA.value = data.tests || '';
+    testsPane.appendChild(testsTA);
+
+    // Replace escalation bar with rerun button
+    const escBar = $('#sc-escalation-bar');
+    escBar.replaceChildren();
+    const rerunBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;' }, 'Save & rerun tests');
+    rerunBtn.addEventListener('click', async () => {
+      const code = $('#sc-edit-code').value;
+      const tests = $('#sc-edit-tests').value;
+      const skeleton = CodeSmith.stageB.getSkeleton();
+      const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+      if (!mod) return;
+
+      _scLog('Re-running ' + modId + ' with edits…');
+
+      await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', code);
+      await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', tests);
+
+      const pytestCode = `
+import sys, os
+sys.path.insert(0, '/workdir')
+os.chdir('/workdir')
+for mn in list(sys.modules):
+    if mn == '${mod.name}' or mn.startswith('${mod.name}.'):
+        del sys.modules[mn]
+import pytest
+exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
+`;
+      const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+      const output = (result.stdout || '') + (result.stderr || '');
+      const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
+
+      _scModuleData[modId] = { code, tests, output };
+
+      if (passed) {
+        _scLog('✓ ' + modId + ' passed after manual edit', 'log-pass');
+        SymbolTable.markImplemented(modId);
+        const artifact = {
+          id: modId + '_' + Date.now(),
+          sessionId: CodeSmith.state.currentId,
+          moduleName: modId,
+          code, tests,
+          spec: mod,
+          createdAt: Date.now(),
+          status: 'passed',
+        };
+        try { await CodeSmith.db.putArtifact(artifact); } catch {}
+        // Re-render and allow resume
+        _scRenderModuleList();
+        _scUpdateProgress();
+        _scSelectModule(modId);
+        // Show resume button to continue with next module
+        $('#btn-sc-resume').hidden = false;
+        CodeSmith.stageC.resume();
+        escBar.hidden = true;
+      } else {
+        _scLog('✗ Still failing after edit', 'log-fail');
+        _scModuleData[modId].output = output;
+        _scSelectModule(modId);
+      }
+    });
+    escBar.appendChild(rerunBtn);
+  }
   
 	return {
 		wire, refreshSessions, renderChat, renderSessionList,
