@@ -2706,7 +2706,10 @@ Output STRICT JSON (no prose, no markdown fences):
 }
 
 Rules:
-- Distinct snake_case module ids
+- module.id and module.name MUST match regex ^[a-z][a-z0-9_]*$ (snake_case lowercase, NO spaces, NO capitals, NO hyphens)
+- Good examples: data_ingestion, csv_reader, pipeline_orchestrator
+- Bad examples: "Data Ingestion", "CSVReader", "data-ingestion", "DataIngestion"
+- Distinct module ids
 - build_order topologically valid (no cycles)
 - Prefer 3-7 modules
 - Complete type hints on all public function signatures
@@ -2756,14 +2759,32 @@ const StageB = (() => {
       }
     }
 
-    if (!parsed.modules || !Array.isArray(parsed.modules)) {
-      throw new Error('Skeleton JSON missing modules array');
-    }
-
-    _skeleton = parsed;
-    _mermaidDef = _buildMermaid(parsed);
-    return parsed;
-  }
+	if (!parsed.modules || !Array.isArray(parsed.modules)) {
+	      throw new Error('Skeleton JSON missing modules array');
+	    }
+	
+	    // Sanitize module names and ids
+	    const sanitize = (n) => {
+	      if (!n) return 'module';
+	      let c = String(n).trim().toLowerCase()
+	        .replace(/[\s-]+/g, '_')
+	        .replace(/[^a-z0-9_]/g, '')
+	        .replace(/^[0-9]/, '_$&');
+	      if (!c || !/^[a-z_]/.test(c)) c = 'mod_' + c;
+	      return c || 'module';
+	    };
+	    for (const mod of parsed.modules) {
+	      if (mod.name) mod.name = sanitize(mod.name);
+	      if (mod.id)   mod.id   = sanitize(mod.id);
+	    }
+	    if (Array.isArray(parsed.build_order)) {
+	      parsed.build_order = parsed.build_order.map(sanitize);
+	    }
+	
+	    _skeleton = parsed;
+	    _mermaidDef = _buildMermaid(parsed);
+	    return parsed;
+	  }
 
   function getSkeleton() { return _skeleton ? JSON.parse(JSON.stringify(_skeleton)) : null; }
   function getApprovedSpec() { return _approvedSpec ? JSON.parse(JSON.stringify(_approvedSpec)) : null; }
@@ -3130,16 +3151,18 @@ const StageC = (() => {
           }
         }
 
-        // ---- Write files ----
-        try {
-          await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', workerResult.code);
-          if (workerResult.tests) {
-            await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', workerResult.tests);
-          }
-        } catch (err) {
-          yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
-          break;
-        }
+		// ---- Write files ----
+		        const safeName = _sanitizeModuleName(mod.name || mod.id);
+		        mod.name = safeName;
+		        try {
+		          await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', workerResult.code);
+		          if (workerResult.tests) {
+		            await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', workerResult.tests);
+		          }
+		        } catch (err) {
+		          yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
+		          break;
+		        }
 
         // ---- Install packages ----
         for (const pkg of (workerResult.imports_needed || [])) {
@@ -3152,16 +3175,16 @@ const StageC = (() => {
         _moduleStates[modId] = 'testing';
         yield { type: 'tests_start', moduleId: modId, attempt };
 
-        const pytestCode = `
-import sys, os
-sys.path.insert(0, '/workdir')
-os.chdir('/workdir')
-for mod_name in list(sys.modules):
-    if mod_name == '${mod.name}' or mod_name.startswith('${mod.name}.'):
-        del sys.modules[mod_name]
-import pytest
-exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
-`;
+		const pytestCode = `
+				import sys, os
+				sys.path.insert(0, '/workdir')
+				os.chdir('/workdir')
+				for mod_name in list(sys.modules):
+				    if mod_name == '${safeName}' or mod_name.startswith('${safeName}.'):
+				        del sys.modules[mod_name]
+				import pytest
+				exit_code = pytest.main(['-v', '/workdir/test_${safeName}.py', '--tb=short', '--no-header'])
+				`;
         let testResult;
         try {
           testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
@@ -3339,6 +3362,16 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     return { moduleId, code: editedCode, tests: editedTests };
   }
 
+	function _sanitizeModuleName(name) {
+    if (!name) return 'module';
+    let clean = String(name).trim().toLowerCase()
+      .replace(/[\s-]+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+      .replace(/^[0-9]/, '_$&');
+    if (!clean || !/^[a-z_]/.test(clean)) clean = 'mod_' + clean;
+    return clean || 'module';
+  }
+	
   function _parseJSON(text) {
     if (!text) throw new Error('Empty response');
     let cleaned = text.trim();
@@ -4288,16 +4321,24 @@ function wireComposer() {
       $('#build-spec-body').textContent = JSON.stringify(data.spec, null, 2);
     }
 
-    if (data.code) {
-      const codeEl = $('#build-code-display');
-      codeEl.textContent = data.code;
-      if (window.hljs) hljs.highlightElement(codeEl);
-    }
-    if (data.tests) {
-      const testsEl = $('#build-tests-display');
-      testsEl.textContent = data.tests;
-      if (window.hljs) hljs.highlightElement(testsEl);
-    }
+	if (data.code) {
+	      const codeEl = $('#build-code-display');
+	      codeEl.textContent = data.code;
+	      if (window.hljs) {
+	        delete codeEl.dataset.highlighted;
+	        codeEl.className = 'language-python';
+	        hljs.highlightElement(codeEl);
+	      }
+	    }
+	    if (data.tests) {
+	      const testsEl = $('#build-tests-display');
+	      testsEl.textContent = data.tests;
+	      if (window.hljs) {
+	        delete testsEl.dataset.highlighted;
+	        testsEl.className = 'language-python';
+	        hljs.highlightElement(testsEl);
+	      }
+	    }
     if (data.output != null) {
       $('#build-output-display').textContent = data.output;
     }
@@ -5064,13 +5105,21 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     badge.className = 'build-badge badge-' + (state === 'building' || state === 'testing' ? 'running' : state);
     badge.textContent = state;
 
-    const codeEl = $('#sc-code-display');
-    codeEl.textContent = data.code || '';
-    if (data.code && window.hljs) hljs.highlightElement(codeEl);
-
-    const testsEl = $('#sc-tests-display');
-    testsEl.textContent = data.tests || '';
-    if (data.tests && window.hljs) hljs.highlightElement(testsEl);
+	const codeEl = $('#sc-code-display');
+	    codeEl.textContent = data.code || '';
+	    if (data.code && window.hljs) {
+	      delete codeEl.dataset.highlighted;
+	      codeEl.className = 'language-python';
+	      hljs.highlightElement(codeEl);
+	    }
+	
+	    const testsEl = $('#sc-tests-display');
+	    testsEl.textContent = data.tests || '';
+	    if (data.tests && window.hljs) {
+	      delete testsEl.dataset.highlighted;
+	      testsEl.className = 'language-python';
+	      hljs.highlightElement(testsEl);
+	    }
 
     $('#sc-output-display').textContent = data.output || '';
 
