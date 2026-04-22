@@ -2754,54 +2754,57 @@ CodeSmith.stageA = StageA;
  *    topology, produces Mermaid flowchart definition.
  * ==========================================================================*/
 
-const STAGE_B_SYSTEM = `You are a senior software architect. The user approved this specification. Design a modular Python architecture.
-
-Output STRICT JSON (no prose, no markdown fences):
-{
-  "summary": "one-line architecture summary",
-  "modules": [
-    {
-      "id": "snake_case_id",
-      "name": "module_name",
-      "purpose": "one-line purpose",
-      "public_functions": [
-        { "name": "fn_name", "signature": "fn_name(arg: type) -> type", "description": "what it does", "raises": ["ValueError"] }
-      ],
-      "depends_on": ["other_module_id"],
-      "notes": "optional"
-    }
-  ],
-  "shared_types": { "TypeName": "definition" },
-  "data_flow": [ { "from": "module_id", "to": "module_id", "data": "description" } ],
-  "build_order": ["module_id_1", "module_id_2"]
-}
-
-Rules:
-- module.id and module.name MUST match regex ^[a-z][a-z0-9_]*$ (snake_case lowercase, NO spaces, NO capitals, NO hyphens)
-- Good examples: data_ingestion, csv_reader, pipeline_orchestrator
-- Bad examples: "Data Ingestion", "CSVReader", "data-ingestion", "DataIngestion"
-- Distinct module ids
-- build_order topologically valid (no cycles)
-- Prefer 3-7 modules
-- Complete type hints on all public function signatures
-- shared_types for anything crossing module boundaries
-
-Specification:
-{spec_json}`;
+	const STAGE_B_SYSTEM = `You are a senior software architect. The user approved this specification. Design a modular Python architecture.
+	
+	CRITICAL: Your ENTIRE response must be a single valid JSON object. No prose before or after. No markdown fences. No explanation. ONLY the JSON object.
+	
+	The JSON schema:
+	{
+	  "summary": "one-line architecture summary",
+	  "modules": [
+	    {
+	      "id": "snake_case_id",
+	      "name": "module_name",
+	      "purpose": "one-line purpose",
+	      "public_functions": [
+	        { "name": "fn_name", "signature": "fn_name(arg: type) -> type", "description": "what it does", "raises": ["ValueError"] }
+	      ],
+	      "depends_on": ["other_module_id"],
+	      "notes": "optional"
+	    }
+	  ],
+	  "shared_types": { "TypeName": "definition" },
+	  "data_flow": [ { "from": "module_id", "to": "module_id", "data": "description" } ],
+	  "build_order": ["module_id_1", "module_id_2"]
+	}
+	
+	Rules:
+	- Distinct snake_case module ids
+	- build_order topologically valid (no cycles)
+	- Prefer 3-7 modules
+	- Complete type hints on all public function signatures
+	- shared_types for anything crossing module boundaries
+	- Do NOT wrap the JSON in markdown code fences
+	- Do NOT include any text before or after the JSON
+	
+	Specification:
+	{spec_json}`;
 
 const StageB = (() => {
   let _skeleton = null;
   let _approvedSpec = null;
   let _mermaidDef = '';
 
-  async function generate(spec) {
+async function generate(spec, onStream) {
     _approvedSpec = JSON.parse(JSON.stringify(spec));
     _skeleton = null;
     _mermaidDef = '';
 
     const systemContent = STAGE_B_SYSTEM.replace('{spec_json}', JSON.stringify(spec, null, 2));
+    let fullText = '';
 
-    const result = await CodeSmith.llm.chatComplete({
+    // Stream so UI can show progress
+    for await (const ev of CodeSmith.llm.chat({
       messages: [
         { role: 'system', content: systemContent },
         { role: 'user', content: 'Design the architecture.' },
@@ -2809,54 +2812,63 @@ const StageB = (() => {
       tier: 'orchestrator',
       temperature: 0.2,
       maxTokens: 6000,
-    });
-
-    // Parse JSON
-    let parsed;
-    const raw = result.text || '';
-    let cleaned = raw.trim();
-    if (cleaned.startsWith('```')) {
-      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-    try { parsed = JSON.parse(cleaned); } catch {
-      const s = cleaned.indexOf('{');
-      const e = cleaned.lastIndexOf('}');
-      if (s >= 0 && e > s) {
-        try { parsed = JSON.parse(cleaned.slice(s, e + 1)); } catch {
-          throw new Error('Failed to parse skeleton JSON from model');
-        }
-      } else {
-        throw new Error('Failed to parse skeleton JSON from model');
+    })) {
+      if (ev.type === 'token') {
+        fullText += ev.delta;
+        if (onStream) onStream(fullText);
+      } else if (ev.type === 'done') {
+        fullText = ev.text || fullText;
+      } else if (ev.type === 'error' && !ev.recoverable) {
+        throw ev.error || new Error('Skeleton generation failed');
       }
     }
 
-	if (!parsed.modules || !Array.isArray(parsed.modules)) {
-	      throw new Error('Skeleton JSON missing modules array');
-	    }
-	
-	    // Sanitize module names and ids
-	    const sanitize = (n) => {
-	      if (!n) return 'module';
-	      let c = String(n).trim().toLowerCase()
-	        .replace(/[\s-]+/g, '_')
-	        .replace(/[^a-z0-9_]/g, '')
-	        .replace(/^[0-9]/, '_$&');
-	      if (!c || !/^[a-z_]/.test(c)) c = 'mod_' + c;
-	      return c || 'module';
-	    };
-	    for (const mod of parsed.modules) {
-	      if (mod.name) mod.name = sanitize(mod.name);
-	      if (mod.id)   mod.id   = sanitize(mod.id);
-	    }
-	    if (Array.isArray(parsed.build_order)) {
-	      parsed.build_order = parsed.build_order.map(sanitize);
-	    }
-	
-	    _skeleton = parsed;
-	    _mermaidDef = _buildMermaid(parsed);
-	    return parsed;
-	  }
+    // Robust JSON extraction
+    let parsed = _extractJSON(fullText);
+    if (!parsed || !parsed.modules || !Array.isArray(parsed.modules)) {
+      throw new Error('Skeleton JSON missing modules array.\n\nRaw response (first 800 chars):\n' + fullText.slice(0, 800));
+    }
 
+    _skeleton = parsed;
+    _mermaidDef = _buildMermaid(parsed);
+    return parsed;
+  }
+
+  function _extractJSON(text) {
+    if (!text) return null;
+    let cleaned = text.trim();
+
+    // Strip markdown fences
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/g, '').replace(/\n?```\s*$/g, '');
+
+    // Try direct parse
+    try { return JSON.parse(cleaned); } catch {}
+
+    // Try extracting outermost { ... }
+    let depth = 0, start = -1;
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === '{') { if (depth === 0) start = i; depth++; }
+      else if (cleaned[i] === '}') {
+        depth--;
+        if (depth === 0 && start >= 0) {
+          try { return JSON.parse(cleaned.slice(start, i + 1)); } catch {}
+        }
+      }
+    }
+
+    // Try fixing common LLM issues: trailing commas, single quotes
+    if (start >= 0) {
+      let attempt = cleaned.slice(start);
+      // Find last }
+      const lastBrace = attempt.lastIndexOf('}');
+      if (lastBrace >= 0) attempt = attempt.slice(0, lastBrace + 1);
+      // Remove trailing commas before } or ]
+      attempt = attempt.replace(/,\s*([}\]])/g, '$1');
+      try { return JSON.parse(attempt); } catch {}
+    }
+
+    return null;
+  }
   function getSkeleton() { return _skeleton ? JSON.parse(JSON.stringify(_skeleton)) : null; }
   function getApprovedSpec() { return _approvedSpec ? JSON.parse(JSON.stringify(_approvedSpec)) : null; }
   function getMermaidDef() { return _mermaidDef; }
@@ -4882,6 +4894,27 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		// Remove typing if still there
 		if (typingRow.parentNode) typingRow.remove();
+		  // Update main chat with stage progress
+    	const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+	    if (sess) {
+	      const spec = CodeSmith.stageA.getSpec();
+	      const filledFields = Object.entries(spec).filter(([k, v]) => {
+	        if (Array.isArray(v)) return v.length > 0;
+	        if (typeof v === 'object' && v !== null) return Object.values(v).some(sv => sv && sv.length > 0);
+	        return v && v.length > 0;
+	      }).length;
+	      // Update or add a progress message in main chat
+	      const existing = sess.messages.find(m => m._stageAProgress);
+	      const progressText = '[Stage A] Requirements: ' + filledFields + '/7 fields filled';
+	      if (existing) {
+	        existing.content = progressText;
+	      } else {
+	        sess.messages.push({ role: 'assistant', content: progressText, ts: Date.now(), _stageAProgress: true });
+	      }
+	      await CodeSmith.db.putSession(sess);
+	      renderChat();
+	      renderStatusStrip();
+	    }
 		_stageARunning = false;
 		await _persistStageState();
 	  }
@@ -4958,36 +4991,80 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		await _generateSkeleton();
 	  }
 
-	  async function _generateSkeleton() {
-		const spec = CodeSmith.stageA.getSpec();
-		const container = $('#mermaid-container');
-		const moduleList = $('#stage-b-module-list');
-		container.innerHTML = '<div class="text-muted text-[13px]">Generating architecture…</div>';
-		moduleList.replaceChildren();
-
-		try {
-		  const skeleton = await CodeSmith.stageB.generate(spec);
-		  // Warn if too many modules
-		  $('#stage-b-warn').hidden = !skeleton.modules || skeleton.modules.length <= 10;
-
-		  // Render Mermaid
-		  const mermaidDef = CodeSmith.stageB.getMermaidDef();
-		  container.innerHTML = '';
-		  const mermaidDiv = el('div', { class: 'mermaid' });
-		  mermaidDiv.textContent = mermaidDef;
-		  container.appendChild(mermaidDiv);
-		  try {
-			await mermaid.run({ nodes: [mermaidDiv] });
-		  } catch (mErr) {
-			container.innerHTML = '<pre style="color:#ff6b6b;font-size:11px;white-space:pre-wrap;">Mermaid render error:\n' + (mErr.message || mErr) + '\n\nDefinition:\n' + mermaidDef + '</pre>';
-		  }
-
-		  // Render module list
-		  _renderModuleList(skeleton);
-		  await _persistStageState();
-		} catch (err) {
-		  container.innerHTML = '<div style="color:#ff6b6b;padding:16px;font-size:13px;">Error: ' + (err.message || err) + '</div>';
-		}
+	async function _generateSkeleton() {
+	    const spec = CodeSmith.stageA.getSpec();
+	    const container = $('#mermaid-container');
+	    const moduleList = $('#stage-b-module-list');
+	    moduleList.replaceChildren();
+	
+	    // Show streaming preview
+	    container.innerHTML = '';
+	    const previewPre = el('pre', {
+	      style: 'font-size:11px;color:#8b92a1;white-space:pre-wrap;word-break:break-all;padding:12px;margin:0;text-align:left;max-height:100%;overflow:auto;width:100%;',
+	    });
+	    previewPre.textContent = 'Generating architecture…\n\n';
+	    container.appendChild(previewPre);
+	    container.style.alignItems = 'flex-start';
+	
+	    let dotCount = 0;
+	    const dotInterval = setInterval(() => {
+	      dotCount++;
+	      const dots = '.'.repeat(dotCount % 4);
+	      const lines = previewPre.textContent.split('\n');
+	      if (lines.length > 2) {
+	        // Show line count as progress
+	        const charCount = previewPre.textContent.length;
+	        container.querySelector('.gen-progress')?.remove();
+	      }
+	    }, 500);
+	
+	    try {
+	      const skeleton = await CodeSmith.stageB.generate(spec, (partialText) => {
+	        // Show raw streaming JSON so user sees progress
+	        previewPre.textContent = 'Generating architecture… (' + partialText.length + ' chars received)\n\n' + partialText;
+	        previewPre.scrollTop = previewPre.scrollHeight;
+	      });
+	
+	      clearInterval(dotInterval);
+	      container.style.alignItems = '';
+	
+	      // Warn if too many modules
+	      $('#stage-b-warn').hidden = !skeleton.modules || skeleton.modules.length <= 10;
+	
+	      // Render Mermaid
+	      const mermaidDef = CodeSmith.stageB.getMermaidDef();
+	      container.innerHTML = '';
+	      const mermaidDiv = el('div', { class: 'mermaid' });
+	      mermaidDiv.textContent = mermaidDef;
+	      container.appendChild(mermaidDiv);
+	      try {
+	        await mermaid.run({ nodes: [mermaidDiv] });
+	      } catch (mErr) {
+	        container.innerHTML = '<pre style="color:#ff6b6b;font-size:11px;white-space:pre-wrap;padding:12px;">Mermaid render error:\n' + (mErr.message || mErr) + '\n\nDefinition:\n' + mermaidDef + '</pre>';
+	      }
+	
+	      // Render module list
+	      _renderModuleList(skeleton);
+	      await _persistStageState();
+	    } catch (err) {
+	      clearInterval(dotInterval);
+	      container.style.alignItems = '';
+	      container.innerHTML = '';
+	      const errDiv = el('div', { style: 'padding:16px;width:100%;' });
+	      errDiv.appendChild(el('div', { style: 'color:#ff6b6b;font-size:13px;margin-bottom:8px;' }, 'Error: ' + (err.message || err)));
+	      const retryBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;margin-right:8px;' }, 'Retry');
+	      retryBtn.addEventListener('click', () => _generateSkeleton());
+	      errDiv.appendChild(retryBtn);
+	      const showRawBtn = el('button', { class: 'btn', style: 'font-size:12px;' }, 'Show raw response');
+	      showRawBtn.addEventListener('click', () => {
+	        const pre = el('pre', { style: 'margin-top:8px;font-size:11px;color:#8b92a1;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:auto;background:#0b0d10;padding:8px;border-radius:6px;' });
+	        pre.textContent = err.message || 'No response captured';
+	        errDiv.appendChild(pre);
+	        showRawBtn.remove();
+	      });
+	      errDiv.appendChild(showRawBtn);
+	      container.appendChild(errDiv);
+	    }
 	  }
 
 	  function _renderModuleList(skeleton) {
