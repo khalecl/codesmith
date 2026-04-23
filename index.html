@@ -2679,9 +2679,8 @@ const StageA = (() => {
 	      if (errorHit) { yield { type: 'error', error: errorHit }; return; }
 	
 	      // Parse the completed response
-			const specUpdateMatch = fullText.match(/<\/?spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i)
-			                           || fullText.match(/<spec_update>([\s\S]*?)<\/spec_update>/i);
-			      const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/i);
+		const specUpdateMatch = fullText.match(/<spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i);
+    	  const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/i);
 	      const question = fullText
 	        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
 	        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
