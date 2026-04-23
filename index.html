@@ -2679,8 +2679,9 @@ const StageA = (() => {
 	      if (errorHit) { yield { type: 'error', error: errorHit }; return; }
 	
 	      // Parse the completed response
-	      const specUpdateMatch = fullText.match(/<spec_update>([\s\S]*?)<\/spec_update>/);
-	      const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/);
+			const specUpdateMatch = fullText.match(/<\/?spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i)
+			                           || fullText.match(/<spec_update>([\s\S]*?)<\/spec_update>/i);
+			      const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/i);
 	      const question = fullText
 	        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
 	        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
@@ -2695,20 +2696,30 @@ const StageA = (() => {
 	        continue;
 	      }
 	
-	      if (specUpdateMatch) {
-	        try {
-	          const update = JSON.parse(specUpdateMatch[1]);
-	          _mergeSpec(update);
-	          yield { type: 'spec_updated', spec: getSpec() };
-	        } catch (parseErr) {
-	          if (tryCount === 0) {
-	            _messages.push({ role: 'assistant', content: fullText });
-	            _messages.push({ role: 'user', content: 'The <spec_update> JSON was malformed. Re-send with valid JSON.' });
-	            continue;
-	          }
-	          yield { type: 'parse_error', error: parseErr };
-	        }
-	      }
+		if (specUpdateMatch) {
+		        try {
+		          let raw = specUpdateMatch[1].trim();
+		          // Extract JSON from within the match
+		          const jsonStart = raw.indexOf('{');
+		          const jsonEnd = raw.lastIndexOf('}');
+		          if (jsonStart >= 0 && jsonEnd > jsonStart) {
+		            raw = raw.slice(jsonStart, jsonEnd + 1);
+		          }
+		          const update = JSON.parse(raw);
+		          _mergeSpec(update);
+		          yield { type: 'spec_updated', spec: getSpec() };
+		        } catch (parseErr) {
+		          if (tryCount === 0 && !retried) {
+		            _messages.push({ role: 'assistant', content: fullText });
+		            _messages.push({
+		              role: 'user',
+		              content: 'The <spec_update> JSON was malformed. Please re-send with valid JSON inside <spec_update> tags.',
+		            });
+		            continue;
+		          }
+		          yield { type: 'parse_error', error: parseErr };
+		        }
+		      }
 	
 	      _messages.push({ role: 'assistant', content: fullText });
 	
@@ -3757,29 +3768,30 @@ function renderStatusStrip() {
     const t = text.trim();
     if (!t) return;
 		// Day 4/5: Build mode routing
-			const isBuildRequest = _buildMode === 'build' || t.startsWith('/build ');
-			if (isBuildRequest) {
-			  const prompt = t.startsWith('/build ') ? t.slice(7) : t;
-			  if (CodeSmith.state.currentId == null) { await newSession(); }
-			  const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
-			  if (sess) {
-				sess.messages.push({ role: 'user', content: t, ts: Date.now() });
-				sess.updatedAt = Date.now();
-				if (!sess.title || sess.title === 'New session') sess.title = deriveTitle(sess.messages);
-				await CodeSmith.db.putSession(sess);
-				renderChat();
-				renderSessionList();
-			  }
-			  if (_quickBuildMode) {
-				// Day 4 direct pipeline
-				_quickBuildMode = false;
-				runBuildPipeline(prompt);
-			  } else {
-				// Day 5: start Stage A requirements dialogue
-				startBuildMode(prompt);
-			  }
-			  return;
-			}
+		    const isBuildRequest = _buildMode === 'build' || t.startsWith('/build ');
+		    if (isBuildRequest) {
+		      const prompt = t.startsWith('/build ') ? t.slice(7) : t;
+		      if (CodeSmith.state.currentId == null) { await newSession(); }
+		      const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+		      if (sess) {
+		        sess.messages.push({ role: 'user', content: t, ts: Date.now() });
+		        sess.updatedAt = Date.now();
+		        if (!sess.title || sess.title === 'New session') sess.title = deriveTitle(sess.messages);
+		        await CodeSmith.db.putSession(sess);
+		        renderChat();
+		        renderSessionList();
+		      }
+		      // Re-enable composer before routing to build
+		      $('#composer').disabled = false;
+		      $('#btn-send').disabled = false;
+		      if (_quickBuildMode) {
+		        _quickBuildMode = false;
+		        runBuildPipeline(prompt);
+		      } else {
+		        startBuildMode(prompt);
+		      }
+		      return;
+		    }
     if (CodeSmith.state.currentId == null) { await newSession(); }
     const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
     if (!sess) return;
@@ -4987,9 +4999,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			      .trim();
 			    liveBubble.textContent = clean;
 			    msgArea.scrollTop = msgArea.scrollHeight;
-			  } else if (ev.type === 'spec_updated') {
-			    _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
-			  } else if (ev.type === 'question_final') {
+				if (ev.type === 'spec_updated') {
+				        _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
+				        // Also update the spec card in Stage C if present
+				        const specBody = $('#build-spec-body');
+				        if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
+				      }
+				else if (ev.type === 'question_final') {
 			    // Replace live bubble content with final clean question
 			    if (liveBubble) liveBubble.textContent = ev.text;
 			  } else if (ev.type === 'ready') {
