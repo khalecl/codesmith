@@ -2639,102 +2639,102 @@ const StageA = (() => {
     _spec = JSON.parse(JSON.stringify(newSpec));
   }
 
-	async function* userTurn(userText) {
-	    _messages.push({ role: 'user', content: userText });
-	    yield { type: 'user_sent' };
-	
-	    const systemContent = STAGE_A_SYSTEM.replace('{spec_json}', JSON.stringify(_spec, null, 2));
-	    const apiMessages = [
-	      { role: 'system', content: systemContent },
-	      ..._messages,
-	    ];
-	
-	    for (let tryCount = 0; tryCount < 2; tryCount++) {
-	      let fullText = '';
-	      let thinkingText = '';
-	      let errorHit = null;
-	
-	      try {
-	        for await (const ev of CodeSmith.llm.chat({
-	          messages: apiMessages,
-	          tier: 'orchestrator',
-	          temperature: 0.3,
-	          maxTokens: 20000,
-	        })) {
-	          if (ev.type === 'thinking') {
-	            thinkingText += ev.delta;
-	            yield { type: 'thinking_delta', delta: ev.delta };
-	          } else if (ev.type === 'token') {
-	            fullText += ev.delta;
-	            yield { type: 'token_delta', delta: ev.delta };
-	          } else if (ev.type === 'done') {
-	            fullText = ev.text || fullText;
-	            thinkingText = ev.thinking || thinkingText;
-	          } else if (ev.type === 'error' && !ev.recoverable) {
-	            errorHit = ev.error;
-	          }
-	        }
-	      } catch (err) { errorHit = err; }
-	
-	      if (errorHit) { yield { type: 'error', error: errorHit }; return; }
-	
-	      // Parse the completed response
-		const specUpdateMatch = fullText.match(/<spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i);
-    	  const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/i);
-	      const question = fullText
-	        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
-	        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
-	        .trim();
-	
-	      if (!question && !readyMatch && !specUpdateMatch && tryCount === 0) {
-	        _messages.push({ role: 'assistant', content: fullText });
-	        _messages.push({
-	          role: 'user',
-	          content: 'Your response was malformed. Please ask ONE question and include a <spec_update> JSON block or <ready_for_skeleton>.',
-	        });
-	        continue;
-	      }
-	
-		if (specUpdateMatch) {
-		        try {
-		          let raw = specUpdateMatch[1].trim();
-		          // Extract JSON from within the match
-		          const jsonStart = raw.indexOf('{');
-		          const jsonEnd = raw.lastIndexOf('}');
-		          if (jsonStart >= 0 && jsonEnd > jsonStart) {
-		            raw = raw.slice(jsonStart, jsonEnd + 1);
+		async function* userTurn(userText) {
+		    _messages.push({ role: 'user', content: userText });
+		    yield { type: 'user_sent' };
+		
+		    const systemContent = STAGE_A_SYSTEM.replace('{spec_json}', JSON.stringify(_spec, null, 2));
+		    const apiMessages = [
+		      { role: 'system', content: systemContent },
+		      ..._messages,
+		    ];
+		
+		    for (let tryCount = 0; tryCount < 2; tryCount++) {
+		      let fullText = '';
+		      let thinkingText = '';
+		      let errorHit = null;
+		
+		      try {
+		        for await (const ev of CodeSmith.llm.chat({
+		          messages: apiMessages,
+		          tier: 'orchestrator',
+		          temperature: 0.3,
+		          maxTokens: 20000,
+		        })) {
+		          if (ev.type === 'thinking') {
+		            thinkingText += ev.delta;
+		            yield { type: 'thinking_delta', delta: ev.delta };
+		          } else if (ev.type === 'token') {
+		            fullText += ev.delta;
+		            yield { type: 'token_delta', delta: ev.delta };
+		          } else if (ev.type === 'done') {
+		            fullText = ev.text || fullText;
+		            thinkingText = ev.thinking || thinkingText;
+		          } else if (ev.type === 'error' && !ev.recoverable) {
+		            errorHit = ev.error;
 		          }
-		          const update = JSON.parse(raw);
-		          _mergeSpec(update);
-		          yield { type: 'spec_updated', spec: getSpec() };
-		        } catch (parseErr) {
-		          if (tryCount === 0 && !retried) {
-		            _messages.push({ role: 'assistant', content: fullText });
-		            _messages.push({
-		              role: 'user',
-		              content: 'The <spec_update> JSON was malformed. Please re-send with valid JSON inside <spec_update> tags.',
-		            });
-		            continue;
-		          }
-		          yield { type: 'parse_error', error: parseErr };
 		        }
+		      } catch (err) { errorHit = err; }
+		
+		      if (errorHit) { yield { type: 'error', error: errorHit }; return; }
+		
+		      // Parse the completed response
+			const specUpdateMatch = fullText.match(/<spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i);
+	    	  const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/i);
+		      const question = fullText
+		        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
+		        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
+		        .trim();
+		
+		      if (!question && !readyMatch && !specUpdateMatch && tryCount === 0) {
+		        _messages.push({ role: 'assistant', content: fullText });
+		        _messages.push({
+		          role: 'user',
+		          content: 'Your response was malformed. Please ask ONE question and include a <spec_update> JSON block or <ready_for_skeleton>.',
+		        });
+		        continue;
 		      }
-	
-	      _messages.push({ role: 'assistant', content: fullText });
-	
-	      if (question) yield { type: 'question_final', text: question };
-	
-	      if (readyMatch) {
-	        _ready = true;
-	        let rationale = '';
-	        try { rationale = (JSON.parse(readyMatch[1]).rationale) || ''; } catch {}
-	        yield { type: 'ready', rationale };
-	      }
-	      return;
-	    }
-	
-	    yield { type: 'error', error: new Error('Failed to get valid response after retry') };
-	}
+		
+			if (specUpdateMatch) {
+			        try {
+			          let raw = specUpdateMatch[1].trim();
+			          // Extract JSON from within the match
+			          const jsonStart = raw.indexOf('{');
+			          const jsonEnd = raw.lastIndexOf('}');
+			          if (jsonStart >= 0 && jsonEnd > jsonStart) {
+			            raw = raw.slice(jsonStart, jsonEnd + 1);
+			          }
+			          const update = JSON.parse(raw);
+			          _mergeSpec(update);
+			          yield { type: 'spec_updated', spec: getSpec() };
+			        } catch (parseErr) {
+			          if (tryCount === 0 && !retried) {
+			            _messages.push({ role: 'assistant', content: fullText });
+			            _messages.push({
+			              role: 'user',
+			              content: 'The <spec_update> JSON was malformed. Please re-send with valid JSON inside <spec_update> tags.',
+			            });
+			            continue;
+			          }
+			          yield { type: 'parse_error', error: parseErr };
+			        }
+			      }
+		
+		      _messages.push({ role: 'assistant', content: fullText });
+		
+		      if (question) yield { type: 'question_final', text: question };
+		
+		      if (readyMatch) {
+		        _ready = true;
+		        let rationale = '';
+		        try { rationale = (JSON.parse(readyMatch[1]).rationale) || ''; } catch {}
+		        yield { type: 'ready', rationale };
+		      }
+		      return;
+		    }
+		
+		    yield { type: 'error', error: new Error('Failed to get valid response after retry') };
+		}
 
   function requestAdvance() {
     _ready = true;
@@ -2813,7 +2813,7 @@ const StageB = (() => {
   let _mermaidDef = '';
 
 async function generate(spec, onStream) {
-    _approvedSpec = JSON.parse(JSON.stringify(spec));
+	_approvedSpec = JSON.parse(JSON.stringify(spec));
     _skeleton = null;
     _mermaidDef = '';
 
@@ -5022,7 +5022,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			    errBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
 			    msgArea.appendChild(errBubble);
 			  }
-			}
+			}}
 			
 			if (typingRow.parentNode) typingRow.remove();
 
