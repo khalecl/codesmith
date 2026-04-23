@@ -2374,7 +2374,7 @@ Fix ONLY the failing behavior. Do NOT change public function signatures. Return 
         ],
         tier: 'orchestrator',
         temperature: 0.3,
-        maxTokens: 20000,
+        maxTokens: 200000,
       });
       spec = _parseJSON(specResult.text);
       if (!spec || !spec.module_name) {
@@ -2659,7 +2659,7 @@ const StageA = (() => {
 	          messages: apiMessages,
 	          tier: 'orchestrator',
 	          temperature: 0.3,
-	          maxTokens: 2000,
+	          maxTokens: 20000,
 	        })) {
 	          if (ev.type === 'thinking') {
 	            thinkingText += ev.delta;
@@ -2818,7 +2818,7 @@ async function generate(spec, onStream) {
       ],
       tier: 'orchestrator',
       temperature: 0.2,
-      maxTokens: 6000,
+      maxTokens: 60000,
     })) {
       if (ev.type === 'token') {
         fullText += ev.delta;
@@ -2841,41 +2841,65 @@ async function generate(spec, onStream) {
     return parsed;
   }
 
-  function _extractJSON(text) {
-    if (!text) return null;
-    let cleaned = text.trim();
-
-    // Strip markdown fences
-    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/g, '').replace(/\n?```\s*$/g, '');
-
-    // Try direct parse
-    try { return JSON.parse(cleaned); } catch {}
-
-    // Try extracting outermost { ... }
-    let depth = 0, start = -1;
-    for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === '{') { if (depth === 0) start = i; depth++; }
-      else if (cleaned[i] === '}') {
-        depth--;
-        if (depth === 0 && start >= 0) {
-          try { return JSON.parse(cleaned.slice(start, i + 1)); } catch {}
-        }
-      }
-    }
-
-    // Try fixing common LLM issues: trailing commas, single quotes
-    if (start >= 0) {
-      let attempt = cleaned.slice(start);
-      // Find last }
-      const lastBrace = attempt.lastIndexOf('}');
-      if (lastBrace >= 0) attempt = attempt.slice(0, lastBrace + 1);
-      // Remove trailing commas before } or ]
-      attempt = attempt.replace(/,\s*([}\]])/g, '$1');
-      try { return JSON.parse(attempt); } catch {}
-    }
-
-    return null;
-  }
+	function _extractJSON(text) {
+	    if (!text) return null;
+	    let cleaned = text.trim();
+	
+	    // Strip markdown fences
+	    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/g, '').replace(/\n?```\s*$/g, '');
+	
+	    // Try direct parse
+	    try { return JSON.parse(cleaned); } catch {}
+	
+	    // Find the first { and track braces to find matching }
+	    let depth = 0, start = -1, end = -1;
+	    for (let i = 0; i < cleaned.length; i++) {
+	      if (cleaned[i] === '{') { if (depth === 0) start = i; depth++; }
+	      else if (cleaned[i] === '}') {
+	        depth--;
+	        if (depth === 0 && start >= 0) { end = i; break; }
+	      }
+	    }
+	
+	    if (start >= 0 && end > start) {
+	      try { return JSON.parse(cleaned.slice(start, end + 1)); } catch {}
+	      // Fix trailing commas
+	      let attempt = cleaned.slice(start, end + 1).replace(/,\s*([}\]])/g, '$1');
+	      try { return JSON.parse(attempt); } catch {}
+	    }
+	
+	    // If truncated (no matching close), try to repair
+	    if (start >= 0 && end === -1) {
+	      let truncated = cleaned.slice(start);
+	      // Close any open strings, arrays, objects
+	      // Count unclosed braces/brackets
+	      let ob = 0, os = 0;
+	      let inStr = false, escape = false;
+	      for (const ch of truncated) {
+	        if (escape) { escape = false; continue; }
+	        if (ch === '\\') { escape = true; continue; }
+	        if (ch === '"') { inStr = !inStr; continue; }
+	        if (inStr) continue;
+	        if (ch === '{') ob++;
+	        else if (ch === '}') ob--;
+	        else if (ch === '[') os++;
+	        else if (ch === ']') os--;
+	      }
+	      // Close open string if needed
+	      if (inStr) truncated += '"';
+	      // Remove trailing comma or partial value
+	      truncated = truncated.replace(/,\s*"[^"]*$/, '');
+	      truncated = truncated.replace(/,\s*$/, '');
+	      // Close open brackets and braces
+	      for (let i = 0; i < os; i++) truncated += ']';
+	      for (let i = 0; i < ob; i++) truncated += '}';
+	      truncated = truncated.replace(/,\s*([}\]])/g, '$1');
+	      try { return JSON.parse(truncated); } catch {}
+	    }
+	
+	    return null;
+	  }
+		
   function getSkeleton() { return _skeleton ? JSON.parse(JSON.stringify(_skeleton)) : null; }
   function getApprovedSpec() { return _approvedSpec ? JSON.parse(JSON.stringify(_approvedSpec)) : null; }
   function getMermaidDef() { return _mermaidDef; }
@@ -3192,7 +3216,7 @@ const StageC = (() => {
             messages: workerMessages,
             tier: 'worker',
             temperature: 0.2,
-            maxTokens: 8000,
+            maxTokens: 20000,
           })) {
             if (ev.type === 'token') {
               workerText += ev.delta;
@@ -3415,7 +3439,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
         ],
         tier: 'orchestrator',
         temperature: 0.2,
-        maxTokens: 4000,
+        maxTokens: 40000,
       });
       let code = (result.text || '').trim();
       if (code.startsWith('```')) code = code.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
@@ -3436,7 +3460,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
         ],
         tier: 'orchestrator',
         temperature: 0.1,
-        maxTokens: 2000,
+        maxTokens: 20000,
       });
       const parsed = _parseJSON(result.text);
       return parsed.decisions || [];
@@ -5619,7 +5643,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			],
 			tier: 'fast',
 			temperature: 0.3,
-			maxTokens: 1500,
+			maxTokens: 15000,
 		  });
 		  if (result.text) readme = result.text;
 		} catch {}
