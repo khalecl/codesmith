@@ -850,16 +850,20 @@
 
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar hairline-r flex flex-col" aria-label="Sessions">
-      <div class="p-3 hairline-b">
-        <button id="btn-new-session" class="btn btn-primary w-full" aria-label="Create a new session">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>New session</span>
-        </button>
-      </div>
+		<div class="p-3 hairline-b" style="display:flex;flex-direction:column;gap:6px;">
+		        <button id="btn-new-session" class="btn btn-primary w-full" aria-label="Create a new session">
+		          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+		               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		            <line x1="12" y1="5" x2="12" y2="19"></line>
+		            <line x1="5" y1="12" x2="19" y2="12"></line>
+		          </svg>
+		          <span>New session</span>
+		        </button>
+		        <div style="display:flex;gap:4px;">
+		          <button id="btn-clear-sessions" class="btn btn-ghost" style="flex:1;font-size:10px;color:#5b6474;" title="Clear all sessions">Clear sessions</button>
+		          <button id="btn-clear-artifacts" class="btn btn-ghost" style="flex:1;font-size:10px;color:#5b6474;" title="Clear all artifacts">Clear artifacts</button>
+		        </div>
+		      </div>
       <div id="session-list" class="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-1"
            role="listbox" aria-label="Past sessions"></div>
 		   
@@ -1195,7 +1199,13 @@
              list="models-datalist" />
     </div>
 
-    <div class="flex items-center gap-2 mt-1">
+	   <div class="hairline-t pt-3 mt-2">
+	      <div class="text-[12px] text-muted mb-2 font-semibold">Per-tier endpoints (optional)</div>
+	      <div class="text-[11px] text-muted mb-2">Route different tiers to different providers. Leave blank to use defaults above.</div>
+	      <div id="endpoint-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+	      <button id="btn-add-endpoint" class="btn btn-ghost" style="font-size:11px;margin-top:6px;">+ Add endpoint</button>
+	    </div>
+	  <div class="flex items-center gap-2 mt-1">
       <button id="btn-test-conn" class="btn" aria-label="Test API connection">Test connection</button>
       <span id="test-result" class="text-[12px]" aria-live="polite"></span>
     </div>
@@ -1336,6 +1346,7 @@
 		modelFast:         'meta/llama-3.1-8b-instruct',
 		tokenBudgetCap: 100000,
 		rateLimitRpm: 40,
+		endpoints: [],  // [{name, apiUrl, apiKey, forTier: 'orchestrator'|'worker'|'fast'}]
 	  },
 	};
 // expose for devtools only — not for app code
@@ -1473,10 +1484,13 @@ const DB = (() => {
 		return pReq(tx(CodeSmith.STORES.ARTIFACTS, 'readwrite').delete(id));
 	  }
 	return {
-		init: async () => { await open(); },
-		getSettings, saveSettings,
-		listSessions, getSession, putSession, createSession,
-		listArtifacts, getArtifact, putArtifact, deleteArtifact,
+	    init: async () => { await open(); },
+	    getSettings, saveSettings,
+	    listSessions, getSession, putSession, createSession,
+	    listArtifacts, getArtifact, putArtifact, deleteArtifact,
+	    deleteSession: (id) => pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').delete(id)),
+	    clearSessions: () => pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').clear()),
+	    clearArtifacts: () => pReq(tx(CodeSmith.STORES.ARTIFACTS, 'readwrite').clear()),
 	  };
 })();
 CodeSmith.db = DB;
@@ -1956,13 +1970,18 @@ const LLM = (() => {
     return CodeSmith.state.settings || CodeSmith.DEFAULTS;
   }
 
-  function getModelForTier(tier) {
-    const s = _getSettings();
-    if (tier === 'orchestrator') return s.modelOrchestrator || CodeSmith.DEFAULTS.modelOrchestrator;
-    if (tier === 'worker')       return s.modelWorker || CodeSmith.DEFAULTS.modelWorker;
-    if (tier === 'fast')         return s.modelFast || CodeSmith.DEFAULTS.modelFast;
-    return s.modelOrchestrator || CodeSmith.DEFAULTS.modelOrchestrator;
-  }
+	function getModelForTier(tier) {
+	    const s = _getSettings();
+	    // Check per-endpoint overrides
+	    const endpoints = s.endpoints || [];
+	    const ep = endpoints.find(e => e.forTier === tier && e.apiUrl && e.apiKey);
+	    if (ep) return { model: ep.model || s.modelOrchestrator, apiUrl: ep.apiUrl, apiKey: ep.apiKey };
+	
+	    if (tier === 'orchestrator') return s.modelOrchestrator || CodeSmith.DEFAULTS.modelOrchestrator;
+	    if (tier === 'worker')       return s.modelWorker || CodeSmith.DEFAULTS.modelWorker;
+	    if (tier === 'fast')         return s.modelFast || CodeSmith.DEFAULTS.modelFast;
+	    return s.modelOrchestrator || CodeSmith.DEFAULTS.modelOrchestrator;
+	  }
 
   function tokenEstimate(text) {
     // ~4 chars per token, fast heuristic
@@ -2013,9 +2032,19 @@ const LLM = (() => {
       return;
     }
 
-    const model = explicitModel || getModelForTier(tier || 'orchestrator');
-    const apiUrl = (s.apiUrl || CodeSmith.DEFAULTS.apiUrl).replace(/\/+$/, '');
-    const url = apiUrl + '/chat/completions';
+		let model, apiUrl, apiKey;
+		    const tierResult = getModelForTier(tier || 'orchestrator');
+		    if (typeof tierResult === 'object' && tierResult.apiUrl) {
+		      model = explicitModel || tierResult.model;
+		      apiUrl = tierResult.apiUrl.replace(/\/+$/, '');
+		      apiKey = tierResult.apiKey;
+		    } else {
+		      model = explicitModel || tierResult;
+		      apiUrl = (s.apiUrl || CodeSmith.DEFAULTS.apiUrl).replace(/\/+$/, '');
+		      apiKey = s.apiKey;
+		    }
+		    const url = apiUrl + '/chat/completions';
+		    const isThinking = _isThinkingModel(model);
     const isThinking = _isThinkingModel(model);
 
     const body = {
@@ -2061,7 +2090,7 @@ const LLM = (() => {
         response = await fetch(url, {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + s.apiKey,
+            'Authorization': 'Bearer ' + apiKey,
             'Content-Type': 'application/json',
             'Accept': 'text/event-stream',
           },
@@ -2573,20 +2602,17 @@ const EMPTY_SPEC = Object.freeze({
   acceptance_criteria: [],
 });
 
-const STAGE_A_SYSTEM = `You are a senior software architect conducting a requirements interview for a user building a Python program.
+const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
 
-Each turn:
-1. Read the current spec state (JSON provided).
-2. Identify the SINGLE most important missing or underspecified field.
-3. Ask ONE focused question to fill it. Prefer asking for concrete examples over abstract descriptions. NEVER ask more than one question.
-4. After your question, output JSON inside <spec_update> tags showing fields you can update from the user's latest message. Mark inferred fields with "(assumed)".
+RULES:
+1. Read the spec state below.
+2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
+3. After your question, output a <spec_update> JSON block with fields you can fill from the user's message. Mark guesses with "(assumed)".
+4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
+5. NEVER ask more than 4 total questions. After 4, output <ready_for_skeleton> with best guesses.
+6. Keep questions under 25 words. No implementation details.
 
-If the spec is complete enough to design a clean skeleton, instead output:
-<ready_for_skeleton>{"rationale":"..."}</ready_for_skeleton>
-
-If the user indicates impatience ("just build it", "skip", "go", "enough"), immediately output <ready_for_skeleton> with best-guess assumptions.
-
-NEVER ask about implementation details (libraries, class names). Focus on WHAT, not HOW.
+IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
 
 Current spec:
 {spec_json}`;
@@ -2754,41 +2780,24 @@ CodeSmith.stageA = StageA;
  *    topology, produces Mermaid flowchart definition.
  * ==========================================================================*/
 
-	const STAGE_B_SYSTEM = `You are a senior software architect. The user approved this specification. Design a modular Python architecture.
-	
-	CRITICAL: Your ENTIRE response must be a single valid JSON object. No prose before or after. No markdown fences. No explanation. ONLY the JSON object.
-	
-	The JSON schema:
-	{
-	  "summary": "one-line architecture summary",
-	  "modules": [
-	    {
-	      "id": "snake_case_id",
-	      "name": "module_name",
-	      "purpose": "one-line purpose",
-	      "public_functions": [
-	        { "name": "fn_name", "signature": "fn_name(arg: type) -> type", "description": "what it does", "raises": ["ValueError"] }
-	      ],
-	      "depends_on": ["other_module_id"],
-	      "notes": "optional"
-	    }
-	  ],
-	  "shared_types": { "TypeName": "definition" },
-	  "data_flow": [ { "from": "module_id", "to": "module_id", "data": "description" } ],
-	  "build_order": ["module_id_1", "module_id_2"]
-	}
-	
-	Rules:
-	- Distinct snake_case module ids
-	- build_order topologically valid (no cycles)
-	- Prefer 3-7 modules
-	- Complete type hints on all public function signatures
-	- shared_types for anything crossing module boundaries
-	- Do NOT wrap the JSON in markdown code fences
-	- Do NOT include any text before or after the JSON
-	
-	Specification:
-	{spec_json}`;
+const STAGE_B_SYSTEM = `You are a senior software architect. Design a modular Python architecture for this specification.
+
+OUTPUT RULES:
+- Return ONLY a JSON object. Nothing else. No markdown fences, no explanation.
+- The JSON must parse with JSON.parse() directly.
+- Use double quotes for all strings. No trailing commas.
+- Keep it simple: prefer 2-5 modules over 7+.
+
+JSON schema:
+{"summary":"string","modules":[{"id":"snake_case","name":"snake_case","purpose":"string","public_functions":[{"name":"string","signature":"string","description":"string","raises":["string"]}],"depends_on":["module_id"],"notes":"string"}],"shared_types":{"TypeName":"definition"},"data_flow":[{"from":"id","to":"id","data":"string"}],"build_order":["id1","id2"]}
+
+Rules:
+- snake_case ids, topological build_order, no cycles
+- Complete type hints on signatures
+- shared_types for cross-module data
+
+Specification:
+{spec_json}`;
 
 const StageB = (() => {
   let _skeleton = null;
@@ -3598,19 +3607,54 @@ function renderChat() {
       }
 
 	// Bubble
-	      const isError = m.isError;
-	      const bubbleCls = m.role === 'user' ? 'bubble bubble-user'
-	                      : isError ? 'bubble bubble-error'
-	                      : 'bubble bubble-assistant';
-	      const bubble = el('div', { class: bubbleCls });
-	      if (m.role === 'assistant' && !isError) {
-	        const md = el('div', { class: 'md-content' });
-	        md.innerHTML = renderMarkdown(m.content);
-	        bubble.appendChild(md);
-	      } else {
-	        bubble.textContent = m.content;
-	      }
-	      col.appendChild(bubble);
+		const isError = m.isError;
+		      const bubbleCls = m.role === 'user' ? 'bubble bubble-user'
+		                      : isError ? 'bubble bubble-error'
+		                      : 'bubble bubble-assistant';
+		      const bubble = el('div', { class: bubbleCls });
+		      bubble.textContent = m.content;
+		      col.appendChild(bubble);
+		
+		      // Detect code blocks in assistant messages and add Copy/Run buttons
+		      if (m.role === 'assistant' && !isError && m.content && m.content.includes('```')) {
+		        const codeMatch = m.content.match(/```(?:python)?\s*\n([\s\S]*?)```/);
+		        if (codeMatch) {
+		          const codeStr = codeMatch[1].trim();
+		          const btnRow = el('div', { style: 'display:flex;gap:4px;margin-top:4px;' });
+		          const copyBtn = el('button', { class: 'btn btn-ghost', style: 'font-size:10px;padding:2px 8px;' }, 'Copy code');
+		          copyBtn.addEventListener('click', () => {
+		            navigator.clipboard.writeText(codeStr).then(() => { copyBtn.textContent = 'Copied!'; setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1500); });
+		          });
+		          btnRow.appendChild(copyBtn);
+		          // Run button for Python
+		          const isPython = m.content.includes('```python') || !m.content.includes('```js');
+		          if (isPython) {
+		            const runBtn = el('button', { class: 'btn btn-ghost', style: 'font-size:10px;padding:2px 8px;' }, '▶ Run');
+		            runBtn.addEventListener('click', async () => {
+		              runBtn.disabled = true;
+		              runBtn.textContent = 'Running…';
+		              try {
+		                const result = await CodeSmith.sandbox.runPython(codeStr);
+		                const out = (result.stdout || '') + (result.error ? '\n' + result.error.type + ': ' + result.error.message : '');
+		                // Show output inline
+		                let outEl = btnRow.parentElement.querySelector('.inline-run-output');
+		                if (!outEl) {
+		                  outEl = el('pre', { class: 'inline-run-output', style: 'font-size:11px;background:#0b0d10;padding:6px 8px;border-radius:4px;margin-top:4px;color:#8b92a1;max-height:150px;overflow:auto;white-space:pre-wrap;' });
+		                  col.appendChild(outEl);
+		                }
+		                outEl.textContent = out || '(no output)';
+		              } catch (err) {
+		                runBtn.textContent = 'Error';
+		              } finally {
+		                runBtn.disabled = false;
+		                runBtn.textContent = '▶ Run';
+		              }
+		            });
+		            btnRow.appendChild(runBtn);
+		          }
+		          col.appendChild(btnRow);
+		        }
+		      }
 
       // Usage line
       if (m.usage && m.role === 'assistant' && !isError) {
@@ -4013,6 +4057,16 @@ function wireComposer() {
     $('#test-result').textContent = '';
     populateDatalist(s.modelsCache || []);
     renderModelsCacheInfo();
+	  // Render endpoint list
+	    _renderEndpoints(s.endpoints || []);
+	    const addEpBtn = $('#btn-add-endpoint');
+	    if (addEpBtn) {
+	      addEpBtn.onclick = () => {
+	        const list = $('#endpoint-list');
+	        const idx = list.children.length;
+	        list.appendChild(_createEndpointRow({ name: '', apiUrl: '', apiKey: '', model: '', forTier: 'worker' }, idx));
+	      };
+	    }
     $('#settings-backdrop').hidden = false;
     $('#settings-modal').hidden = false;
     // Focus first field
@@ -4051,6 +4105,7 @@ function wireComposer() {
       modelFast:         $('#s-model-fast').value.trim() || CodeSmith.DEFAULTS.modelFast,
       modelsCache:       prev.modelsCache || [],
       modelsCacheAt:     prev.modelsCacheAt || 0,
+		endpoints:         _collectEndpoints(),
     };
     await CodeSmith.db.saveSettings(next);
     CodeSmith.state.settings = { ...next, id: 'app' };
@@ -4141,6 +4196,21 @@ function wireComposer() {
       $('#sidebar').classList.toggle('collapsed');
     });
     wireComposer();
+	const clearSessBtn = $('#btn-clear-sessions');
+	    if (clearSessBtn) clearSessBtn.addEventListener('click', async () => {
+	      if (!confirm('Delete all sessions? This cannot be undone.')) return;
+	      await CodeSmith.db.clearSessions();
+	      CodeSmith.state.sessions = [];
+	      CodeSmith.state.currentId = null;
+	      renderSessionList();
+	      renderChat();
+	    });
+	    const clearArtBtn = $('#btn-clear-artifacts');
+	    if (clearArtBtn) clearArtBtn.addEventListener('click', async () => {
+	      if (!confirm('Delete all artifacts? This cannot be undone.')) return;
+	      await CodeSmith.db.clearArtifacts();
+	      renderArtifactList();
+	    });
     wireDebugPanel(); // Day 2
 	wireMode();          // Day 4
 	wireStepper();       // Day 5
@@ -4500,100 +4570,108 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     if (passed) await saveArtifact(_currentBuild);
   }
 
-  async function runBuildPipeline(userPrompt) {
-    // Switch to build mode
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
-	_buildMode = 'build';
-	$('#split-right').hidden = false;
-	document.body.classList.add('build-mode');
+	async function runBuildPipeline(userPrompt) {
+	    // Day 4 single-block build — works WITHOUT skeleton
+	    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+	    document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
+	    _buildMode = 'build';
+	    $('#split-right').hidden = false;
+	    $('#split-left').style.maxWidth = '50%';
+	
+	    // Show Stage C panel directly
+	    _showStep('c');
+	
+	    // Reset build panel
+	    _currentBuild = { status: 'running', attempt: 0, moduleName: '', spec: null, code: '', tests: '', output: '' };
+	    updateBuildPanel(_currentBuild);
+	
+	    // Consume build events from Day 4 builder
+	    for await (const ev of CodeSmith.builder.buildBlock(userPrompt)) {
+	      switch (ev.type) {
+	        case 'spec_start':
+	          setBuildBadge('running');
+	          _currentBuild.output += 'Generating spec…\n';
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'spec':
+	          _currentBuild.spec = ev.spec;
+	          _currentBuild.moduleName = ev.spec.module_name;
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'worker_start':
+	          setBuildBadge('running');
+	          _currentBuild.output += 'Worker generating code…\n';
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'worker_stream':
+	          break;
+	        case 'worker_done':
+	          _currentBuild.code = ev.result.code;
+	          _currentBuild.tests = ev.result.tests || '';
+	          _currentBuild.attempt = ev.attempt;
+	          _currentBuild.workerResult = ev.result;
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'install_package':
+	          _currentBuild.output += 'Installing ' + ev.name + '…\n';
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'tests_start':
+	          setBuildBadge('running');
+	          _currentBuild.output += '\n--- Running tests (attempt ' + ev.attempt + ') ---\n';
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'tests_done':
+	          _currentBuild.output += ev.output + '\n';
+	          if (ev.errorOutput) _currentBuild.output += ev.errorOutput + '\n';
+	          _currentBuild.output += 'Passed: ' + ev.passCount + '  Failed: ' + ev.failCount + '\n';
+	          if (!ev.passed) setBuildBadge('failed');
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'repair_start':
+	          setBuildBadge('repairing');
+	          _currentBuild.output += '\n--- Repair attempt ' + ev.attempt + ' ---\n';
+	          _currentBuild.attempt = ev.attempt;
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'success':
+	          _currentBuild.status = 'passed';
+	          setBuildBadge('passed');
+	          updateBuildPanel(_currentBuild);
+	          await saveArtifact(_currentBuild);
+	          break;
+	        case 'escalated':
+	          _currentBuild.status = 'escalated';
+	          _currentBuild.output += '\n--- Escalated after ' + ev.attempt + ' attempts ---\n';
+	          setBuildBadge('escalated');
+	          updateBuildPanel(_currentBuild);
+	          break;
+	        case 'error':
+	          _currentBuild.status = 'failed';
+	          _currentBuild.output += '\n[Error in ' + ev.stage + '] ' + (ev.error ? ev.error.message : '') + '\n';
+	          setBuildBadge('failed');
+	          updateBuildPanel(_currentBuild);
+	          break;
+	      }
+	    }
+	  }
 
-    // Reset build panel
-    _currentBuild = { status: 'running', attempt: 0, moduleName: '', spec: null, code: '', tests: '', output: '' };
-    updateBuildPanel(_currentBuild);
-
-    // Consume build events
-    for await (const ev of CodeSmith.builder.buildBlock(userPrompt)) {
-      switch (ev.type) {
-        case 'spec_start':
-          setBuildBadge('running');
-          break;
-        case 'spec':
-          _currentBuild.spec = ev.spec;
-          _currentBuild.moduleName = ev.spec.module_name;
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'worker_start':
-          setBuildBadge('running');
-          break;
-        case 'worker_stream':
-          // Could show partial JSON — skip for now
-          break;
-        case 'worker_done':
-          _currentBuild.code = ev.result.code;
-          _currentBuild.tests = ev.result.tests || '';
-          _currentBuild.attempt = ev.attempt;
-          _currentBuild.workerResult = ev.result;
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'install_package':
-          _currentBuild.output += 'Installing ' + ev.name + '…\n';
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'tests_start':
-          setBuildBadge('running');
-          _currentBuild.output += '\n--- Running tests (attempt ' + ev.attempt + ') ---\n';
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'tests_done':
-          _currentBuild.output += ev.output + '\n';
-          if (ev.errorOutput) _currentBuild.output += ev.errorOutput + '\n';
-          _currentBuild.output += 'Passed: ' + ev.passCount + '  Failed: ' + ev.failCount + '\n';
-          if (!ev.passed) setBuildBadge('failed');
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'repair_start':
-          setBuildBadge('repairing');
-          _currentBuild.output += '\n--- Repair attempt ' + ev.attempt + ' ---\n';
-          _currentBuild.attempt = ev.attempt;
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'success':
-          _currentBuild.status = 'passed';
-          setBuildBadge('passed');
-          updateBuildPanel(_currentBuild);
-          await saveArtifact(_currentBuild);
-          break;
-        case 'escalated':
-          _currentBuild.status = 'escalated';
-          _currentBuild.output += '\n--- Escalated after ' + ev.attempt + ' attempts ---\n';
-          setBuildBadge('escalated');
-          updateBuildPanel(_currentBuild);
-          break;
-        case 'error':
-          _currentBuild.status = 'failed';
-          _currentBuild.output += '\n[Error in ' + ev.stage + '] ' + (ev.error ? ev.error.message : '') + '\n';
-          setBuildBadge('failed');
-          updateBuildPanel(_currentBuild);
-          break;
-      }
-    }
-  }
-
-  async function saveArtifact(build) {
-    const artifact = {
-      id: build.moduleName + '_' + Date.now(),
-      sessionId: CodeSmith.state.currentId,
-      moduleName: build.moduleName,
-      code: build.code,
-      tests: build.tests,
-      spec: build.spec,
-      createdAt: Date.now(),
-      status: build.status,
-    };
-    await CodeSmith.db.putArtifact(artifact);
-    renderArtifactList();
-  }
+	async function saveArtifact(build) {
+	    const skeleton = CodeSmith.stageB ? CodeSmith.stageB.getSkeleton() : null;
+	    const artifact = {
+	      id: (build.moduleName || 'module') + '_' + Date.now(),
+	      sessionId: CodeSmith.state.currentId,
+	      moduleName: build.moduleName,
+	      code: build.code,
+	      tests: build.tests,
+	      spec: build.spec,
+	      skeleton: skeleton,
+	      createdAt: Date.now(),
+	      status: build.status,
+	    };
+	    await CodeSmith.db.putArtifact(artifact);
+	    renderArtifactList();
+	  }
 
   async function renderArtifactList() {
     const list = $('#artifact-list');
@@ -4710,7 +4788,26 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 	  let _stageARunning = false;
 	  let _quickBuildMode = false;
 	  function wireStepper() {
-		// Quick build button
+		// Make stepper items clickable for back-navigation
+		    for (const si of document.querySelectorAll('.step-item')) {
+		      si.style.cursor = 'pointer';
+		      si.addEventListener('click', () => {
+		        const target = si.dataset.step;
+		        // Can go back to any completed step, or stay on current
+		        if (target <= _currentStep) {
+		          if (target === 'a' && _currentStep === 'b') {
+		            // Going back to A from B
+		            _showStep('a');
+		            _renderSpecCard(CodeSmith.stageA.getSpec(), CodeSmith.stageA.getAssumptions());
+		          } else if (target === 'b' && _currentStep === 'c') {
+		            _showStep('b');
+		          } else {
+		            _showStep(target);
+		          }
+		        }
+		      });
+		    }
+		  // Quick build button
 		$('#btn-quick-build').addEventListener('click', () => {
 			  _quickBuildMode = true;
 			  _showStep('c');
@@ -4759,21 +4856,21 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		});
 	  }
 
-	 function _showStep(step) {
-			_currentStep = step;
-			document.querySelectorAll('.step-item').forEach(si => {
-			  si.classList.remove('active', 'done');
-			  const s = si.dataset.step;
-			  if (s === step) si.classList.add('active');
-			  else if (s < step) si.classList.add('done');
-			});
-
-			$('#stage-a-panel').hidden = step !== 'a';
-			$('#stage-a-panel').style.display = step === 'a' ? '' : 'none';
-			$('#stage-b-panel').hidden = step !== 'b';
-			$('#stage-c-panel').hidden = step !== 'c';
-			$('#stage-c-panel').style.display = step === 'c' ? 'flex' : 'none';
-		  }
+	function _showStep(step) {
+	    _currentStep = step;
+	    document.querySelectorAll('.step-item').forEach(si => {
+	      si.classList.remove('active', 'done');
+	      const s = si.dataset.step;
+	      if (s === step) si.classList.add('active');
+	      else if (s < step) si.classList.add('done');
+	    });
+	
+	    $('#stage-a-panel').hidden = step !== 'a';
+	    $('#stage-a-panel').style.display = step === 'a' ? '' : 'none';
+	    $('#stage-b-panel').hidden = step !== 'b';
+	    $('#stage-c-panel').hidden = step !== 'c';
+	    $('#stage-c-panel').style.display = step === 'c' ? 'flex' : 'none';
+	  }
 
 	  function startBuildMode(userPrompt) {
 		// Switch to build mode
@@ -5290,10 +5387,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     $('#sc-progress-text').textContent = passed + ' / ' + total;
   }
 
-  async function _scStartBuild() {
-    const skeleton = CodeSmith.stageB.getSkeleton();
-    const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
-    if (!skeleton) { _scLog('No skeleton available', 'log-fail'); return; }
+	async function _scStartBuild() {
+	    const skeleton = CodeSmith.stageB ? CodeSmith.stageB.getSkeleton() : null;
+	    const spec = (CodeSmith.stageB ? CodeSmith.stageB.getApprovedSpec() : null) || (CodeSmith.stageA ? CodeSmith.stageA.getSpec() : null) || {};
+	    if (!skeleton) {
+	      _scLog('No skeleton — use Quick Build for single-module projects.', 'log-warn');
+	      return;
+	    }
 
     // Show controls
     $('#btn-sc-start').hidden = true;
@@ -5985,7 +6085,45 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  chatList.prepend(row);
 		}
 	  }
-  
+		  // ---- Endpoint config helpers -------------------------------------------
+		  function _renderEndpoints(endpoints) {
+		    const list = $('#endpoint-list');
+		    if (!list) return;
+		    list.replaceChildren();
+		    (endpoints || []).forEach((ep, i) => list.appendChild(_createEndpointRow(ep, i)));
+		  }
+		
+		  function _createEndpointRow(ep, idx) {
+		    const row = el('div', { class: 'panel', style: 'padding:8px;font-size:11px;' });
+		    row.innerHTML = `
+		      <div style="display:flex;gap:6px;margin-bottom:4px;">
+		        <select class="ep-tier" style="background:#0f1319;color:#e8ecf1;border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:3px 6px;font-size:11px;">
+		          <option value="orchestrator" ${ep.forTier === 'orchestrator' ? 'selected' : ''}>Orchestrator</option>
+		          <option value="worker" ${ep.forTier === 'worker' ? 'selected' : ''}>Worker</option>
+		          <option value="fast" ${ep.forTier === 'fast' ? 'selected' : ''}>Fast</option>
+		        </select>
+		        <input class="ep-url" type="url" placeholder="API URL" value="${ep.apiUrl || ''}" style="flex:1;font-size:11px;padding:3px 6px;" />
+		        <button class="btn btn-ghost ep-remove" style="font-size:10px;color:#ff6b6b;padding:2px 6px;">✕</button>
+		      </div>
+		      <div style="display:flex;gap:6px;">
+		        <input class="ep-key" type="password" placeholder="API key" value="${ep.apiKey || ''}" style="flex:1;font-size:11px;padding:3px 6px;" />
+		        <input class="ep-model" type="text" placeholder="Model ID" value="${ep.model || ''}" style="flex:1;font-size:11px;padding:3px 6px;font-family:monospace;" />
+		      </div>
+		    `;
+		    row.querySelector('.ep-remove').addEventListener('click', () => row.remove());
+		    return row;
+		  }
+		
+		  function _collectEndpoints() {
+		    const list = $('#endpoint-list');
+		    if (!list) return [];
+		    return Array.from(list.children).map(row => ({
+		      forTier: row.querySelector('.ep-tier')?.value || 'worker',
+		      apiUrl: row.querySelector('.ep-url')?.value?.trim() || '',
+		      apiKey: row.querySelector('.ep-key')?.value || '',
+		      model: row.querySelector('.ep-model')?.value?.trim() || '',
+		    })).filter(ep => ep.apiUrl && ep.apiKey);
+		  }
 		return {
 			wire, refreshSessions, renderChat, renderSessionList,
 			renderStatusStrip, renderComposerHelp, newSession,
