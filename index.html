@@ -2374,7 +2374,7 @@ Fix ONLY the failing behavior. Do NOT change public function signatures. Return 
         ],
         tier: 'orchestrator',
         temperature: 0.3,
-        maxTokens: 200000,
+        maxTokens: 20000,
       });
       spec = _parseJSON(specResult.text);
       if (!spec || !spec.module_name) {
@@ -2425,7 +2425,7 @@ Fix ONLY the failing behavior. Do NOT change public function signatures. Return 
           messages: workerMessages,
           tier: 'worker',
           temperature: 0.2,
-          maxTokens: 80000,
+          maxTokens: 8000,
         })) {
           if (ev.type === 'token') {
             workerText += ev.delta;
@@ -2659,7 +2659,7 @@ const StageA = (() => {
 		          messages: apiMessages,
 		          tier: 'orchestrator',
 		          temperature: 0.3,
-		          maxTokens: 20000,
+		          maxTokens: 80000,
 		        })) {
 		          if (ev.type === 'thinking') {
 		            thinkingText += ev.delta;
@@ -2828,7 +2828,7 @@ async function generate(spec, onStream) {
       ],
       tier: 'fast',
       temperature: 0.2,
-      maxTokens: 60000,
+      maxTokens: 6000,
     })) {
       if (ev.type === 'token') {
         fullText += ev.delta;
