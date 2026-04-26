@@ -1555,7 +1555,7 @@ const API = (() => {
       stream: false,
     };
     const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), 20000);
+    const to = setTimeout(() => controller.abort(), 60000);
     try {
       const r = await fetch(url, {
         method: 'POST',
@@ -1580,7 +1580,7 @@ const API = (() => {
       // Any well-formed response is success for Day 1.
       return { ok: true, model: j.model || model };
     } catch (err) {
-      if (err.name === 'AbortError') throw new Error('Request timed out after 20s.');
+      if (err.name === 'AbortError') throw new Error('Request timed out after 60s.');
       if (err instanceof TypeError) throw new Error('Network error — CORS, offline, or Worker unreachable.');
       throw err;
     } finally {
@@ -2018,7 +2018,7 @@ const LLM = (() => {
   async function* chat(options) {
     const {
       messages, tier, model: explicitModel, temperature, maxTokens,
-      responseFormat, timeoutMs = 90000, signal,
+      responseFormat, timeoutMs = 180000, signal,
     } = options;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
