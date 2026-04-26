@@ -2659,7 +2659,7 @@ const StageA = (() => {
 		          messages: apiMessages,
 		          tier: 'orchestrator',
 		          temperature: 0.3,
-		          maxTokens: 80000,
+		          maxTokens: 8000,
 		        })) {
 		          if (ev.type === 'thinking') {
 		            thinkingText += ev.delta;
@@ -3449,7 +3449,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
         ],
         tier: 'orchestrator',
         temperature: 0.2,
-        maxTokens: 40000,
+        maxTokens: 8000,
       });
       let code = (result.text || '').trim();
       if (code.startsWith('```')) code = code.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
@@ -3470,7 +3470,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
         ],
         tier: 'orchestrator',
         temperature: 0.1,
-        maxTokens: 20000,
+        maxTokens: 10000,
       });
       const parsed = _parseJSON(result.text);
       return parsed.decisions || [];
