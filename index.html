@@ -3606,9 +3606,13 @@ function renderChat() {
     if (!sess) {
       list.style.display = 'none';
       empty.hidden = false;
-      $('#composer').disabled = true;
-      $('#btn-send').disabled = true;
+      // Only disable if NOT in build mode (build mode uses Stage A input)
+      if (_buildMode !== 'build') {
+        $('#composer').disabled = false;
+        $('#btn-send').disabled = false;
+      }
       $('#st-session-id').textContent = '—';
+      updatePageTitle();
       return;
     }
     list.style.display = '';
@@ -3662,26 +3666,54 @@ function renderChat() {
 		          const isPython = m.content.includes('```python') || !m.content.includes('```js');
 		          if (isPython) {
 		            const runBtn = el('button', { class: 'btn btn-ghost', style: 'font-size:10px;padding:2px 8px;' }, '▶ Run');
-		            runBtn.addEventListener('click', async () => {
+					runBtn.addEventListener('click', async () => {
 		              runBtn.disabled = true;
 		              runBtn.textContent = 'Running…';
 		              try {
-		                const result = await CodeSmith.sandbox.runPython(codeStr);
+		                // Wrap code to handle common patterns that fail in Pyodide
+		                let runCode = codeStr;
+		                // Remove if __name__ == "__main__" block — just define functions
+		                // and add a simple test call
+		                const hasMain = runCode.includes('if __name__');
+		                const hasArgv = runCode.includes('sys.argv');
+		                const hasFileIO = runCode.includes('open(') && (runCode.includes('input_file') || runCode.includes('sys.argv'));
+		
+		                if (hasArgv || hasFileIO) {
+		                  // Can't run file I/O or CLI scripts in Pyodide
+		                  let outEl = btnRow.parentElement.querySelector('.inline-run-output');
+		                  if (!outEl) {
+		                    outEl = el('pre', { class: 'inline-run-output', style: 'font-size:11px;background:#0b0d10;padding:6px 8px;border-radius:4px;margin-top:4px;color:#f59e0b;max-height:150px;overflow:auto;white-space:pre-wrap;' });
+		                    col.appendChild(outEl);
+		                  }
+		                  outEl.textContent = 'This code uses file I/O or sys.argv which cannot run in the browser sandbox.\nUse the Build mode to create a testable version, or copy the code to run locally.';
+		                  runBtn.disabled = false;
+		                  runBtn.textContent = '▶ Run';
+		                  return;
+		                }
+		
+		                const result = await CodeSmith.sandbox.runPython(runCode);
 		                const out = (result.stdout || '') + (result.error ? '\n' + result.error.type + ': ' + result.error.message : '');
-		                // Show output inline
 		                let outEl = btnRow.parentElement.querySelector('.inline-run-output');
 		                if (!outEl) {
 		                  outEl = el('pre', { class: 'inline-run-output', style: 'font-size:11px;background:#0b0d10;padding:6px 8px;border-radius:4px;margin-top:4px;color:#8b92a1;max-height:150px;overflow:auto;white-space:pre-wrap;' });
 		                  col.appendChild(outEl);
 		                }
 		                outEl.textContent = out || '(no output)';
+		                if (result.error) outEl.style.color = '#ff6b6b';
+		                else outEl.style.color = '#4ade80';
 		              } catch (err) {
-		                runBtn.textContent = 'Error';
+		                let outEl = btnRow.parentElement.querySelector('.inline-run-output');
+		                if (!outEl) {
+		                  outEl = el('pre', { class: 'inline-run-output', style: 'font-size:11px;background:#0b0d10;padding:6px 8px;border-radius:4px;margin-top:4px;color:#ff6b6b;max-height:150px;overflow:auto;white-space:pre-wrap;' });
+		                  col.appendChild(outEl);
+		                }
+		                outEl.textContent = 'Error: ' + (err.message || err);
 		              } finally {
 		                runBtn.disabled = false;
 		                runBtn.textContent = '▶ Run';
 		              }
 		            });
+					  
 		            btnRow.appendChild(runBtn);
 		          }
 		          col.appendChild(btnRow);
@@ -4929,129 +4961,109 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		_stageAHandleUserInput(userPrompt);
 	  }
 
-	  async function _stageASend() {
-		const input = $('#stage-a-input');
-		const text = input.value.trim();
-		if (!text || _stageARunning) return;
-		input.value = '';
-		_stageAHandleUserInput(text);
-	  }
+		async function _stageASend() {
+		    const input = $('#stage-a-input');
+		    if (!input) return;
+		    const text = input.value.trim();
+		    if (!text) return;
+		    if (_stageARunning) return;
+		    input.value = '';
+		    input.style.height = 'auto';
+		    try {
+		      await _stageAHandleUserInput(text);
+		    } catch (err) {
+		      _stageARunning = false;
+		      console.error('[StageA] Error:', err);
+		    }
+		  }
 
-	  async function _stageAHandleUserInput(text) {
-		_stageARunning = true;
-		const msgArea = $('#stage-a-messages');
-
-		// Show user bubble
-		const userRow = el('div', { class: 'flex justify-end' });
-		const userBubble = el('div', { class: 'bubble bubble-user', style: 'font-size:13px;max-width:400px;' });
-		userBubble.textContent = text;
-		userRow.appendChild(userBubble);
-		msgArea.appendChild(userRow);
-
-		// Typing indicator
-		const typingRow = el('div', { class: 'flex justify-start' });
-		const typingEl = el('div', { class: 'typing-indicator' });
-		typingEl.innerHTML = '<span></span><span></span><span></span>';
-		typingRow.appendChild(typingEl);
-		msgArea.appendChild(typingRow);
-		msgArea.scrollTop = msgArea.scrollHeight;
-
-		// Process turn
-			let liveRow = null;
-			let liveBubble = null;
-			let liveThinking = null;
-			let liveThinkingText = '';
-			let liveText = '';
-			
-			function ensureLive() {
-			  if (liveRow) return;
-			  typingRow.remove();
-			  liveRow = el('div', { class: 'flex justify-start', style: 'flex-direction:column;' });
-			  liveBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;' });
-			  liveRow.appendChild(liveBubble);
-			  msgArea.appendChild(liveRow);
-			}
-			
-			for await (const ev of CodeSmith.stageA.userTurn(text)) {
-			  if (ev.type === 'thinking_delta') {
-			    ensureLive();
-			    if (!liveThinking) {
-			      const tb = el('div', { class: 'thinking-block' });
-			      const toggle = el('button', { class: 'thinking-toggle open' });
-			      toggle.innerHTML = '<span class="arrow" aria-hidden="true">▶</span> Reasoning…';
-			      const body = el('div', { class: 'thinking-body' });
-			      toggle.addEventListener('click', () => toggle.classList.toggle('open'));
-			      tb.appendChild(toggle); tb.appendChild(body);
-			      liveRow.insertBefore(tb, liveBubble);
-			      liveThinking = body;
-			    }
-			    liveThinkingText += ev.delta;
-			    liveThinking.textContent = liveThinkingText;
-			    msgArea.scrollTop = msgArea.scrollHeight;
-			  } else if (ev.type === 'token_delta') {
-			    ensureLive();
-			    liveText += ev.delta;
-			    // Strip tags for live display
-			    const clean = liveText
-			      .replace(/<spec_update>[\s\S]*?(<\/spec_update>|$)/g, '')
-			      .replace(/<ready_for_skeleton>[\s\S]*?(<\/ready_for_skeleton>|$)/g, '')
-			      .trim();
-			    liveBubble.textContent = clean;
-			    msgArea.scrollTop = msgArea.scrollHeight;
-				if (ev.type === 'spec_updated') {
-				        _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
-				        // Also update the spec card in Stage C if present
-				        const specBody = $('#build-spec-body');
-				        if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
-				      }
-				else if (ev.type === 'question_final') {
-			    // Replace live bubble content with final clean question
-			    if (liveBubble) liveBubble.textContent = ev.text;
-			  } else if (ev.type === 'ready') {
-			    const readyBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;border-color:rgba(74,222,128,0.3);margin-top:4px;' });
-			    readyBubble.textContent = 'Spec looks complete! ' + (ev.rationale || 'Ready to generate skeleton.');
-			    msgArea.appendChild(readyBubble);
-			
-			    const advBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;margin-top:6px;align-self:flex-start;' }, 'Continue to Skeleton →');
-			    advBtn.addEventListener('click', () => _transitionToB());
-			    msgArea.appendChild(advBtn);
-			    msgArea.scrollTop = msgArea.scrollHeight;
-			  } else if (ev.type === 'error') {
-			    if (typingRow.parentNode) typingRow.remove();
-			    const errBubble = el('div', { class: 'bubble bubble-error', style: 'font-size:13px;' });
-			    errBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
-			    msgArea.appendChild(errBubble);
-			  }
-			}}
-			
-			if (typingRow.parentNode) typingRow.remove();
-
-		// Remove typing if still there
-		if (typingRow.parentNode) typingRow.remove();
-		  // Update main chat with stage progress
-    	const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
-	    if (sess) {
-	      const spec = CodeSmith.stageA.getSpec();
-	      const filledFields = Object.entries(spec).filter(([k, v]) => {
-	        if (Array.isArray(v)) return v.length > 0;
-	        if (typeof v === 'object' && v !== null) return Object.values(v).some(sv => sv && sv.length > 0);
-	        return v && v.length > 0;
-	      }).length;
-	      // Update or add a progress message in main chat
-	      const existing = sess.messages.find(m => m._stageAProgress);
-	      const progressText = '[Stage A] Requirements: ' + filledFields + '/7 fields filled';
-	      if (existing) {
-	        existing.content = progressText;
-	      } else {
-	        sess.messages.push({ role: 'assistant', content: progressText, ts: Date.now(), _stageAProgress: true });
-	      }
-	      await CodeSmith.db.putSession(sess);
-	      renderChat();
-	      renderStatusStrip();
-	    }
-		_stageARunning = false;
-		await _persistStageState();
-	  }
+			async function _stageAHandleUserInput(text) {
+		    _stageARunning = true;
+		    const msgArea = $('#stage-a-messages');
+		
+		    const userRow = el('div', { class: 'flex justify-end' });
+		    const userBubble = el('div', { class: 'bubble bubble-user', style: 'font-size:13px;max-width:400px;' });
+		    userBubble.textContent = text;
+		    userRow.appendChild(userBubble);
+		    msgArea.appendChild(userRow);
+		
+		    const typingRow = el('div', { class: 'flex justify-start' });
+		    const typingEl = el('div', { class: 'typing-indicator' });
+		    typingEl.innerHTML = '<span></span><span></span><span></span>';
+		    typingRow.appendChild(typingEl);
+		    msgArea.appendChild(typingRow);
+		    msgArea.scrollTop = msgArea.scrollHeight;
+		
+		    try {
+		      for await (const ev of CodeSmith.stageA.userTurn(text)) {
+		        if (ev.type === 'spec_updated') {
+		          _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
+		          const specBody = $('#build-spec-body');
+		          if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
+		        } else if (ev.type === 'question') {
+		          if (typingRow.parentNode) typingRow.remove();
+		          const aiRow = el('div', { class: 'flex justify-start' });
+		          const aiBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;' });
+		          aiBubble.textContent = ev.text;
+		          aiRow.appendChild(aiBubble);
+		          msgArea.appendChild(aiRow);
+		          msgArea.scrollTop = msgArea.scrollHeight;
+		        } else if (ev.type === 'ready') {
+		          if (typingRow.parentNode) typingRow.remove();
+		          const readyRow = el('div', { class: 'flex justify-start' });
+		          const readyBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;border-color:rgba(74,222,128,0.3);' });
+		          readyBubble.textContent = 'Spec looks complete! ' + (ev.rationale || 'Ready to generate skeleton.');
+		          readyRow.appendChild(readyBubble);
+		          msgArea.appendChild(readyRow);
+		          const advRow = el('div', { class: 'flex justify-center', style: 'margin-top:8px;' });
+		          const advBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;' }, 'Continue to Skeleton →');
+		          advBtn.addEventListener('click', () => _transitionToB());
+		          advRow.appendChild(advBtn);
+		          msgArea.appendChild(advRow);
+		          msgArea.scrollTop = msgArea.scrollHeight;
+		        } else if (ev.type === 'error') {
+		          if (typingRow.parentNode) typingRow.remove();
+		          const errRow = el('div', { class: 'flex justify-start' });
+		          const errBubble = el('div', { class: 'bubble bubble-error', style: 'font-size:13px;max-width:400px;' });
+		          errBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
+		          errRow.appendChild(errBubble);
+		          const retryBtn = el('button', { class: 'btn', style: 'font-size:11px;margin-top:4px;' }, 'Retry');
+		          retryBtn.addEventListener('click', () => { errRow.remove(); _stageAHandleUserInput(text); });
+		          errRow.appendChild(retryBtn);
+		          msgArea.appendChild(errRow);
+		        }
+		      }
+		    } catch (err) {
+		      if (typingRow.parentNode) typingRow.remove();
+		      const errRow = el('div', { class: 'flex justify-start' });
+		      const errBubble = el('div', { class: 'bubble bubble-error', style: 'font-size:13px;max-width:400px;' });
+		      errBubble.textContent = 'Error: ' + (err.message || err);
+		      errRow.appendChild(errBubble);
+		      msgArea.appendChild(errRow);
+		    } finally {
+		      if (typingRow.parentNode) typingRow.remove();
+		      _stageARunning = false;
+		    }
+		
+		    // Update main chat with progress
+		    const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
+		    if (sess) {
+		      const spec = CodeSmith.stageA.getSpec();
+		      const filledFields = Object.entries(spec).filter(([k, v]) => {
+		        if (Array.isArray(v)) return v.length > 0;
+		        if (typeof v === 'object' && v !== null) return Object.values(v).some(sv => sv && sv.length > 0);
+		        return v && v.length > 0;
+		      }).length;
+		      const existing = sess.messages.find(m => m._stageAProgress);
+		      const progressText = '[Stage A] Requirements: ' + filledFields + '/7 fields filled';
+		      if (existing) { existing.content = progressText; }
+		      else { sess.messages.push({ role: 'assistant', content: progressText, ts: Date.now(), _stageAProgress: true }); }
+		      await CodeSmith.db.putSession(sess);
+		      renderChat();
+		      renderStatusStrip();
+		    }
+		    await _persistStageState();
+		  }
 
 	  function _renderSpecCard(spec, assumptions) {
 		const container = $('#stage-a-spec-card');
