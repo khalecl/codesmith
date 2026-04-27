@@ -6950,8 +6950,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  });
 
 		  // Drop zone
-		  const codeArea = $('#explorer-code-area');
-		  codeArea.addEventListener('dragover', (ev) => {
+			// Click on drop zone triggers upload
+			  const dropZone = $('#explorer-drop-zone');
+			  if (dropZone) {
+			    dropZone.addEventListener('click', () => {
+			      $('#explorer-file-input').click();
+			    });
+			  }
 			ev.preventDefault();
 			const dz = $('#explorer-drop-zone');
 			if (dz) dz.classList.add('drag-over');
