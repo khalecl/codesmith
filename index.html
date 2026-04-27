@@ -2708,7 +2708,7 @@ const StageA = (() => {
 			          _mergeSpec(update);
 			          yield { type: 'spec_updated', spec: getSpec() };
 			        } catch (parseErr) {
-			          if (tryCount === 0 && !retried) {
+			          if (tryCount === 0) {
 			            _messages.push({ role: 'assistant', content: fullText });
 			            _messages.push({
 			              role: 'user',
@@ -3875,6 +3875,8 @@ function renderStatusStrip() {
     const t0 = performance.now();
 
     // Replace typing indicator with live bubble
+	let _renderPending = false;
+    let _scrollPending = false;
     let liveBubble = null;
     let liveThinking = null;
     let liveRow = null;
@@ -3916,10 +3918,19 @@ function renderStatusStrip() {
           liveThinking.textContent = thinkingText;
           _scrollBottom();
 			} else if (ev.type === 'token') {
-          ensureLiveBubble();
-          fullText += ev.delta;
-          liveBubble.innerHTML = renderMarkdown(fullText);
-          _scrollBottom();
+	          ensureLiveBubble();
+	          fullText += ev.delta;
+	          if (!_renderPending) {
+	            _renderPending = true;
+	            requestAnimationFrame(() => {
+	              liveBubble.innerHTML = renderMarkdown(fullText);
+	              _renderPending = false;
+	            });
+	          }
+	          if (!_scrollPending) {
+	            _scrollPending = true;
+	            requestAnimationFrame(() => { _scrollBottom(); _scrollPending = false; });
+	          }
         } else if (ev.type === 'done') {
           fullText = ev.text || fullText;
           thinkingText = ev.thinking || thinkingText;
@@ -5000,7 +5011,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		          _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
 		          const specBody = $('#build-spec-body');
 		          if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
-		        } else if (ev.type === 'question') {
+		        } else if (ev.type === 'question' || ev.type === 'question_final') {
 		          if (typingRow.parentNode) typingRow.remove();
 		          const aiRow = el('div', { class: 'flex justify-start' });
 		          const aiBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;' });
