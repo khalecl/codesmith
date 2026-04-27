@@ -787,7 +787,322 @@
   }
   .telem-stat .telem-val { font-size: 20px; font-weight: 700; color: #e8ecf1; font-family: monospace; }
   .telem-stat .telem-label { font-size: 10px; color: #5b6474; text-transform: uppercase; margin-top: 2px; }
-  
+  /* ---- Code Explorer: Layout -------------------------------------------- */
+		.explorer-layout {
+		  display: flex; flex: 1; min-height: 0; overflow: hidden;
+		}
+
+		/* File tree panel */
+		.explorer-tree {
+		  width: 220px; min-width: 180px; max-width: 300px;
+		  border-right: 1px solid rgba(255,255,255,0.06);
+		  display: flex; flex-direction: column; overflow: hidden;
+		  background: #0f1319;
+		}
+		.explorer-tree-header {
+		  padding: 8px 10px; font-size: 11px; color: #5b6474;
+		  text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+		  border-bottom: 1px solid rgba(255,255,255,0.06);
+		  display: flex; align-items: center; gap: 6px;
+		}
+		.explorer-tree-body {
+		  flex: 1; overflow-y: auto; padding: 4px 0;
+		}
+		.explorer-tree-actions {
+		  padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.06);
+		  display: flex; gap: 4px; flex-wrap: wrap;
+		}
+
+		/* File tree items */
+		.ftree-item {
+		  display: flex; align-items: center; gap: 6px;
+		  padding: 4px 10px; cursor: pointer; font-size: 12px;
+		  color: #8b92a1; border-left: 2px solid transparent;
+		  transition: all 80ms;
+		}
+		.ftree-item:hover { background: rgba(255,255,255,0.03); color: #e8ecf1; }
+		.ftree-item.active {
+		  background: rgba(79,140,255,0.08); color: #e8ecf1;
+		  border-left-color: #4f8cff;
+		}
+		.ftree-item .ftree-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
+		.ftree-item .ftree-name {
+		  font-family: "JetBrains Mono", monospace; font-size: 11px;
+		  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
+		.ftree-item .ftree-lines {
+		  margin-left: auto; font-size: 9px; color: #5b6474;
+		  font-family: monospace;
+		}
+		.ftree-item .ftree-badge {
+		  margin-left: auto; font-size: 8px; padding: 1px 5px;
+		  border-radius: 3px; font-weight: 600;
+		}
+		.ftree-badge.modified { background: rgba(245,158,11,0.15); color: #f59e0b; }
+		.ftree-badge.added { background: rgba(74,222,128,0.15); color: #4ade80; }
+
+		/* Center: Code viewer with line numbers */
+		.explorer-editor {
+		  flex: 1; min-width: 0; display: flex; flex-direction: column;
+		  overflow: hidden;
+		}
+		.explorer-editor-header {
+		  padding: 6px 12px; font-size: 12px; color: #8b92a1;
+		  border-bottom: 1px solid rgba(255,255,255,0.06);
+		  display: flex; align-items: center; gap: 8px;
+		  background: #141820; flex-shrink: 0;
+		}
+		.explorer-editor-header .file-path {
+		  font-family: "JetBrains Mono", monospace; font-size: 11px;
+		  color: #e8ecf1; font-weight: 500;
+		}
+		.explorer-editor-tabs {
+		  display: flex; border-bottom: 1px solid rgba(255,255,255,0.06);
+		  flex-shrink: 0; overflow-x: auto;
+		}
+		.editor-tab {
+		  padding: 5px 14px; font-size: 11px; cursor: pointer; color: #8b92a1;
+		  border: none; border-bottom: 2px solid transparent;
+		  background: none; font-family: "JetBrains Mono", monospace;
+		  white-space: nowrap; display: flex; align-items: center; gap: 6px;
+		}
+		.editor-tab:hover { color: #e8ecf1; background: rgba(255,255,255,0.02); }
+		.editor-tab.active { color: #4f8cff; border-bottom-color: #4f8cff; }
+		.editor-tab .tab-close {
+		  font-size: 10px; color: #5b6474; cursor: pointer;
+		  width: 14px; height: 14px; display: inline-flex;
+		  align-items: center; justify-content: center; border-radius: 3px;
+		}
+		.editor-tab .tab-close:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+
+		.explorer-code-area {
+		  flex: 1; overflow: auto; position: relative;
+		  font-family: "JetBrains Mono", "Fira Code", monospace;
+		  font-size: 12px; line-height: 1.65;
+		}
+		.code-table {
+		  width: 100%; border-collapse: collapse;
+		}
+		.code-table td { padding: 0; vertical-align: top; }
+		.code-line-num {
+		  width: 50px; text-align: right; padding: 0 12px 0 8px;
+		  color: #3a3f4a; user-select: none; cursor: pointer;
+		  font-size: 11px; position: sticky; left: 0;
+		  background: #0b0d10;
+		}
+		.code-line-num:hover { color: #5b6474; }
+		.code-line-content {
+		  padding: 0 16px 0 8px; white-space: pre;
+		  color: #e8ecf1;
+		}
+		.code-line-row:hover .code-line-num { color: #8b92a1; }
+		.code-line-row:hover { background: rgba(255,255,255,0.015); }
+		.code-line-row.highlighted { background: rgba(79,140,255,0.08); }
+		.code-line-row.highlighted .code-line-num { color: #4f8cff; font-weight: 600; }
+		.code-line-row.edit-target { background: rgba(245,158,11,0.08); }
+		.code-line-row.edit-target .code-line-num {
+		  color: #f59e0b; font-weight: 600;
+		  border-left: 2px solid #f59e0b;
+		}
+		.code-line-row.delete-target { background: rgba(255,107,107,0.06); }
+		.code-line-row.delete-target .code-line-num {
+		  color: #ff6b6b; text-decoration: line-through;
+		}
+		.code-line-row.add-marker { background: rgba(74,222,128,0.06); }
+		.code-line-row.add-marker .code-line-num {
+		  color: #4ade80; font-weight: 600;
+		}
+
+		/* Right panel: AI analysis & pair programmer */
+		.explorer-ai {
+		  width: 380px; min-width: 300px; max-width: 480px;
+		  border-left: 1px solid rgba(255,255,255,0.06);
+		  display: flex; flex-direction: column; overflow: hidden;
+		  background: #141820;
+		}
+		.explorer-ai-tabs {
+		  display: flex; border-bottom: 1px solid rgba(255,255,255,0.06);
+		  flex-shrink: 0;
+		}
+		.ai-tab {
+		  padding: 7px 12px; cursor: pointer; color: #8b92a1; font-size: 11px;
+		  border: none; border-bottom: 2px solid transparent;
+		  background: none; font-family: inherit;
+		}
+		.ai-tab:hover { color: #e8ecf1; }
+		.ai-tab.active { color: #4f8cff; border-bottom-color: #4f8cff; }
+		.explorer-ai-content {
+		  flex: 1; overflow-y: auto; display: none;
+		}
+		.explorer-ai-content.active { display: flex; flex-direction: column; }
+
+		/* Analysis panel */
+		.analysis-section {
+		  padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
+		}
+		.analysis-label {
+		  font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
+		  color: #5b6474; font-weight: 600; margin-bottom: 6px;
+		}
+		.analysis-metric {
+		  display: flex; align-items: center; gap: 8px;
+		  padding: 3px 0; font-size: 12px; color: #8b92a1;
+		}
+		.analysis-metric .metric-val {
+		  font-family: "JetBrains Mono", monospace; font-weight: 600;
+		  color: #e8ecf1; font-size: 13px;
+		}
+		.analysis-metric .metric-bar {
+		  flex: 1; height: 4px; background: rgba(255,255,255,0.06);
+		  border-radius: 2px; overflow: hidden;
+		}
+		.analysis-metric .metric-bar-fill {
+		  height: 100%; border-radius: 2px; transition: width 300ms;
+		}
+		.complexity-low  { background: #4ade80; }
+		.complexity-med  { background: #f59e0b; }
+		.complexity-high { background: #ff6b6b; }
+
+		.fn-map-item {
+		  padding: 5px 8px; border-radius: 4px; cursor: pointer;
+		  font-family: "JetBrains Mono", monospace; font-size: 11px;
+		  color: #8b92a1; display: flex; align-items: center; gap: 6px;
+		  margin-bottom: 2px;
+		}
+		.fn-map-item:hover { background: rgba(255,255,255,0.04); color: #e8ecf1; }
+		.fn-map-item .fn-line {
+		  font-size: 9px; color: #5b6474; margin-left: auto;
+		}
+		.fn-map-item .fn-type-dot {
+		  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+		}
+		.fn-type-dot.fn-func { background: #4f8cff; }
+		.fn-type-dot.fn-class { background: #a855f7; }
+		.fn-type-dot.fn-method { background: #f59e0b; }
+		.fn-type-dot.fn-const { background: #4ade80; }
+
+		/* Pair Programmer panel */
+		.pair-chat {
+		  flex: 1; overflow-y: auto; padding: 10px; display: flex;
+		  flex-direction: column; gap: 8px;
+		}
+		.pair-input-bar {
+		  padding: 8px; border-top: 1px solid rgba(255,255,255,0.06);
+		  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+		}
+		.pair-input-bar textarea {
+		  resize: none; min-height: 50px; max-height: 120px;
+		  font-size: 12px; padding: 8px;
+		}
+		.pair-input-bar .pair-actions {
+		  display: flex; gap: 4px; flex-wrap: wrap;
+		}
+		.pair-quick-btn {
+		  font-size: 10px; padding: 3px 8px; border-radius: 4px;
+		  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+		  color: #8b92a1; cursor: pointer; transition: all 80ms;
+		}
+		.pair-quick-btn:hover { background: rgba(79,140,255,0.1); color: #4f8cff; border-color: rgba(79,140,255,0.2); }
+
+		/* Edit instruction cards */
+		.edit-card {
+		  border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+		  overflow: hidden; font-size: 12px; margin: 4px 0;
+		  background: rgba(255,255,255,0.02);
+		}
+		.edit-card-header {
+		  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+		  border-bottom: 1px solid rgba(255,255,255,0.04);
+		}
+		.edit-card-type {
+		  font-size: 9px; font-weight: 700; text-transform: uppercase;
+		  letter-spacing: 0.5px; padding: 2px 6px; border-radius: 3px;
+		}
+		.edit-type-replace { background: rgba(245,158,11,0.15); color: #f59e0b; }
+		.edit-type-add { background: rgba(74,222,128,0.15); color: #4ade80; }
+		.edit-type-delete { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+		.edit-type-move { background: rgba(168,85,247,0.15); color: #a855f7; }
+		.edit-card-location {
+		  font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8b92a1;
+		}
+		.edit-card-body {
+		  padding: 0;
+		}
+		.edit-card-old, .edit-card-new {
+		  padding: 6px 10px; font-family: "JetBrains Mono", monospace;
+		  font-size: 11px; line-height: 1.5; white-space: pre-wrap;
+		  overflow-x: auto;
+		}
+		.edit-card-old {
+		  background: rgba(255,107,107,0.04); color: #ff9999;
+		  border-bottom: 1px solid rgba(255,255,255,0.04);
+		}
+		.edit-card-new {
+		  background: rgba(74,222,128,0.04); color: #99ffbb;
+		}
+		.edit-card-reason {
+		  padding: 6px 10px; font-size: 11px; color: #8b92a1;
+		  border-top: 1px solid rgba(255,255,255,0.04);
+		  line-height: 1.4;
+		}
+		.edit-card-actions {
+		  display: flex; gap: 4px; padding: 6px 10px;
+		  border-top: 1px solid rgba(255,255,255,0.04);
+		}
+		.edit-apply-btn {
+		  font-size: 10px; padding: 3px 10px; border-radius: 4px;
+		  background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.2);
+		  color: #4ade80; cursor: pointer; font-weight: 600;
+		}
+		.edit-apply-btn:hover { background: rgba(74,222,128,0.2); }
+		.edit-show-btn {
+		  font-size: 10px; padding: 3px 10px; border-radius: 4px;
+		  background: rgba(79,140,255,0.1); border: 1px solid rgba(79,140,255,0.2);
+		  color: #4f8cff; cursor: pointer;
+		}
+		.edit-show-btn:hover { background: rgba(79,140,255,0.2); }
+		.edit-applied {
+		  opacity: 0.5; pointer-events: none;
+		}
+		.edit-applied .edit-apply-btn {
+		  background: rgba(74,222,128,0.05); color: #5b6474;
+		}
+
+		/* Algorithm flowchart */
+		.algo-container {
+		  padding: 12px; flex: 1; overflow: auto;
+		}
+		.algo-container svg { max-width: 100%; height: auto; }
+
+		/* Drop zone */
+		.drop-zone {
+		  border: 2px dashed rgba(79,140,255,0.3); border-radius: 8px;
+		  padding: 24px 16px; text-align: center; cursor: pointer;
+		  transition: all 120ms; margin: 8px;
+		}
+		.drop-zone:hover { border-color: rgba(79,140,255,0.5); background: rgba(79,140,255,0.03); }
+		.drop-zone.drag-over { border-color: #4f8cff; background: rgba(79,140,255,0.08); }
+		.drop-zone-icon { font-size: 28px; margin-bottom: 8px; }
+		.drop-zone-text { font-size: 12px; color: #8b92a1; }
+		.drop-zone-hint { font-size: 10px; color: #5b6474; margin-top: 4px; }
+
+		/* Explorer empty state */
+		.explorer-empty {
+		  flex: 1; display: flex; align-items: center; justify-content: center;
+		  flex-direction: column; gap: 12px; color: #5b6474; padding: 24px;
+		  text-align: center;
+		}
+		.explorer-empty-icon { font-size: 36px; opacity: 0.4; }
+		.explorer-empty-title { font-size: 14px; color: #8b92a1; font-weight: 500; }
+		.explorer-empty-desc { font-size: 12px; max-width: 300px; line-height: 1.5; }
+
+		/* Resizable panels */
+		.explorer-resize-handle {
+		  width: 4px; cursor: col-resize; background: transparent;
+		  transition: background 80ms; flex-shrink: 0;
+		}
+		.explorer-resize-handle:hover { background: rgba(79,140,255,0.3); }
+		.explorer-resize-handle:active { background: #4f8cff; }
 </style>
 </head>
 <body class="bg-bg text-text">
@@ -822,6 +1137,7 @@
 		<div class="mode-toggle" style="margin-left:8px;">
         <button class="mode-btn active" data-mode="chat">Chat</button>
         <button class="mode-btn" data-mode="build">Build</button>
+		<button class="mode-btn" data-mode="explore">Explore</button>
       </div>
       </span>
     </div>
@@ -1048,7 +1364,131 @@
 					  <!-- Right: live log -->
 					  <div id="sc-log" class="stage-c-log"></div>
 					</div>
+					
 				  </div>
+				 <!-- Stage E: Code Explorer + AI Pair Programmer -->
+					<div id="stage-e-panel" hidden style="display:flex;flex-direction:column;flex:1;min-height:0;">
+					  <div class="explorer-layout" style="flex:1;min-height:0;">
+
+						<!-- File tree -->
+						<div class="explorer-tree">
+						  <div class="explorer-tree-header">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+							Explorer
+							<span style="margin-left:auto;font-size:10px;color:#5b6474;" id="explorer-file-count">0 files</span>
+						  </div>
+						  <div id="explorer-tree-body" class="explorer-tree-body"></div>
+						  <div class="explorer-tree-actions">
+							<button id="btn-explorer-upload" class="btn btn-ghost" style="font-size:10px;flex:1;">
+							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+							  Upload
+							</button>
+							<button id="btn-explorer-paste" class="btn btn-ghost" style="font-size:10px;flex:1;">
+							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+							  Paste
+							</button>
+							<button id="btn-explorer-clear" class="btn btn-ghost" style="font-size:10px;color:#5b6474;">✕</button>
+						  </div>
+						</div>
+
+						<div class="explorer-resize-handle" id="explorer-resize-left"></div>
+
+						<!-- Code viewer -->
+						<div class="explorer-editor">
+						  <div class="explorer-editor-tabs" id="explorer-tabs"></div>
+						  <div class="explorer-editor-header" id="explorer-editor-header" hidden>
+							<span class="file-path" id="explorer-file-path">—</span>
+							<span style="margin-left:auto;font-size:10px;color:#5b6474;" id="explorer-line-info"></span>
+							<button id="btn-explorer-edit-toggle" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Edit</button>
+							<button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Copy</button>
+						  </div>
+						  <div id="explorer-code-area" class="explorer-code-area">
+							<!-- Empty state / drop zone shown when no file selected -->
+							<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;">
+							  <div class="drop-zone-icon">📂</div>
+							  <div class="drop-zone-text">Drop files here or click Upload</div>
+							  <div class="drop-zone-hint">Supports .py .js .ts .html .css .json .md .txt .jsx .vue</div>
+							</div>
+						  </div>
+						</div>
+
+						<div class="explorer-resize-handle" id="explorer-resize-right"></div>
+
+						<!-- AI panel -->
+						<div class="explorer-ai">
+						  <div class="explorer-ai-tabs">
+							<button class="ai-tab active" data-aitab="analysis">Analysis</button>
+							<button class="ai-tab" data-aitab="pair">Pair Programmer</button>
+							<button class="ai-tab" data-aitab="algo">Algorithm</button>
+						  </div>
+
+						  <!-- Analysis tab -->
+						  <div class="explorer-ai-content active" data-aicontent="analysis">
+							<div id="explorer-analysis" style="overflow-y:auto;flex:1;">
+							  <div class="explorer-empty">
+								<div class="explorer-empty-icon">🔍</div>
+								<div class="explorer-empty-title">No file loaded</div>
+								<div class="explorer-empty-desc">Upload or paste code to see analysis</div>
+							  </div>
+							</div>
+							<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);">
+							  <button id="btn-explorer-analyze" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
+								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+								Analyze with AI
+							  </button>
+							</div>
+						  </div>
+
+						  <!-- Pair Programmer tab -->
+						  <div class="explorer-ai-content" data-aicontent="pair">
+							<div id="pair-chat" class="pair-chat">
+							  <div class="explorer-empty" style="padding:16px;">
+								<div class="explorer-empty-icon">🤝</div>
+								<div class="explorer-empty-title">AI Pair Programmer</div>
+								<div class="explorer-empty-desc">Ask for changes, improvements, or bug fixes. Get exact line-by-line edit instructions you can apply with one click.</div>
+							  </div>
+							</div>
+							<div class="pair-input-bar">
+							  <div class="pair-actions">
+								<button class="pair-quick-btn" data-pair-q="fix">🐛 Fix bugs</button>
+								<button class="pair-quick-btn" data-pair-q="optimize">⚡ Optimize</button>
+								<button class="pair-quick-btn" data-pair-q="refactor">♻️ Refactor</button>
+								<button class="pair-quick-btn" data-pair-q="tests">🧪 Add tests</button>
+								<button class="pair-quick-btn" data-pair-q="docs">📝 Add docs</button>
+								<button class="pair-quick-btn" data-pair-q="types">🏷️ Add types</button>
+							  </div>
+							  <div style="display:flex;gap:6px;">
+								<textarea id="pair-input" rows="2" placeholder="Describe what to change…"></textarea>
+								<button id="btn-pair-send" class="btn btn-primary" style="font-size:11px;align-self:flex-end;" disabled>
+								  Ask
+								</button>
+							  </div>
+							</div>
+						  </div>
+
+						  <!-- Algorithm tab -->
+						  <div class="explorer-ai-content" data-aicontent="algo">
+							<div id="algo-container" class="algo-container">
+							  <div class="explorer-empty">
+								<div class="explorer-empty-icon">🔀</div>
+								<div class="explorer-empty-title">Algorithm Flowchart</div>
+								<div class="explorer-empty-desc">Generates a visual flowchart of the code's logic and control flow</div>
+							  </div>
+							</div>
+							<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);">
+							  <button id="btn-explorer-algo" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
+								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+								Generate Flowchart
+							  </button>
+							</div>
+						  </div>
+						</div>
+					  </div>
+					</div>
+					<input type="file" id="explorer-file-input" hidden multiple
+						   accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini" />
+
+ 
 			</div>
 		  </div>
 
@@ -1093,7 +1533,8 @@
     <span class="ml-auto font-mono text-muted/70" id="st-session-id">—</span>
   </footer>
 </div>
-
+		 <input type="file" id="explorer-file-input" hidden multiple
+		accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini" />
 <!-- ========= Debug panel (Ctrl+Shift+D) — Day 2 ========= -->
 <div id="debug-panel" class="debug-panel" hidden>
   <div style="display:flex;align-items:center;padding:6px 10px 0;">
@@ -3526,6 +3967,298 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 })();
 CodeSmith.stageC = StageC;
 
+// === CODE EXPLORER MODULE ===================================================
+const Explorer = (() => {
+  let _files = {};       // { filename: { content, language, modified } }
+  let _activeFile = null;
+  let _openTabs = [];    // [filename, ...]
+  let _editMode = false;
+
+  function addFile(name, content) {
+    const lang = _detectLang(name);
+    _files[name] = { content, language: lang, modified: false, original: content };
+    return { name, language: lang, lines: content.split('\n').length };
+  }
+
+  function getFile(name) { return _files[name] || null; }
+  function getAllFiles() { return { ..._files }; }
+  function getFileList() {
+    return Object.entries(_files).map(([name, f]) => ({
+      name, language: f.language, lines: f.content.split('\n').length, modified: f.modified,
+    }));
+  }
+  function getActiveFile() { return _activeFile; }
+  function setActiveFile(name) { _activeFile = name; }
+  function getOpenTabs() { return _openTabs.slice(); }
+
+  function openTab(name) {
+    if (!_openTabs.includes(name)) _openTabs.push(name);
+    _activeFile = name;
+  }
+  function closeTab(name) {
+    _openTabs = _openTabs.filter(n => n !== name);
+    if (_activeFile === name) _activeFile = _openTabs[_openTabs.length - 1] || null;
+  }
+
+  function updateFileContent(name, newContent) {
+    if (!_files[name]) return;
+    _files[name].content = newContent;
+    _files[name].modified = newContent !== _files[name].original;
+  }
+
+  function applyEdit(filename, edit) {
+    const file = _files[filename];
+    if (!file) return { ok: false, error: 'File not found' };
+    const lines = file.content.split('\n');
+
+    if (edit.type === 'replace') {
+      const start = Math.max(0, edit.startLine - 1);
+      const end = Math.min(lines.length, edit.endLine);
+      const newLines = edit.newCode.split('\n');
+      lines.splice(start, end - start, ...newLines);
+    } else if (edit.type === 'add') {
+      const insertAt = Math.min(lines.length, edit.afterLine);
+      const newLines = edit.newCode.split('\n');
+      lines.splice(insertAt, 0, ...newLines);
+    } else if (edit.type === 'delete') {
+      const start = Math.max(0, edit.startLine - 1);
+      const end = Math.min(lines.length, edit.endLine);
+      lines.splice(start, end - start);
+    }
+
+    file.content = lines.join('\n');
+    file.modified = true;
+    return { ok: true, newContent: file.content };
+  }
+
+  function clearAll() {
+    _files = {};
+    _activeFile = null;
+    _openTabs = [];
+  }
+
+  function analyzeCode(content, language) {
+    const lines = content.split('\n');
+    const totalLines = lines.length;
+    const blankLines = lines.filter(l => l.trim() === '').length;
+    const commentLines = lines.filter(l => {
+      const t = l.trim();
+      return t.startsWith('#') || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*');
+    }).length;
+    const codeLines = totalLines - blankLines - commentLines;
+
+    // Extract functions/classes
+    const symbols = [];
+    const fnRegex = language === 'python'
+      ? /^(\s*)(def|class|async\s+def)\s+(\w+)/gm
+      : /^(\s*)(function|class|const|let|var|export\s+(?:default\s+)?(?:function|class|const))\s+(\w+)/gm;
+
+    let match;
+    while ((match = fnRegex.exec(content)) !== null) {
+      const lineNum = content.substring(0, match.index).split('\n').length;
+      const indent = match[1].length;
+      const kind = match[2].replace(/async\s+/, '').replace(/export\s+(?:default\s+)?/, '');
+      symbols.push({ name: match[3], kind, line: lineNum, indent });
+    }
+
+    // Complexity estimate
+    const branchKeywords = language === 'python'
+      ? ['if ', 'elif ', 'for ', 'while ', 'except ', 'with ']
+      : ['if ', 'else if', 'for ', 'while ', 'catch ', 'switch ', '? ', '&&', '||'];
+    let branchCount = 0;
+    for (const line of lines) {
+      const t = line.trim();
+      for (const kw of branchKeywords) {
+        if (t.startsWith(kw) || t.includes(kw)) { branchCount++; break; }
+      }
+    }
+    const complexityScore = Math.min(100, Math.round((branchCount / Math.max(codeLines, 1)) * 200));
+
+    // Imports
+    const imports = [];
+    const importRegex = language === 'python'
+      ? /^(?:from\s+(\S+)\s+import|import\s+(\S+))/gm
+      : /^import\s+.*?from\s+['"]([^'"]+)['"]/gm;
+    while ((match = importRegex.exec(content)) !== null) {
+      imports.push(match[1] || match[2] || match[3]);
+    }
+
+    return {
+      totalLines, blankLines, commentLines, codeLines,
+      symbols, imports, branchCount, complexityScore,
+      commentRatio: totalLines > 0 ? Math.round((commentLines / totalLines) * 100) : 0,
+    };
+  }
+
+  function _detectLang(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const map = {
+      py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript',
+      tsx: 'typescript', vue: 'vue', html: 'html', css: 'css',
+      json: 'json', md: 'markdown', txt: 'text', sh: 'bash',
+      sql: 'sql', yaml: 'yaml', yml: 'yaml', toml: 'toml',
+    };
+    return map[ext] || 'text';
+  }
+
+  return {
+    addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
+    getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
+    clearAll, analyzeCode,
+  };
+})();
+CodeSmith.explorer = Explorer;
+
+
+		// === PAIR PROGRAMMER MODULE =================================================
+		const PairProgrammer = (() => {
+
+		  const PAIR_SYSTEM = `You are an expert pair programmer inside CodeSmith. The user shows you code and asks for changes.
+
+		YOUR RESPONSE FORMAT:
+		1. Brief explanation (1-2 sentences max)
+		2. One or more EDIT BLOCKS using this exact format:
+
+		<edit type="replace" file="{filename}" start="{line}" end="{line}">
+		<old>
+		exact old code
+		</old>
+		<new>
+		replacement code
+		</new>
+		<reason>Why this change</reason>
+		</edit>
+
+		<edit type="add" file="{filename}" after="{line}">
+		<new>
+		code to insert
+		</new>
+		<reason>Why adding this</reason>
+		</edit>
+
+		<edit type="delete" file="{filename}" start="{line}" end="{line}">
+		<reason>Why deleting</reason>
+		</edit>
+
+		RULES:
+		- ALWAYS use exact line numbers from the provided code
+		- The <old> block must match the EXACT content at those lines (whitespace matters)
+		- Keep edits minimal — change only what's needed
+		- Number edits so they can be applied in order
+		- If multiple edits, list them top-to-bottom by line number
+		- Test your logic mentally before suggesting
+		- For Python: maintain PEP 8, type hints on public functions
+		- For JS: use modern ES6+, const/let, arrow functions where appropriate`;
+
+		  const ANALYSIS_SYSTEM = `You are a code analyst. Analyze the provided code and output ONLY valid JSON:
+		{
+		  "summary": "one-line description of what this code does",
+		  "quality_score": 0-100,
+		  "issues": [
+			{"severity": "high|medium|low", "line": N, "message": "description", "category": "bug|performance|style|security|maintainability"}
+		  ],
+		  "suggestions": ["suggestion 1", "suggestion 2"],
+		  "architecture_notes": "brief architecture observation",
+		  "dependencies_analysis": "what this code depends on and potential concerns"
+		}
+		Be specific about line numbers. Focus on real issues, not style nitpicks.`;
+
+		  const ALGO_SYSTEM = `You are a code visualizer. Given code, generate a Mermaid flowchart showing its algorithm and control flow.
+		Rules:
+		- Use flowchart TD (top-down)
+		- Show function entry points, conditionals, loops, return paths
+		- Use descriptive labels, not code
+		- Keep it readable (max ~15 nodes for a function)
+		- Style: classDef default fill:#1a1f2a,stroke:#4f8cff,stroke-width:1px,color:#e8ecf1
+		- For multiple functions, use subgraphs
+		Output ONLY the mermaid definition, no explanation, no fences.`;
+
+		  async function analyzeWithAI(code, filename, language) {
+			const result = await CodeSmith.llm.chatComplete({
+			  messages: [
+				{ role: 'system', content: ANALYSIS_SYSTEM },
+				{ role: 'user', content: `File: ${filename} (${language})\nLines: ${code.split('\n').length}\n\n${code}` },
+			  ],
+			  tier: 'orchestrator',
+			  temperature: 0.2,
+			  maxTokens: 4000,
+			});
+			// Parse JSON from response
+			let text = result.text.trim();
+			if (text.startsWith('```')) text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+			try { return JSON.parse(text); }
+			catch {
+			  const s = text.indexOf('{'), e = text.lastIndexOf('}');
+			  if (s >= 0 && e > s) try { return JSON.parse(text.slice(s, e + 1)); } catch {}
+			  return null;
+			}
+		  }
+
+		  async function* askPair(code, filename, language, question) {
+			const numberedCode = code.split('\n').map((l, i) => `${i + 1}\t${l}`).join('\n');
+			const messages = [
+			  { role: 'system', content: PAIR_SYSTEM },
+			  { role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`\n\nRequest: ${question}` },
+			];
+
+			for await (const ev of CodeSmith.llm.chat({
+			  messages,
+			  tier: 'orchestrator',
+			  temperature: 0.2,
+			  maxTokens: 8000,
+			})) {
+			  if (ev.type === 'token') yield { type: 'token', delta: ev.delta };
+			  else if (ev.type === 'thinking') yield { type: 'thinking', delta: ev.delta };
+			  else if (ev.type === 'done') yield { type: 'done', text: ev.text, thinking: ev.thinking };
+			  else if (ev.type === 'error') yield { type: 'error', error: ev.error };
+			}
+		  }
+
+		  function parseEdits(responseText) {
+			const edits = [];
+			const editRegex = /<edit\s+type="(\w+)"\s+file="([^"]+)"(?:\s+start="(\d+)")?(?:\s+end="(\d+)")?(?:\s+after="(\d+)")?\s*>([\s\S]*?)<\/edit>/g;
+			let match;
+			while ((match = editRegex.exec(responseText)) !== null) {
+			  const edit = {
+				type: match[1],
+				file: match[2],
+				startLine: match[3] ? parseInt(match[3]) : null,
+				endLine: match[4] ? parseInt(match[4]) : null,
+				afterLine: match[5] ? parseInt(match[5]) : null,
+			  };
+			  const inner = match[6];
+
+			  const oldMatch = inner.match(/<old>\n?([\s\S]*?)\n?<\/old>/);
+			  const newMatch = inner.match(/<new>\n?([\s\S]*?)\n?<\/new>/);
+			  const reasonMatch = inner.match(/<reason>([\s\S]*?)<\/reason>/);
+
+			  if (oldMatch) edit.oldCode = oldMatch[1];
+			  if (newMatch) edit.newCode = newMatch[1];
+			  if (reasonMatch) edit.reason = reasonMatch[1].trim();
+
+			  edits.push(edit);
+			}
+			return edits;
+		  }
+
+		  async function generateFlowchart(code, filename, language) {
+			const result = await CodeSmith.llm.chatComplete({
+			  messages: [
+				{ role: 'system', content: ALGO_SYSTEM },
+				{ role: 'user', content: `File: ${filename} (${language})\n\n${code}` },
+			  ],
+			  tier: 'fast',
+			  temperature: 0.2,
+			  maxTokens: 3000,
+			});
+			let text = result.text.trim();
+			if (text.startsWith('```')) text = text.replace(/^```(?:mermaid)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+			return text;
+		  }
+
+		  return { analyzeWithAI, askPair, parseEdits, generateFlowchart };
+		})();
+		CodeSmith.pair = PairProgrammer;
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
  *    No innerHTML with user content — textContent or element builders only.
@@ -4295,6 +5028,7 @@ function wireComposer() {
     wireTemplates();    // Day 7
     wireKeyboardShortcuts(); // Day 7
     wireErrorRecovery(); // Day 7
+	wireExplorer();     // Code Explorer
     // Help button
     const helpBtn = $('#btn-help');
     if (helpBtn) helpBtn.addEventListener('click', openHelp);
@@ -4488,10 +5222,25 @@ function wireComposer() {
 		    btn.addEventListener('click', () => {
 		      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
 		      btn.classList.add('active');
-		      _buildMode = btn.dataset.mode;
-		      $('#split-right').hidden = _buildMode !== 'build';
-		      document.body.classList.toggle('build-mode', _buildMode === 'build');
-		      if (_buildMode === 'build') {
+		     _buildMode = btn.dataset.mode;
+				$('#split-right').hidden = _buildMode !== 'build' && _buildMode !== 'explore';
+				document.body.classList.toggle('build-mode', _buildMode === 'build' || _buildMode === 'explore');
+				if (_buildMode === 'explore') {
+				// Hide build panels, show explorer
+				$('#stage-a-panel').hidden = true;
+				$('#stage-a-panel').style.display = 'none';
+				$('#stage-b-panel').hidden = true;
+				$('#stage-c-panel').hidden = true;
+				$('#stage-c-panel').style.display = 'none';
+				$('#stage-e-panel').hidden = false;
+				$('#stage-e-panel').style.display = 'flex';
+				document.querySelector('.build-stepper').style.display = 'none';
+				} else {
+				$('#stage-e-panel').hidden = true;
+				$('#stage-e-panel').style.display = 'none';
+				document.querySelector('.build-stepper').style.display = '';
+				}
+				if (_buildMode === 'build') {
 		        _showStep(_currentStep);
 		        // Auto-focus Stage A input if we're on Stage A
 		        if (_currentStep === 'a') setTimeout(() => $('#stage-a-input').focus(), 100);
@@ -6101,6 +6850,727 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  totalCalls: budget.calls,
 		};
 	  }
+		// ---- Code Explorer UI wiring ----
+		// INSERT THESE FUNCTIONS INSIDE the UI module, before its return { ... }
+
+		function wireExplorer() {
+		  const $ = (sel) => document.querySelector(sel);
+		  function el(tag, props = {}, children = []) {
+			const n = document.createElement(tag);
+			for (const [k, v] of Object.entries(props)) {
+			  if (k === 'class') n.className = v;
+			  else if (k === 'style' && typeof v === 'string') n.setAttribute('style', v);
+			  else if (k in n) n[k] = v;
+			  else n.setAttribute(k, v);
+			}
+			for (const c of [].concat(children)) {
+			  if (c == null) continue;
+			  n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+			}
+			return n;
+		  }
+
+		  // AI tab switching
+		  for (const tab of document.querySelectorAll('.ai-tab')) {
+			tab.addEventListener('click', () => {
+			  document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+			  document.querySelectorAll('.explorer-ai-content').forEach(c => c.classList.remove('active'));
+			  tab.classList.add('active');
+			  const tgt = tab.dataset.aitab;
+			  const content = document.querySelector(`[data-aicontent="${tgt}"]`);
+			  if (content) content.classList.add('active');
+			});
+		  }
+
+		  // File upload
+		  $('#btn-explorer-upload').addEventListener('click', () => {
+			$('#explorer-file-input').click();
+		  });
+		  $('#explorer-file-input').addEventListener('change', async (ev) => {
+			for (const file of ev.target.files) {
+			  const text = await file.text();
+			  CodeSmith.explorer.addFile(file.name, text);
+			  CodeSmith.explorer.openTab(file.name);
+			}
+			_explorerRenderTree();
+			_explorerRenderTabs();
+			_explorerShowFile(CodeSmith.explorer.getActiveFile());
+			ev.target.value = '';
+		  });
+
+		  // Paste code
+		  $('#btn-explorer-paste').addEventListener('click', () => {
+			const name = prompt('Filename (e.g. main.py):');
+			if (!name) return;
+			const code = prompt('Paste your code:');
+			if (!code) return;
+			CodeSmith.explorer.addFile(name, code);
+			CodeSmith.explorer.openTab(name);
+			_explorerRenderTree();
+			_explorerRenderTabs();
+			_explorerShowFile(name);
+		  });
+
+		  // Clear all
+		  $('#btn-explorer-clear').addEventListener('click', () => {
+			if (!confirm('Clear all files?')) return;
+			CodeSmith.explorer.clearAll();
+			_explorerRenderTree();
+			_explorerRenderTabs();
+			$('#explorer-code-area').innerHTML = '';
+			$('#explorer-drop-zone')?.remove();
+			const dz = el('div', { id: 'explorer-drop-zone', class: 'drop-zone', style: 'margin:40px auto;max-width:360px;' });
+			dz.innerHTML = '<div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div>';
+			$('#explorer-code-area').appendChild(dz);
+			_explorerResetAnalysis();
+		  });
+
+		  // Drop zone
+		  const codeArea = $('#explorer-code-area');
+		  codeArea.addEventListener('dragover', (ev) => {
+			ev.preventDefault();
+			const dz = $('#explorer-drop-zone');
+			if (dz) dz.classList.add('drag-over');
+		  });
+		  codeArea.addEventListener('dragleave', () => {
+			const dz = $('#explorer-drop-zone');
+			if (dz) dz.classList.remove('drag-over');
+		  });
+		  codeArea.addEventListener('drop', async (ev) => {
+			ev.preventDefault();
+			const dz = $('#explorer-drop-zone');
+			if (dz) dz.classList.remove('drag-over');
+			for (const file of ev.dataTransfer.files) {
+			  const text = await file.text();
+			  CodeSmith.explorer.addFile(file.name, text);
+			  CodeSmith.explorer.openTab(file.name);
+			}
+			_explorerRenderTree();
+			_explorerRenderTabs();
+			_explorerShowFile(CodeSmith.explorer.getActiveFile());
+		  });
+
+		  // Analyze button
+		  $('#btn-explorer-analyze').addEventListener('click', _explorerRunAnalysis);
+
+		  // Algorithm button
+		  $('#btn-explorer-algo').addEventListener('click', _explorerRunAlgo);
+
+		  // Pair programmer send
+		  $('#btn-pair-send').addEventListener('click', _pairSend);
+		  $('#pair-input').addEventListener('keydown', (ev) => {
+			if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); _pairSend(); }
+		  });
+
+		  // Quick action buttons
+		  for (const btn of document.querySelectorAll('.pair-quick-btn')) {
+			btn.addEventListener('click', () => {
+			  const q = btn.dataset.pairQ;
+			  const map = {
+				fix: 'Find and fix any bugs in this code. Be specific about what\'s wrong and why.',
+				optimize: 'Optimize this code for performance. Identify bottlenecks and suggest improvements.',
+				refactor: 'Refactor this code for better readability and maintainability. Keep the same behavior.',
+				tests: 'Add comprehensive unit tests for this code. Cover happy path, edge cases, and error cases.',
+				docs: 'Add clear docstrings and inline comments explaining the logic.',
+				types: 'Add type hints to all functions and variables.',
+			  };
+			  $('#pair-input').value = map[q] || q;
+			  _pairSend();
+			});
+		  }
+
+		  // Copy file button
+		  $('#btn-explorer-copy-file').addEventListener('click', () => {
+			const name = CodeSmith.explorer.getActiveFile();
+			if (!name) return;
+			const file = CodeSmith.explorer.getFile(name);
+			if (!file) return;
+			navigator.clipboard.writeText(file.content).then(() => {
+			  const btn = $('#btn-explorer-copy-file');
+			  btn.textContent = 'Copied!';
+			  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+			});
+		  });
+
+		  // Edit toggle
+		  $('#btn-explorer-edit-toggle').addEventListener('click', () => {
+			const name = CodeSmith.explorer.getActiveFile();
+			if (!name) return;
+			const file = CodeSmith.explorer.getFile(name);
+			if (!file) return;
+			const area = $('#explorer-code-area');
+			const btn = $('#btn-explorer-edit-toggle');
+
+			if (area.querySelector('.explorer-edit-textarea')) {
+			  // Save and exit edit mode
+			  const ta = area.querySelector('.explorer-edit-textarea');
+			  CodeSmith.explorer.updateFileContent(name, ta.value);
+			  btn.textContent = 'Edit';
+			  _explorerShowFile(name);
+			  _explorerRenderTree();
+			} else {
+			  // Enter edit mode
+			  area.innerHTML = '';
+			  const ta = el('textarea', {
+				class: 'explorer-edit-textarea',
+				style: 'width:100%;height:100%;background:#0b0d10;color:#e8ecf1;border:none;padding:12px;font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.65;resize:none;outline:none;',
+			  });
+			  ta.value = file.content;
+			  area.appendChild(ta);
+			  ta.focus();
+			  btn.textContent = 'Save';
+			}
+		  });
+		}
+
+		function _explorerRenderTree() {
+		  const $ = (sel) => document.querySelector(sel);
+		  const files = CodeSmith.explorer.getFileList();
+		  const body = $('#explorer-tree-body');
+		  body.replaceChildren();
+		  $('#explorer-file-count').textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
+
+		  const iconMap = {
+			python: '🐍', javascript: '📜', typescript: '📘', html: '🌐',
+			css: '🎨', json: '📋', markdown: '📝', text: '📄', bash: '⚡',
+			vue: '💚', sql: '🗄️', yaml: '⚙️',
+		  };
+
+		  for (const f of files) {
+			const active = f.name === CodeSmith.explorer.getActiveFile();
+			const item = document.createElement('div');
+			item.className = 'ftree-item' + (active ? ' active' : '');
+			const icon = document.createElement('span');
+			icon.className = 'ftree-icon';
+			icon.textContent = iconMap[f.language] || '📄';
+			item.appendChild(icon);
+			const name = document.createElement('span');
+			name.className = 'ftree-name';
+			name.textContent = f.name;
+			item.appendChild(name);
+			if (f.modified) {
+			  const badge = document.createElement('span');
+			  badge.className = 'ftree-badge modified';
+			  badge.textContent = 'M';
+			  item.appendChild(badge);
+			} else {
+			  const lines = document.createElement('span');
+			  lines.className = 'ftree-lines';
+			  lines.textContent = f.lines + 'L';
+			  item.appendChild(lines);
+			}
+			item.addEventListener('click', () => {
+			  CodeSmith.explorer.openTab(f.name);
+			  _explorerRenderTree();
+			  _explorerRenderTabs();
+			  _explorerShowFile(f.name);
+			});
+			body.appendChild(item);
+		  }
+
+		  // Enable/disable buttons
+		  const hasFile = !!CodeSmith.explorer.getActiveFile();
+		  const analyzeBtn = $('#btn-explorer-analyze');
+		  const algoBtn = $('#btn-explorer-algo');
+		  const pairBtn = $('#btn-pair-send');
+		  if (analyzeBtn) analyzeBtn.disabled = !hasFile;
+		  if (algoBtn) algoBtn.disabled = !hasFile;
+		  if (pairBtn) pairBtn.disabled = !hasFile;
+		}
+
+		function _explorerRenderTabs() {
+		  const $ = (sel) => document.querySelector(sel);
+		  const tabs = CodeSmith.explorer.getOpenTabs();
+		  const container = $('#explorer-tabs');
+		  container.replaceChildren();
+
+		  for (const name of tabs) {
+			const active = name === CodeSmith.explorer.getActiveFile();
+			const tab = document.createElement('div');
+			tab.className = 'editor-tab' + (active ? ' active' : '');
+			tab.textContent = name;
+			const closeBtn = document.createElement('span');
+			closeBtn.className = 'tab-close';
+			closeBtn.textContent = '×';
+			closeBtn.addEventListener('click', (ev) => {
+			  ev.stopPropagation();
+			  CodeSmith.explorer.closeTab(name);
+			  _explorerRenderTabs();
+			  _explorerRenderTree();
+			  const newActive = CodeSmith.explorer.getActiveFile();
+			  if (newActive) _explorerShowFile(newActive);
+			  else {
+				$('#explorer-code-area').innerHTML = '';
+				$('#explorer-editor-header').hidden = true;
+			  }
+			});
+			tab.appendChild(closeBtn);
+			tab.addEventListener('click', () => {
+			  CodeSmith.explorer.setActiveFile(name);
+			  _explorerRenderTabs();
+			  _explorerRenderTree();
+			  _explorerShowFile(name);
+			});
+			container.appendChild(tab);
+		  }
+		}
+
+		function _explorerShowFile(name) {
+		  const $ = (sel) => document.querySelector(sel);
+		  if (!name) return;
+		  const file = CodeSmith.explorer.getFile(name);
+		  if (!file) return;
+
+		  $('#explorer-editor-header').hidden = false;
+		  $('#explorer-file-path').textContent = name;
+		  const lines = file.content.split('\n');
+		  $('#explorer-line-info').textContent = lines.length + ' lines · ' + file.language;
+
+		  const area = $('#explorer-code-area');
+		  area.innerHTML = '';
+
+		  const table = document.createElement('table');
+		  table.className = 'code-table';
+		  const tbody = document.createElement('tbody');
+
+		  for (let i = 0; i < lines.length; i++) {
+			const tr = document.createElement('tr');
+			tr.className = 'code-line-row';
+			tr.dataset.line = String(i + 1);
+			const numTd = document.createElement('td');
+			numTd.className = 'code-line-num';
+			numTd.textContent = String(i + 1);
+			numTd.addEventListener('click', () => {
+			  tr.classList.toggle('highlighted');
+			});
+			tr.appendChild(numTd);
+			const codeTd = document.createElement('td');
+			codeTd.className = 'code-line-content';
+			// Use hljs for syntax highlighting
+			if (window.hljs && file.language !== 'text') {
+			  const codeEl = document.createElement('code');
+			  codeEl.textContent = lines[i];
+			  try {
+				const lang = file.language === 'python' ? 'python' : file.language === 'javascript' ? 'javascript' : null;
+				if (lang && hljs.getLanguage(lang)) {
+				  codeEl.innerHTML = hljs.highlight(lines[i], { language: lang }).value;
+				}
+			  } catch {}
+			  codeTd.appendChild(codeEl);
+			} else {
+			  codeTd.textContent = lines[i];
+			}
+			tr.appendChild(codeTd);
+			tbody.appendChild(tr);
+		  }
+
+		  table.appendChild(tbody);
+		  area.appendChild(table);
+
+		  // Run local analysis
+		  const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
+		  _explorerRenderLocalAnalysis(analysis);
+		}
+
+		function _explorerRenderLocalAnalysis(analysis) {
+		  const $ = (sel) => document.querySelector(sel);
+		  const container = $('#explorer-analysis');
+		  container.replaceChildren();
+
+		  // Metrics section
+		  const metricsSection = document.createElement('div');
+		  metricsSection.className = 'analysis-section';
+		  const metricsLabel = document.createElement('div');
+		  metricsLabel.className = 'analysis-label';
+		  metricsLabel.textContent = 'Metrics';
+		  metricsSection.appendChild(metricsLabel);
+
+		  const metrics = [
+			{ label: 'Total lines', val: analysis.totalLines },
+			{ label: 'Code lines', val: analysis.codeLines },
+			{ label: 'Comments', val: analysis.commentLines + ' (' + analysis.commentRatio + '%)' },
+			{ label: 'Blank lines', val: analysis.blankLines },
+			{ label: 'Branches', val: analysis.branchCount },
+		  ];
+		  for (const m of metrics) {
+			const row = document.createElement('div');
+			row.className = 'analysis-metric';
+			row.innerHTML = `<span>${m.label}</span><span class="metric-val">${m.val}</span>`;
+			metricsSection.appendChild(row);
+		  }
+
+		  // Complexity bar
+		  const compRow = document.createElement('div');
+		  compRow.className = 'analysis-metric';
+		  const compLevel = analysis.complexityScore < 30 ? 'low' : analysis.complexityScore < 60 ? 'med' : 'high';
+		  compRow.innerHTML = `<span>Complexity</span>
+			<div class="metric-bar"><div class="metric-bar-fill complexity-${compLevel}" style="width:${analysis.complexityScore}%"></div></div>
+			<span class="metric-val" style="font-size:11px;">${analysis.complexityScore}/100</span>`;
+		  metricsSection.appendChild(compRow);
+		  container.appendChild(metricsSection);
+
+		  // Symbols section
+		  if (analysis.symbols.length > 0) {
+			const symSection = document.createElement('div');
+			symSection.className = 'analysis-section';
+			const symLabel = document.createElement('div');
+			symLabel.className = 'analysis-label';
+			symLabel.textContent = 'Functions & Classes (' + analysis.symbols.length + ')';
+			symSection.appendChild(symLabel);
+
+			for (const sym of analysis.symbols) {
+			  const item = document.createElement('div');
+			  item.className = 'fn-map-item';
+			  const dotCls = sym.kind === 'class' ? 'fn-class' : sym.kind === 'def' || sym.kind === 'function' ? 'fn-func' : 'fn-method';
+			  item.innerHTML = `<span class="fn-type-dot ${dotCls}"></span>
+				<span>${sym.name}</span>
+				<span class="fn-line">L${sym.line}</span>`;
+			  item.addEventListener('click', () => {
+				const row = document.querySelector(`.code-line-row[data-line="${sym.line}"]`);
+				if (row) {
+				  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+				  row.classList.add('highlighted');
+				  setTimeout(() => row.classList.remove('highlighted'), 2000);
+				}
+			  });
+			  symSection.appendChild(item);
+			}
+			container.appendChild(symSection);
+		  }
+
+		  // Imports section
+		  if (analysis.imports.length > 0) {
+			const impSection = document.createElement('div');
+			impSection.className = 'analysis-section';
+			const impLabel = document.createElement('div');
+			impLabel.className = 'analysis-label';
+			impLabel.textContent = 'Imports (' + analysis.imports.length + ')';
+			impSection.appendChild(impLabel);
+			const impList = document.createElement('div');
+			impList.style.cssText = 'font-size:11px;font-family:monospace;color:#8b92a1;line-height:1.8;';
+			impList.textContent = analysis.imports.join(', ');
+			impSection.appendChild(impList);
+			container.appendChild(impSection);
+		  }
+		}
+
+		function _explorerResetAnalysis() {
+		  const $ = (sel) => document.querySelector(sel);
+		  const container = $('#explorer-analysis');
+		  container.innerHTML = '<div class="explorer-empty"><div class="explorer-empty-icon">🔍</div><div class="explorer-empty-title">No file loaded</div></div>';
+		}
+
+		async function _explorerRunAnalysis() {
+		  const $ = (sel) => document.querySelector(sel);
+		  const name = CodeSmith.explorer.getActiveFile();
+		  if (!name) return;
+		  const file = CodeSmith.explorer.getFile(name);
+		  if (!file) return;
+
+		  const btn = $('#btn-explorer-analyze');
+		  btn.disabled = true;
+		  btn.textContent = 'Analyzing…';
+
+		  try {
+			const result = await CodeSmith.pair.analyzeWithAI(file.content, name, file.language);
+			if (!result) { btn.textContent = 'Analysis failed'; return; }
+
+			const container = $('#explorer-analysis');
+			// Append AI analysis after local analysis
+			const aiSection = document.createElement('div');
+			aiSection.className = 'analysis-section';
+			aiSection.style.borderTop = '2px solid rgba(79,140,255,0.2)';
+
+			const aiLabel = document.createElement('div');
+			aiLabel.className = 'analysis-label';
+			aiLabel.style.color = '#4f8cff';
+			aiLabel.textContent = 'AI Analysis';
+			aiSection.appendChild(aiLabel);
+
+			// Summary
+			if (result.summary) {
+			  const sum = document.createElement('div');
+			  sum.style.cssText = 'font-size:12px;color:#e8ecf1;margin-bottom:8px;line-height:1.4;';
+			  sum.textContent = result.summary;
+			  aiSection.appendChild(sum);
+			}
+
+			// Quality score
+			if (result.quality_score != null) {
+			  const qRow = document.createElement('div');
+			  qRow.className = 'analysis-metric';
+			  const qLevel = result.quality_score >= 70 ? 'low' : result.quality_score >= 40 ? 'med' : 'high';
+			  qRow.innerHTML = `<span>Quality</span>
+				<div class="metric-bar"><div class="metric-bar-fill complexity-${qLevel}" style="width:${result.quality_score}%"></div></div>
+				<span class="metric-val">${result.quality_score}/100</span>`;
+			  aiSection.appendChild(qRow);
+			}
+
+			// Issues
+			if (result.issues && result.issues.length > 0) {
+			  const issLabel = document.createElement('div');
+			  issLabel.className = 'analysis-label';
+			  issLabel.style.marginTop = '8px';
+			  issLabel.textContent = 'Issues (' + result.issues.length + ')';
+			  aiSection.appendChild(issLabel);
+
+			  for (const issue of result.issues) {
+				const issItem = document.createElement('div');
+				issItem.style.cssText = 'padding:4px 0;font-size:11px;color:#8b92a1;cursor:pointer;';
+				const sevColor = issue.severity === 'high' ? '#ff6b6b' : issue.severity === 'medium' ? '#f59e0b' : '#8b92a1';
+				issItem.innerHTML = `<span style="color:${sevColor};font-weight:600;font-size:9px;text-transform:uppercase;">${issue.severity}</span>
+				  <span style="color:#5b6474;font-family:monospace;margin:0 4px;">L${issue.line || '?'}</span>
+				  ${issue.message}`;
+				if (issue.line) {
+				  issItem.addEventListener('click', () => {
+					const row = document.querySelector(`.code-line-row[data-line="${issue.line}"]`);
+					if (row) {
+					  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+					  row.classList.add('highlighted');
+					  setTimeout(() => row.classList.remove('highlighted'), 3000);
+					}
+				  });
+				}
+				aiSection.appendChild(issItem);
+			  }
+			}
+
+			// Suggestions
+			if (result.suggestions && result.suggestions.length > 0) {
+			  const sugLabel = document.createElement('div');
+			  sugLabel.className = 'analysis-label';
+			  sugLabel.style.marginTop = '8px';
+			  sugLabel.textContent = 'Suggestions';
+			  aiSection.appendChild(sugLabel);
+			  for (const sug of result.suggestions) {
+				const sugItem = document.createElement('div');
+				sugItem.style.cssText = 'padding:2px 0;font-size:11px;color:#8b92a1;';
+				sugItem.textContent = '→ ' + sug;
+				aiSection.appendChild(sugItem);
+			  }
+			}
+
+			container.appendChild(aiSection);
+		  } catch (err) {
+			console.error('[Explorer] AI analysis error:', err);
+		  } finally {
+			btn.disabled = false;
+			btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Analyze with AI';
+		  }
+		}
+
+		async function _explorerRunAlgo() {
+		  const $ = (sel) => document.querySelector(sel);
+		  const name = CodeSmith.explorer.getActiveFile();
+		  if (!name) return;
+		  const file = CodeSmith.explorer.getFile(name);
+		  if (!file) return;
+
+		  const btn = $('#btn-explorer-algo');
+		  btn.disabled = true;
+		  btn.textContent = 'Generating…';
+
+		  try {
+			const mermaidDef = await CodeSmith.pair.generateFlowchart(file.content, name, file.language);
+			const container = $('#algo-container');
+			container.innerHTML = '';
+			const mermaidDiv = document.createElement('div');
+			mermaidDiv.className = 'mermaid';
+			mermaidDiv.textContent = mermaidDef;
+			container.appendChild(mermaidDiv);
+			try {
+			  await mermaid.run({ nodes: [mermaidDiv] });
+			} catch (mErr) {
+			  container.innerHTML = `<pre style="color:#ff6b6b;font-size:11px;white-space:pre-wrap;padding:12px;">Mermaid error: ${mErr.message}\n\nDefinition:\n${mermaidDef}</pre>`;
+			}
+		  } catch (err) {
+			console.error('[Explorer] Algo error:', err);
+		  } finally {
+			btn.disabled = false;
+			btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Generate Flowchart';
+		  }
+		}
+
+		async function _pairSend() {
+		  const $ = (sel) => document.querySelector(sel);
+		  const input = $('#pair-input');
+		  const question = input.value.trim();
+		  if (!question) return;
+
+		  const name = CodeSmith.explorer.getActiveFile();
+		  if (!name) return;
+		  const file = CodeSmith.explorer.getFile(name);
+		  if (!file) return;
+
+		  input.value = '';
+		  const chat = $('#pair-chat');
+
+		  // Clear empty state
+		  const empty = chat.querySelector('.explorer-empty');
+		  if (empty) empty.remove();
+
+		  // User message
+		  const userRow = document.createElement('div');
+		  userRow.style.cssText = 'display:flex;justify-content:flex-end;';
+		  const userBubble = document.createElement('div');
+		  userBubble.className = 'bubble bubble-user';
+		  userBubble.style.cssText = 'font-size:12px;max-width:100%;';
+		  userBubble.textContent = question;
+		  userRow.appendChild(userBubble);
+		  chat.appendChild(userRow);
+
+		  // AI response area
+		  const aiRow = document.createElement('div');
+		  aiRow.style.cssText = 'display:flex;justify-content:flex-start;';
+		  const aiCol = document.createElement('div');
+		  aiCol.style.cssText = 'max-width:100%;width:100%;';
+		  const aiBubble = document.createElement('div');
+		  aiBubble.className = 'bubble bubble-assistant';
+		  aiBubble.style.cssText = 'font-size:12px;max-width:100%;';
+		  aiBubble.textContent = '';
+		  aiCol.appendChild(aiBubble);
+		  aiRow.appendChild(aiCol);
+		  chat.appendChild(aiRow);
+		  chat.scrollTop = chat.scrollHeight;
+
+		  let fullText = '';
+		  const btn = $('#btn-pair-send');
+		  btn.disabled = true;
+		  btn.textContent = '…';
+
+		  try {
+			for await (const ev of CodeSmith.pair.askPair(file.content, name, file.language, question)) {
+			  if (ev.type === 'token') {
+				fullText += ev.delta;
+				aiBubble.innerHTML = renderMarkdown(fullText);
+				chat.scrollTop = chat.scrollHeight;
+			  } else if (ev.type === 'done') {
+				fullText = ev.text || fullText;
+			  } else if (ev.type === 'error') {
+				aiBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
+				aiBubble.className = 'bubble bubble-error';
+			  }
+			}
+
+			// Parse edit instructions from response
+			const edits = CodeSmith.pair.parseEdits(fullText);
+			if (edits.length > 0) {
+			  for (let i = 0; i < edits.length; i++) {
+				const edit = edits[i];
+				const card = _createEditCard(edit, i, name);
+				aiCol.appendChild(card);
+			  }
+			  chat.scrollTop = chat.scrollHeight;
+			}
+		  } catch (err) {
+			aiBubble.textContent = 'Error: ' + (err.message || err);
+			aiBubble.className = 'bubble bubble-error';
+		  } finally {
+			btn.disabled = false;
+			btn.textContent = 'Ask';
+		  }
+		}
+
+		function _createEditCard(edit, index, filename) {
+		  const card = document.createElement('div');
+		  card.className = 'edit-card';
+		  card.dataset.editIndex = String(index);
+
+		  // Header
+		  const header = document.createElement('div');
+		  header.className = 'edit-card-header';
+		  const typeBadge = document.createElement('span');
+		  typeBadge.className = 'edit-card-type edit-type-' + edit.type;
+		  typeBadge.textContent = edit.type;
+		  header.appendChild(typeBadge);
+		  const location = document.createElement('span');
+		  location.className = 'edit-card-location';
+		  if (edit.type === 'add') {
+			location.textContent = 'after line ' + edit.afterLine;
+		  } else {
+			location.textContent = 'lines ' + edit.startLine + (edit.endLine !== edit.startLine ? '–' + edit.endLine : '');
+		  }
+		  header.appendChild(location);
+		  card.appendChild(header);
+
+		  // Body
+		  const body = document.createElement('div');
+		  body.className = 'edit-card-body';
+		  if (edit.oldCode) {
+			const oldDiv = document.createElement('div');
+			oldDiv.className = 'edit-card-old';
+			oldDiv.textContent = edit.oldCode;
+			body.appendChild(oldDiv);
+		  }
+		  if (edit.newCode) {
+			const newDiv = document.createElement('div');
+			newDiv.className = 'edit-card-new';
+			newDiv.textContent = edit.newCode;
+			body.appendChild(newDiv);
+		  }
+		  card.appendChild(body);
+
+		  // Reason
+		  if (edit.reason) {
+			const reason = document.createElement('div');
+			reason.className = 'edit-card-reason';
+			reason.textContent = edit.reason;
+			card.appendChild(reason);
+		  }
+
+		  // Actions
+		  const actions = document.createElement('div');
+		  actions.className = 'edit-card-actions';
+
+		  const applyBtn = document.createElement('button');
+		  applyBtn.className = 'edit-apply-btn';
+		  applyBtn.textContent = '✓ Apply';
+		  applyBtn.addEventListener('click', () => {
+			const result = CodeSmith.explorer.applyEdit(filename, edit);
+			if (result.ok) {
+			  card.classList.add('edit-applied');
+			  applyBtn.textContent = 'Applied';
+			  _explorerShowFile(filename);
+			  _explorerRenderTree();
+			} else {
+			  applyBtn.textContent = 'Failed: ' + result.error;
+			  applyBtn.style.color = '#ff6b6b';
+			}
+		  });
+		  actions.appendChild(applyBtn);
+
+		  const showBtn = document.createElement('button');
+		  showBtn.className = 'edit-show-btn';
+		  showBtn.textContent = '→ Show';
+		  showBtn.addEventListener('click', () => {
+			const targetLine = edit.startLine || edit.afterLine || 1;
+			const row = document.querySelector(`.code-line-row[data-line="${targetLine}"]`);
+			if (row) {
+			  // Clear previous highlights
+			  document.querySelectorAll('.code-line-row.edit-target').forEach(r => r.classList.remove('edit-target'));
+			  // Highlight target lines
+			  if (edit.type === 'replace' || edit.type === 'delete') {
+				for (let l = edit.startLine; l <= edit.endLine; l++) {
+				  const r = document.querySelector(`.code-line-row[data-line="${l}"]`);
+				  if (r) r.classList.add(edit.type === 'delete' ? 'delete-target' : 'edit-target');
+				}
+			  } else if (edit.type === 'add') {
+				row.classList.add('add-marker');
+			  }
+			  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			}
+		  });
+		  actions.appendChild(showBtn);
+		  card.appendChild(actions);
+
+		  return card;
+		}
+
+		// Mode switching for explore mode — add to wireMode()
+		function _wireExploreMode() {
+		  // This handles showing/hiding the explorer panel
+		  // Called from the mode button click handler
+		}
 
 	  // ---- Day 7: Error recovery ---------------------------------------------
 	  function wireErrorRecovery() {
@@ -6189,9 +7659,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			renderStatusStrip, renderComposerHelp, newSession,
 			runBuildPipeline, renderArtifactList, updateBuildPanel,
 			startBuildMode, checkOnboarding, checkIncompleteBuilds,
-			updatePageTitle, openHelp, openCommandPalette, getTelemetry,
-			runInBrowser,
-		  };
+			updatePageTitle, openHelp, openCommandPalette, getTelemetry, wireExplorer,runInBrowser};
 	})();
 CodeSmith.ui = UI;
 
