@@ -888,6 +888,10 @@
 		  flex: 1; overflow: auto; position: relative;
 		  font-family: "JetBrains Mono", "Fira Code", monospace;
 		  font-size: 12px; line-height: 1.65;
+		  min-height: 0;
+		}
+		.code-table {
+		  width: max-content; min-width: 100%;
 		}
 		.code-table {
 		  width: 100%; border-collapse: collapse;
@@ -921,7 +925,22 @@
 		.code-line-row.add-marker .code-line-num {
 		  color: #4ade80; font-weight: 600;
 		}
-
+		/* Code folding */
+		.code-fold-marker {
+		  display: inline-block; width: 12px; height: 12px; text-align: center;
+		  font-size: 9px; color: #5b6474; cursor: pointer; margin-right: 2px;
+		  border-radius: 2px; line-height: 12px; user-select: none;
+		  vertical-align: middle;
+		}
+		.code-fold-marker:hover { color: #e8ecf1; background: rgba(255,255,255,0.06); }
+		.code-line-row.folded-head .code-fold-marker { color: #f59e0b; }
+		.code-line-row.folded-hidden { display: none; }
+		.fold-ellipsis {
+		  display: inline-block; padding: 0 6px; margin-left: 4px;
+		  font-size: 10px; color: #5b6474; background: rgba(255,255,255,0.04);
+		  border-radius: 3px; cursor: pointer; font-style: italic;
+		}
+		.fold-ellipsis:hover { background: rgba(255,255,255,0.08); color: #8b92a1; }
 		/* Right panel: AI analysis & pair programmer */
 		.explorer-ai {
 		  width: 380px; min-width: 300px; max-width: 480px;
@@ -6958,10 +6977,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			      $('#explorer-file-input').click();
 			    });
 			  }
+			// Drop zone
+		  const codeArea = $('#explorer-code-area');
+		  codeArea.addEventListener('dragover', (ev) => {
 			ev.preventDefault();
-			const dz = $('#explorer-drop-zone');
-			if (dz) dz.classList.add('drag-over');
-		  });
+					const dz = $('#explorer-drop-zone');
+					if (dz) dz.classList.add('drag-over');
+				  });
 		  codeArea.addEventListener('dragleave', () => {
 			const dz = $('#explorer-drop-zone');
 			if (dz) dz.classList.remove('drag-over');
@@ -7171,8 +7193,69 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			numTd.className = 'code-line-num';
 			numTd.textContent = String(i + 1);
 			numTd.addEventListener('click', () => {
-			  tr.classList.toggle('highlighted');
-			});
+			      tr.classList.toggle('highlighted');
+			    });
+			
+			    // Detect foldable blocks
+			    const trimmed = lines[i].trimStart();
+			    const indent = lines[i].length - lines[i].trimStart().length;
+			    const isFoldStart = /^(def |class |function |if |else|elif |for |while |try:|except |with |switch |case |async def |async function |export |const \w+ = \(|=>\s*\{)/.test(trimmed)
+			      || trimmed.endsWith('{') || trimmed.endsWith(':');
+			
+			    if (isFoldStart && i < lines.length - 1) {
+			      const foldBtn = document.createElement('span');
+			      foldBtn.className = 'code-fold-marker';
+			      foldBtn.textContent = '▼';
+			      foldBtn.title = 'Fold';
+			      foldBtn.addEventListener('click', (ev) => {
+			        ev.stopPropagation();
+			        const isCollapsed = tr.classList.contains('folded-head');
+			        if (isCollapsed) {
+			          // Unfold
+			          tr.classList.remove('folded-head');
+			          foldBtn.textContent = '▼';
+			          const ellipsis = tr.querySelector('.fold-ellipsis');
+			          if (ellipsis) ellipsis.remove();
+			          // Show hidden lines
+			          let next = tr.nextElementSibling;
+			          while (next && next.dataset.foldParent === String(i + 1)) {
+			            next.classList.remove('folded-hidden');
+			            delete next.dataset.foldParent;
+			            next = next.nextElementSibling;
+			          }
+			        } else {
+			          // Fold: hide lines with deeper indent
+			          tr.classList.add('folded-head');
+			          foldBtn.textContent = '▶';
+			          let foldCount = 0;
+			          let j = i + 1;
+			          while (j < lines.length) {
+			            const nextLine = lines[j];
+			            const nextTrimmed = nextLine.trimStart();
+			            const nextIndent = nextLine.length - nextTrimmed.length;
+			            if (nextTrimmed === '') { j++; foldCount++; continue; }
+			            if (nextIndent <= indent) break;
+			            j++; foldCount++;
+			          }
+			          if (foldCount > 0) {
+			            let next = tr.nextElementSibling;
+			            let hidden = 0;
+			            while (next && hidden < foldCount) {
+			              next.classList.add('folded-hidden');
+			              next.dataset.foldParent = String(i + 1);
+			              next = next.nextElementSibling;
+			              hidden++;
+			            }
+			            const ellipsis = document.createElement('span');
+			            ellipsis.className = 'fold-ellipsis';
+			            ellipsis.textContent = '… ' + foldCount + ' lines';
+			            ellipsis.addEventListener('click', (ev) => { ev.stopPropagation(); foldBtn.click(); });
+			            codeTd.appendChild(ellipsis);
+			          }
+			        }
+			      });
+			      numTd.insertBefore(foldBtn, numTd.firstChild);
+			    }
 			tr.appendChild(numTd);
 			const codeTd = document.createElement('td');
 			codeTd.className = 'code-line-content';
