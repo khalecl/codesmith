@@ -4271,9 +4271,10 @@ CodeSmith.explorer = Explorer;
 				{ role: 'system', content: ALGO_SYSTEM },
 				{ role: 'user', content: `File: ${filename} (${language})\n\n${code}` },
 			  ],
-			  tier: 'orchestrator',
-			  temperature: 0.1,
-			  maxTokens: 3000,
+			      tier: 'worker',
+			      temperature: 0.1,
+			      maxTokens: 3000,
+			      timeoutMs: 120000,
 			});
 			let text = result.text.trim();
 			if (text.startsWith('```')) text = text.replace(/^```(?:mermaid)?\s*\n?/, '').replace(/\n?```\s*$/, '');
