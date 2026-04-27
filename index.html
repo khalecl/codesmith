@@ -25,6 +25,15 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
@@ -284,7 +293,7 @@
 		body.build-mode .hairline-t:has(#composer) { display: none; }
 		
 		/* Sidebar truncation fix */
-		.sidebar { min-width: 260px; }
+		.sidebar:not(.collapsed) { min-width: 260px; }
 		.sess-title, .art-name {
 		  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 		}
@@ -1432,7 +1441,8 @@
 							  </div>
 							</div>
 							<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);">
-							  <button id="btn-explorer-analyze" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
+							 <div id="explorer-token-usage" style="font-size:10px;color:#5b6474;font-family:monospace;text-align:center;padding:2px 0;"></div>
+								<button id="btn-explorer-analyze" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
 								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
 								Analyze with AI
 							  </button>
@@ -4163,15 +4173,29 @@ CodeSmith.explorer = Explorer;
 		}
 		Be specific about line numbers. Focus on real issues, not style nitpicks.`;
 
-		  const ALGO_SYSTEM = `You are a code visualizer. Given code, generate a Mermaid flowchart showing its algorithm and control flow.
-		Rules:
-		- Use flowchart TD (top-down)
-		- Show function entry points, conditionals, loops, return paths
-		- Use descriptive labels, not code
-		- Keep it readable (max ~15 nodes for a function)
-		- Style: classDef default fill:#1a1f2a,stroke:#4f8cff,stroke-width:1px,color:#e8ecf1
-		- For multiple functions, use subgraphs
-		Output ONLY the mermaid definition, no explanation, no fences.`;
+		const ALGO_SYSTEM = `You are a code visualizer. Generate a Mermaid flowchart for the given code.
+		
+		STRICT SYNTAX RULES — violations cause parse errors:
+		- Start with: flowchart TD
+		- Nodes: A["Label text"]  (use quotes around labels)
+		- Edges: A --> B  or  A -->|"label"| B
+		- NEVER use -->|text|> (the > after | is INVALID)
+		- NEVER use special characters in node IDs (only letters/numbers/underscores)
+		- Subgraphs: subgraph name["Title"] ... end
+		- Max 12 nodes per function. Summarize, don't trace every line.
+		- Show: entry points, major branches (if/else), loops, returns, error paths
+		- Skip: variable assignments, imports, trivial operations
+		
+		VALID EXAMPLE:
+		flowchart TD
+		  A["Start: parse_input"] --> B{"Valid format?"}
+		  B -->|"Yes"| C["Process data"]
+		  B -->|"No"| D["Raise ValueError"]
+		  C --> E["Return result"]
+		
+		classDef default fill:#1a1f2a,stroke:#4f8cff,stroke-width:1px,color:#e8ecf1
+		
+		Output ONLY the mermaid definition. No markdown fences. No explanation.`;
 
 		  async function analyzeWithAI(code, filename, language) {
 			const result = await CodeSmith.llm.chatComplete({
@@ -4247,8 +4271,8 @@ CodeSmith.explorer = Explorer;
 				{ role: 'system', content: ALGO_SYSTEM },
 				{ role: 'user', content: `File: ${filename} (${language})\n\n${code}` },
 			  ],
-			  tier: 'fast',
-			  temperature: 0.2,
+			  tier: 'orchestrator',
+			  temperature: 0.1,
 			  maxTokens: 3000,
 			});
 			let text = result.text.trim();
@@ -7150,9 +7174,10 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			if (window.hljs && file.language !== 'text') {
 			  const codeEl = document.createElement('code');
 			  codeEl.textContent = lines[i];
-			  try {
-				const lang = file.language === 'python' ? 'python' : file.language === 'javascript' ? 'javascript' : null;
-				if (lang && hljs.getLanguage(lang)) {
+			try {
+			        const langMap = { python:'python', javascript:'javascript', typescript:'typescript', html:'xml', css:'css', json:'json', markdown:'markdown', bash:'bash', sql:'sql', yaml:'yaml', vue:'xml' };
+			        const lang = langMap[file.language] || null;
+			        if (lang && hljs.getLanguage(lang)) {
 				  codeEl.innerHTML = hljs.highlight(lines[i], { language: lang }).value;
 				}
 			  } catch {}
@@ -7267,13 +7292,34 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const file = CodeSmith.explorer.getFile(name);
 		  if (!file) return;
 
-		  const btn = $('#btn-explorer-analyze');
+		const btn = $('#btn-explorer-analyze');
 		  btn.disabled = true;
 		  btn.textContent = 'Analyzing…';
-
+		
+		  // Show spinner in analysis panel
+		  const container = $('#explorer-analysis');
+		  const spinner = document.createElement('div');
+		  spinner.className = 'analysis-section';
+		  spinner.id = 'analysis-spinner';
+		  spinner.innerHTML = '<div class="typing-indicator" style="padding:12px;"><span></span><span></span><span></span></div><div style="font-size:11px;color:#5b6474;padding:0 12px;">AI is analyzing the code…</div>';
+		  container.appendChild(spinner);
+		
 		  try {
-			const result = await CodeSmith.pair.analyzeWithAI(file.content, name, file.language);
-			if (!result) { btn.textContent = 'Analysis failed'; return; }
+		    const result = await CodeSmith.pair.analyzeWithAI(file.content, name, file.language);
+		    const sp = $('#analysis-spinner');
+		    if (sp) sp.remove();
+			  // Update token display
+		    const budget = CodeSmith.llm.getBudget();
+		    const tokenEl = $('#explorer-token-usage');
+		    if (tokenEl) tokenEl.textContent = '↑' + budget.tokensIn.toLocaleString() + ' ↓' + budget.tokensOut.toLocaleString() + ' tokens';
+		    if (!result) {
+		      btn.textContent = 'Analysis failed';
+		      const errDiv = document.createElement('div');
+		      errDiv.className = 'analysis-section';
+		      errDiv.innerHTML = '<div style="color:#ff6b6b;font-size:12px;">AI analysis returned no results. Check your API connection.</div>';
+		      container.appendChild(errDiv);
+		      return;
+		    }
 
 			const container = $('#explorer-analysis');
 			// Append AI analysis after local analysis
@@ -7353,10 +7399,18 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			container.appendChild(aiSection);
 		  } catch (err) {
 			console.error('[Explorer] AI analysis error:', err);
-		  } finally {
-			btn.disabled = false;
-			btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Analyze with AI';
-		  }
+		  } catch (err) {
+		    console.error('[Explorer] AI analysis error:', err);
+			    const sp = $('#analysis-spinner');
+			    if (sp) sp.remove();
+			    const errDiv = document.createElement('div');
+			    errDiv.className = 'analysis-section';
+			    errDiv.innerHTML = '<div style="color:#ff6b6b;font-size:12px;">Error: ' + (err.message || err) + '</div>';
+			    container.appendChild(errDiv);
+			  } finally {
+			    btn.disabled = false;
+			    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Analyze with AI';
+			  }
 		}
 
 		async function _explorerRunAlgo() {
@@ -7462,6 +7516,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			  }
 			  chat.scrollTop = chat.scrollHeight;
 			}
+		  // Update token display
+		    const budget = CodeSmith.llm.getBudget();
+		    const tokenEl = document.querySelector('#explorer-token-usage');
+		    if (tokenEl) tokenEl.textContent = '↑' + budget.tokensIn.toLocaleString() + ' ↓' + budget.tokensOut.toLocaleString() + ' tokens';
+		    CodeSmith.ui.renderStatusStrip();
 		  } catch (err) {
 			aiBubble.textContent = 'Error: ' + (err.message || err);
 			aiBubble.className = 'bubble bubble-error';
