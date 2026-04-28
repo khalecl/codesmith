@@ -1492,13 +1492,13 @@
 				  </div>
 				</div>
 				<!-- A: live spec -->
-				<div class="stage-a-spec">
-				  <div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
-					<span class="text-[12px] text-muted font-semibold">Live Spec</span>
-					<button id="btn-edit-spec-a" class="btn btn-ghost" style="font-size:11px;margin-left:auto;">Edit spec</button>
-				  </div>
-				  <div id="stage-a-spec-card" class="spec-live-card"></div>
-				</div>
+<div class="stage-a-spec">
+  <div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+    <span class="text-[12px] text-muted font-semibold">Live Spec</span>
+    <button id="btn-edit-spec-a" class="btn btn-ghost" style="font-size:11px;margin-left:auto;">Edit spec</button>
+  </div>
+  <div id="stage-a-spec-card" class="spec-live-card"></div>
+</div>
 			  </div>
 
 			  <!-- Stage B: Skeleton -->
@@ -6919,10 +6919,16 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 						msgArea._liveRow = null;
 					}
 					}
-				if (ev.type === 'spec_updated') {
-		          _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
-		          const specBody = $('#build-spec-body');
-		          if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
+						if (ev.type === 'spec_updated') {
+							_renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
+							const specBody = $('#build-spec-body');
+							if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
+							// Also update the live spec card in Stage A
+							const stageASpecCard = $('#stage-a-spec-card');
+							if (stageASpecCard) {
+							_renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
+							}
+						
 		        } else if (ev.type === 'question' || ev.type === 'question_final') {
 		          if (typingRow.parentNode) typingRow.remove();
 		          const aiRow = el('div', { class: 'flex justify-start' });
