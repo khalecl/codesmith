@@ -47,14 +47,17 @@
   require(['vs/editor/editor.main'], function() {
     window._monacoReady = true;
     // Load xterm AFTER Monaco owns the AMD loader
-    var s1 = document.createElement('script');
-    s1.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
-    s1.onload = function() {
-      var s2 = document.createElement('script');
-      s2.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
-      document.head.appendChild(s2);
-    };
-    document.head.appendChild(s1);
+	var _amdDefine = window.define;
+	    window.define = undefined;
+	    var s1 = document.createElement('script');
+	    s1.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
+	    s1.onload = function() {
+	      var s2 = document.createElement('script');
+	      s2.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
+	      s2.onload = function() { window.define = _amdDefine; };
+	      document.head.appendChild(s2);
+	    };
+	    document.head.appendChild(s1);
   });
 </script>
 <script>
@@ -1762,8 +1765,6 @@
     <span class="ml-auto font-mono text-muted/70" id="st-session-id">—</span>
   </footer>
 </div>
-		 <input type="file" id="explorer-file-input" hidden multiple
-		accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini" />
 <!-- ========= Debug panel (Ctrl+Shift+D) — Day 2 ========= -->
 <div id="debug-panel" class="debug-panel" hidden>
   <div style="display:flex;align-items:center;padding:6px 10px 0;">
@@ -5793,7 +5794,7 @@ function wireComposer() {
 		    wireTemplates();    // Day 7
 		    wireKeyboardShortcuts(); // Day 7
 		    wireErrorRecovery(); // Day 7
-			try { wireExplorer(); } catch(e) { console.warn('[CodeSmith] Explorer wire skipped:', e.message); }
+			if ($('#btn-explorer-upload')) { try { wireExplorer(); } catch(e) { console.warn('[CodeSmith] Explorer wire skipped:', e.message); } }
 	  // Help button
 		    const helpBtn = $('#btn-help');
 		    if (helpBtn) helpBtn.addEventListener('click', openHelp);
