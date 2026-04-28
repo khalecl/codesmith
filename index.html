@@ -3317,28 +3317,45 @@ CodeSmith.builder = Builder;
  */
 const EMPTY_SPEC = Object.freeze({
   goal: '',
+  target_users: '',                    // NEW
+  usage_scenarios: [],                 // NEW
   inputs:  { format: '', example: '', size_estimate: '' },
   outputs: { format: '', example: '' },
   core_operations: [],
-  constraints: { libraries_allowed: '', performance: '' },
+  constraints: { 
+    libraries_allowed: '', 
+    performance: '', 
+    security: '',                      // NEW
+    scalability: ''                    // NEW
+  },
   non_goals: [],
-  acceptance_criteria: [],
+  acceptance_criteria: [],             // Already exists but keep
+  integrations: [],                    // NEW
+  deployment_target: ''                // NEW (script, package, web app, CLI, etc.)
 });
 
-const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
+const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST, high-quality requirements interview for a Python program.
 
-RULES:
-1. Read the spec state below.
-2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
-3. After your question, output a <spec_update> JSON block with fields you can fill from the user's message. Mark guesses with "(assumed)".
-4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
-5. NEVER ask more than 4 total questions. After 4, output <ready_for_skeleton> with best guesses.
-6. Keep questions under 25 words. No implementation details.
+	STRICT RULES:
+	1. Ask **ONE** short, specific, high-value question at a time about the SINGLE most important missing gap.
+	2. Prefer concrete questions ("Give me an example of...", "What should happen when...") over vague ones.
+	3. After your question, ALWAYS output a valid <spec_update> JSON block with any fields you can now fill or improve. Mark uncertain values with "(assumed)".
+	4. Output format must be:
+	[Your short question here]
 
-IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
+	<spec_update>
+	{valid JSON object with updated fields}
+	</spec_update>
 
-Current spec:
-{spec_json}`;
+	5. If user says "skip", "just build it", "go ahead", "enough", or after maximum 4 questions → immediately output:
+	<ready_for_skeleton>{"rationale":"Spec is sufficiently complete"}</ready_for_skeleton>
+
+	6. NEVER ask more than 4 questions total. After the 4th question, always trigger ready_for_skeleton with best assumptions.
+	7. Prioritize gathering in this order: Goal → Usage & Users → Inputs/Outputs → Core Operations → Constraints & Non-functional (performance, security, scalability) → Acceptance Criteria.
+	8. Be aggressive filling fields from context and previous answers. Do not ask obvious things.
+
+	Current spec:
+	{spec_json}`;
 
 const StageA = (() => {
   let _spec = null;
@@ -3383,7 +3400,7 @@ const StageA = (() => {
 		        for await (const ev of CodeSmith.llm.chat({
 		          messages: apiMessages,
 		          tier: 'orchestrator',
-		          temperature: 0.3,
+		          temperature: 0.2,
 		          maxTokens: 8000,
 		        })) {
 		          if (ev.type === 'thinking') {
@@ -3405,8 +3422,8 @@ const StageA = (() => {
 		
 		      // Parse the completed response
 			const specUpdateMatch = fullText.match(/<spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i);
-	    	  const readyMatch = fullText.match(/<ready_for_skeleton>([\s\S]*?)<\/ready_for_skeleton>/i);
-		      const question = fullText
+			const readyMatch = fullText.match(/<ready_for_skeleton>\s*([\s\S]*?)\s*<\/ready_for_skeleton>/i);
+				      const question = fullText
 		        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
 		        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
 		        .trim();
@@ -3419,31 +3436,31 @@ const StageA = (() => {
 		        });
 		        continue;
 		      }
-		
-			if (specUpdateMatch) {
-			        try {
-			          let raw = specUpdateMatch[1].trim();
-			          // Extract JSON from within the match
-			          const jsonStart = raw.indexOf('{');
-			          const jsonEnd = raw.lastIndexOf('}');
-			          if (jsonStart >= 0 && jsonEnd > jsonStart) {
-			            raw = raw.slice(jsonStart, jsonEnd + 1);
-			          }
-			          const update = JSON.parse(raw);
-			          _mergeSpec(update);
-			          yield { type: 'spec_updated', spec: getSpec() };
-			        } catch (parseErr) {
-			          if (tryCount === 0) {
-			            _messages.push({ role: 'assistant', content: fullText });
-			            _messages.push({
-			              role: 'user',
-			              content: 'The <spec_update> JSON was malformed. Please re-send with valid JSON inside <spec_update> tags.',
-			            });
-			            continue;
-			          }
-			          yield { type: 'parse_error', error: parseErr };
-			        }
-			      }
+
+				if (specUpdateMatch) {
+				try {
+					let raw = specUpdateMatch[1].trim();
+					// More robust JSON extraction
+					const jsonStart = raw.indexOf('{');
+					const jsonEnd = raw.lastIndexOf('}');
+					if (jsonStart >= 0 && jsonEnd > jsonStart) {
+					raw = raw.slice(jsonStart, jsonEnd + 1);
+					}
+					// Clean common markdown/quote issues
+					raw = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+					
+					const update = JSON.parse(raw);
+					_mergeSpec(update);
+					yield { type: 'spec_updated', spec: getSpec() };
+				} catch (parseErr) {
+					console.warn("Spec update parse failed:", parseErr);
+					if (tryCount === 0) {
+					_messages.push({ role: 'user', content: 'Please re-send the <spec_update> with valid JSON only. Do not add extra text outside the tags.' });
+					continue;
+					}
+					yield { type: 'parse_error', error: parseErr };
+				}
+				}
 		
 		      _messages.push({ role: 'assistant', content: fullText });
 		
