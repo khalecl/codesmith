@@ -6709,62 +6709,87 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 	    }
 	  }
 
-	async function saveArtifact(build) {
-	    const skeleton = CodeSmith.stageB ? CodeSmith.stageB.getSkeleton() : null;
-	    const artifact = {
-	      id: (build.moduleName || 'module') + '_' + Date.now(),
-	      sessionId: CodeSmith.state.currentId,
-	      moduleName: build.moduleName,
-	      code: build.code,
-	      tests: build.tests,
-	      spec: build.spec,
-	      skeleton: skeleton,
-	      createdAt: Date.now(),
-	      status: build.status,
-	    };
-	    await CodeSmith.db.putArtifact(artifact);
-	    renderArtifactList();
-	  }
+			async function saveArtifact(build) {
+				const skeleton = CodeSmith.stageB ? CodeSmith.stageB.getSkeleton() : null;
+				const artifact = {
+				id: (build.moduleName || 'module') + '_' + Date.now(),
+				sessionId: CodeSmith.state.currentId,
+				moduleName: build.moduleName,
+				code: build.code,
+				tests: build.tests,
+				spec: build.spec,
+				skeleton: skeleton,
+				createdAt: Date.now(),
+				status: build.status,
+				};
+				await CodeSmith.db.putArtifact(artifact);
+				renderArtifactList();
+			}
 
-  async function renderArtifactList() {
-    const list = $('#artifact-list');
-    if (!list) return;
-    list.replaceChildren();
-    let artifacts;
-    try { artifacts = await CodeSmith.db.listArtifacts(); } catch { return; }
-    if (artifacts.length === 0) {
-      list.appendChild(el('div', { class: 'text-muted text-[11px] px-2 py-2 text-center' }, 'No artifacts'));
-      return;
-    }
-    for (const a of artifacts) {
-      const item = el('div', { class: 'artifact-item' }, [
-        el('span', { class: 'art-name' }, a.moduleName),
-        el('span', { class: 'art-status' }, a.status + ' · ' + fmtTime(a.createdAt)),
-      ]);
-      item.addEventListener('click', () => loadArtifact(a));
-      list.appendChild(item);
-    }
-  }
+		async function renderArtifactList() {
+			const list = $('#artifact-list');
+			if (!list) return;
+			list.replaceChildren();
+			let artifacts;
+			try { artifacts = await CodeSmith.db.listArtifacts(); } catch { return; }
+			if (artifacts.length === 0) {
+			list.appendChild(el('div', { class: 'text-muted text-[11px] px-2 py-2 text-center' }, 'No artifacts'));
+			return;
+			}
+			for (const a of artifacts) {
+			const item = el('div', { class: 'artifact-item' }, [
+				el('span', { class: 'art-name' }, a.moduleName),
+				el('span', { class: 'art-status' }, a.status + ' · ' + fmtTime(a.createdAt)),
+			]);
+			item.addEventListener('click', () => loadArtifact(a));
+			list.appendChild(item);
+			}
+		}
 
-  function loadArtifact(a) {
-    // Switch to build mode and populate
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
-    _buildMode = 'build';
-    $('#split-right').hidden = false;
-    $('#split-left').style.maxWidth = '50%';
+		function loadArtifact(a) {
+			// Switch to build mode full screen
+			document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+			document.querySelector('.mode-btn[data-mode="build"]').classList.add('active');
+			_buildMode = 'build';
+			$('#split-right').hidden = false;
+			$('#split-left').style.display = 'none';
+			document.body.classList.add('build-mode');
 
-    _currentBuild = {
-      moduleName: a.moduleName,
-      spec: a.spec,
-      code: a.code,
-      tests: a.tests,
-      status: a.status,
-      output: '',
-      attempt: 0,
-    };
-    updateBuildPanel(_currentBuild);
-  }
+			// Hide explorer
+			$('#stage-e-panel').hidden = true;
+			if ($('#stage-e-panel')) $('#stage-e-panel').style.display = 'none';
+			document.querySelector('.build-stepper').style.display = '';
+
+			// Show Stage C directly
+			_showStep('c');
+
+			_currentBuild = {
+			moduleName: a.moduleName,
+			spec: a.spec,
+			code: a.code,
+			tests: a.tests,
+			status: a.status,
+			output: '',
+			attempt: 0,
+			};
+			updateBuildPanel(_currentBuild);
+
+			// Also populate Stage C center panel
+			const codeEl = $('#sc-code-display');
+			if (codeEl) {
+			codeEl.textContent = a.code || '';
+			if (window.hljs) { delete codeEl.dataset.highlighted; codeEl.className = 'language-python'; hljs.highlightElement(codeEl); }
+			}
+			const testsEl = $('#sc-tests-display');
+			if (testsEl) {
+			testsEl.textContent = a.tests || '';
+			if (window.hljs) { delete testsEl.dataset.highlighted; testsEl.className = 'language-python'; hljs.highlightElement(testsEl); }
+			}
+			const nameEl = $('#sc-active-name');
+			if (nameEl) nameEl.textContent = a.moduleName || '—';
+			const badge = $('#sc-active-badge');
+			if (badge) { badge.className = 'build-badge badge-' + (a.status || 'draft'); badge.textContent = a.status || 'draft'; }
+		}
 
   async function downloadArtifact() {
     if (!_currentBuild || !_currentBuild.code) return;
