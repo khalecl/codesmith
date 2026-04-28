@@ -3482,9 +3482,57 @@ const StageA = (() => {
     _ready = true;
   }
 
-  function _mergeSpec(update) {
-    for (const key of Object.keys(update)) {
-      if (!(key in _spec)) continue;
+		function _mergeSpec(update) {
+		    for (const key of Object.keys(update)) {
+		      const val = update[key];
+		      if (val === null || val === undefined) continue;
+		
+		      if (key in _spec) {
+		        // Known field — merge normally
+		        if (typeof val === 'string') {
+		          const isAssumed = val.includes('(assumed)');
+		          _spec[key] = val.replace(/\s*\(assumed\)\s*/g, '').trim();
+		          if (isAssumed) _assumptions[key] = true;
+		          else delete _assumptions[key];
+		        } else if (Array.isArray(val)) {
+		          _spec[key] = val.map(v => {
+		            if (typeof v === 'string') {
+		              const isa = v.includes('(assumed)');
+		              const clean = v.replace(/\s*\(assumed\)\s*/g, '').trim();
+		              if (isa) _assumptions[key + '.' + clean] = true;
+		              return clean;
+		            }
+		            return v;
+		          });
+		        } else if (typeof val === 'object') {
+		          if (typeof _spec[key] === 'object' && !Array.isArray(_spec[key])) {
+		            for (const subKey of Object.keys(val)) {
+		              if (subKey in _spec[key]) {
+		                const sv = val[subKey];
+		                if (typeof sv === 'string') {
+		                  const isa = sv.includes('(assumed)');
+		                  _spec[key][subKey] = sv.replace(/\s*\(assumed\)\s*/g, '').trim();
+		                  if (isa) _assumptions[key + '.' + subKey] = true;
+		                  else delete _assumptions[key + '.' + subKey];
+		                } else {
+		                  _spec[key][subKey] = sv;
+		                }
+		              } else {
+		                // Accept unknown subfields
+		                _spec[key][subKey] = val[subKey];
+		              }
+		            }
+		          } else {
+		            // Overwrite with object
+		            _spec[key] = val;
+		          }
+		        }
+		      } else {
+		        // Unknown top-level field — store it anyway
+		        _spec[key] = val;
+		      }
+		    }
+		  }
       const val = update[key];
 
       if (typeof val === 'string') {
@@ -6933,15 +6981,44 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		const container = $('#stage-a-spec-card');
 		container.replaceChildren();
 
-		const fields = [
-		  { key: 'goal', label: 'Goal', type: 'string' },
-		  { key: 'inputs', label: 'Inputs', type: 'object', subkeys: ['format', 'example', 'size_estimate'] },
-		  { key: 'outputs', label: 'Outputs', type: 'object', subkeys: ['format', 'example'] },
-		  { key: 'core_operations', label: 'Core Operations', type: 'array' },
-		  { key: 'constraints', label: 'Constraints', type: 'object', subkeys: ['libraries_allowed', 'performance'] },
-		  { key: 'non_goals', label: 'Non-goals', type: 'array' },
-		  { key: 'acceptance_criteria', label: 'Acceptance Criteria', type: 'array' },
-		];
+		// Render ALL fields in spec, not just hardcoded ones
+		    for (const [key, val] of Object.entries(spec)) {
+		      const div = el('div', { class: 'spec-field' });
+		      const label = el('div', { class: 'spec-field-label' }, key.replace(/_/g, ' '));
+		      div.appendChild(label);
+		
+		      if (val === null || val === undefined || val === '') {
+		        div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+		      } else if (typeof val === 'string') {
+		        const valEl = el('div', { class: 'spec-field-value' });
+		        valEl.textContent = val;
+		        if (assumptions[key]) valEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
+		        div.appendChild(valEl);
+		      } else if (Array.isArray(val)) {
+		        if (val.length === 0) {
+		          div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+		        } else {
+		          for (const item of val) {
+		            const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
+		            itemEl.textContent = '• ' + (typeof item === 'string' ? item : JSON.stringify(item));
+		            div.appendChild(itemEl);
+		          }
+		        }
+		      } else if (typeof val === 'object') {
+		        for (const [sk, sv] of Object.entries(val)) {
+		          const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
+		          row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
+		          const svEl = el('span', { class: 'spec-field-value', style: 'font-size:12px;' });
+		          svEl.textContent = typeof sv === 'string' ? (sv || '—') : JSON.stringify(sv);
+		          const aKey = key + '.' + sk;
+		          if (assumptions[aKey]) svEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
+		          row.appendChild(svEl);
+		          div.appendChild(row);
+		        }
+		      }
+		
+		      container.appendChild(div);
+		    }
 
 		for (const field of fields) {
 		  const div = el('div', { class: 'spec-field' });
@@ -6997,6 +7074,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 	  async function _transitionToB() {
 		const spec = CodeSmith.stageA.getSpec();
+		  console.log('[StageB] Spec passed to skeleton:', JSON.stringify(spec).slice(0, 500));
 		_showStep('b');
 		await _generateSkeleton();
 	  }
