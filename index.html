@@ -3533,40 +3533,6 @@ const StageA = (() => {
 		      }
 		    }
 		  }
-      const val = update[key];
-
-      if (typeof val === 'string') {
-        const isAssumed = val.includes('(assumed)');
-        _spec[key] = val.replace(/\s*\(assumed\)\s*/g, '').trim();
-        if (isAssumed) _assumptions[key] = true;
-        else delete _assumptions[key];
-      } else if (Array.isArray(val)) {
-        _spec[key] = val.map(v => {
-          if (typeof v === 'string') {
-            const isa = v.includes('(assumed)');
-            const clean = v.replace(/\s*\(assumed\)\s*/g, '').trim();
-            if (isa) _assumptions[key + '.' + clean] = true;
-            return clean;
-          }
-          return v;
-        });
-      } else if (typeof val === 'object' && val !== null) {
-        if (typeof _spec[key] !== 'object') continue;
-        for (const subKey of Object.keys(val)) {
-          if (!(subKey in _spec[key])) continue;
-          const sv = val[subKey];
-          if (typeof sv === 'string') {
-            const isa = sv.includes('(assumed)');
-            _spec[key][subKey] = sv.replace(/\s*\(assumed\)\s*/g, '').trim();
-            if (isa) _assumptions[key + '.' + subKey] = true;
-            else delete _assumptions[key + '.' + subKey];
-          } else {
-            _spec[key][subKey] = sv;
-          }
-        }
-      }
-    }
-  }
 
   return { start, getSpec, setSpec, getMessages, isReady, getAssumptions, userTurn, requestAdvance };
 })();
