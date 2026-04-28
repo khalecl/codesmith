@@ -3530,9 +3530,10 @@ const StageA = (() => {
     _ready = true;
   }
 
-		function _mergeSpec(update) {
-		    if (!update || typeof update !== 'object' || Array.isArray(update)) return;
-		    for (const key of Object.keys(update)) {
+			function _mergeSpec(update) {
+			    if (!update || typeof update !== 'object' || Array.isArray(update)) return;
+			    if (!_spec) _spec = JSON.parse(JSON.stringify(EMPTY_SPEC));
+			    for (const key of Object.keys(update)) {
 		      const val = update[key];
 		      if (val === null || val === undefined) continue;
 		
