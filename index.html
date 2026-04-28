@@ -3449,8 +3449,8 @@ const StageA = (() => {
 					// Clean common markdown/quote issues
 					raw = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
 					
-					const update = JSON.parse(raw);
-					_mergeSpec(update);
+						const update = JSON.parse(raw);
+			          if (update && typeof update === 'object') _mergeSpec(update);
 					yield { type: 'spec_updated', spec: getSpec() };
 				} catch (parseErr) {
 					console.warn("Spec update parse failed:", parseErr);
@@ -6699,9 +6699,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		            _showStep('a');
 		            _renderSpecCard(CodeSmith.stageA.getSpec(), CodeSmith.stageA.getAssumptions());
 		      		 // Pre-fill spec card with goal
-					const specCard = document.querySelector('#stage-a-spec-card');
-					if (specCard && specCard.children.length === 0) {
-					_renderSpecCard(CodeSmith.stageA.getSpec(), {});
+					// Always render spec card with current data
+					    _renderSpecCard(CodeSmith.stageA.getSpec(), {});
 					}
 			      } else if (target === 'b' && _currentStep === 'c') {
 		            _showStep('b');
