@@ -1617,6 +1617,7 @@
 							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
 							  Paste
 							</button>
+							<button id="btn-explorer-folder" class="btn btn-ghost" style="font-size:10px;flex:1;">📁 Folder</button>
 							<button id="btn-explorer-clear" class="btn btn-ghost" style="font-size:10px;color:#5b6474;">✕</button>
 						  </div>
 						</div>
@@ -1772,8 +1773,8 @@
 					  </div>
 					</div>
 					<input type="file" id="explorer-file-input" hidden multiple
-						   accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini" />
-
+					accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini,.zip" />
+						<input type="file" id="explorer-folder-input" hidden webkitdirectory directory multiple />
  
 			</div>
 		  </div>
@@ -4392,7 +4393,11 @@ const Explorer = (() => {
     file.modified = true;
     return { ok: true, newContent: file.content };
   }
-
+	function deleteFile(name) {
+		delete _files[name];
+		_openTabs = _openTabs.filter(n => n !== name);
+		if (_activeFile === name) _activeFile = _openTabs[_openTabs.length - 1] || null;
+	}
   function clearAll() {
     _files = {};
     _activeFile = null;
@@ -4466,7 +4471,7 @@ const Explorer = (() => {
   return {
     addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
     getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
-    clearAll, analyzeCode,
+    clearAll, deleteFile, analyzeCode,
   };
 })();
 CodeSmith.explorer = Explorer;
@@ -8145,18 +8150,63 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  $('#btn-explorer-upload').addEventListener('click', () => {
 			$('#explorer-file-input').click();
 		  });
-		  $('#explorer-file-input').addEventListener('change', async (ev) => {
-			for (const file of ev.target.files) {
-			  const text = await file.text();
-			  CodeSmith.explorer.addFile(file.name, text);
-			  CodeSmith.explorer.openTab(file.name);
-			}
+			$('#explorer-file-input').addEventListener('change', async (ev) => {
+				for (const file of ev.target.files) {
+				if (file.name.endsWith('.zip') && typeof JSZip !== 'undefined') {
+					// Extract zip
+					try {
+					const zip = await JSZip.loadAsync(file);
+					for (const [path, entry] of Object.entries(zip.files)) {
+						if (entry.dir) continue;
+						if (path.includes('__pycache__') || path.includes('.pyc') || path.includes('node_modules') || path.includes('.git/')) continue;
+						// Skip binary files
+						const ext = path.split('.').pop().toLowerCase();
+						const textExts = ['py','js','ts','jsx','tsx','vue','html','css','json','md','txt','cfg','toml','yaml','yml','sh','bat','sql','csv','xml','env','gitignore','ini','rst','in','lock'];
+						if (!textExts.includes(ext)) continue;
+						try {
+						const content = await entry.async('string');
+						CodeSmith.explorer.addFile(path, content);
+						} catch {}
+					}
+					} catch (err) {
+					console.error('[Explorer] Zip extract failed:', err);
+					alert('Failed to extract zip: ' + err.message);
+					}
+				} else {
+					const text = await file.text();
+					CodeSmith.explorer.addFile(file.name, text);
+				}
+				CodeSmith.explorer.openTab(file.name);
+				}
 			_explorerRenderTree();
 			_explorerRenderTabs();
 			_explorerShowFile(CodeSmith.explorer.getActiveFile());
 			ev.target.value = '';
 		  });
-
+				// Folder upload
+					const folderBtn = $('#btn-explorer-folder');
+					if (folderBtn) {
+						folderBtn.addEventListener('click', () => { $('#explorer-folder-input').click(); });
+					}
+					const folderInput = $('#explorer-folder-input');
+					if (folderInput) {
+						folderInput.addEventListener('change', async (ev) => {
+						for (const file of ev.target.files) {
+							// Skip hidden files and common junk
+							const path = file.webkitRelativePath || file.name;
+							if (path.includes('__pycache__') || path.includes('.pyc') || path.includes('node_modules') || path.includes('.git/') || path.includes('.DS_Store')) continue;
+							try {
+							const text = await file.text();
+							CodeSmith.explorer.addFile(path, text);
+							} catch {}
+						}
+						_explorerRenderTree();
+						_explorerRenderTabs();
+						const first = CodeSmith.explorer.getFileList()[0];
+						if (first) { CodeSmith.explorer.openTab(first.name); _explorerShowFile(first.name); }
+						ev.target.value = '';
+						});
+					}
 		  // Paste code
 		  $('#btn-explorer-paste').addEventListener('click', () => {
 			const name = prompt('Filename (e.g. main.py):');
@@ -8325,7 +8375,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			        { label: 'Rename', action: () => { const nn = prompt('New name:', f.name); if (nn && nn !== f.name) { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.explorer.addFile(nn, fl.content); CodeSmith.explorer.closeTab(f.name); CodeSmith.explorer.openTab(nn); _explorerRenderTree(); _explorerRenderTabs(); _explorerShowFile(nn); } } } },
 			        { label: 'Snapshot', action: () => { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.snapshots.take(f.name, fl.content, 'Manual'); _renderSnapshots(); } } },
 			        'sep',
-			        { label: 'Delete', cls: 'destructive', action: () => { if (confirm('Delete ' + f.name + '?')) { CodeSmith.explorer.closeTab(f.name); CodeSmith.monaco.closeFile(f.name); delete CodeSmith.explorer.getAllFiles()[f.name]; _explorerRenderTree(); _explorerRenderTabs(); } } },
+						{ label: 'Delete', cls: 'destructive', action: () => { if (confirm('Delete ' + f.name + '?')) { CodeSmith.explorer.deleteFile(f.name); if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(f.name); _explorerRenderTree(); _explorerRenderTabs(); const next = CodeSmith.explorer.getActiveFile(); if (next) _explorerShowFile(next); else { const mc = document.querySelector('#monaco-container'); if (mc) mc.innerHTML = '<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;"><div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div></div>'; document.querySelector('#explorer-editor-header').hidden = true; } } } },
 			      ]);
 			    });
 			body.appendChild(item);
