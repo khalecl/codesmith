@@ -568,7 +568,7 @@
   /* ---- Day 5: Stage A ---------------------------------------------------- */
   .stage-a-layout { display: flex; flex: 1; min-height: 0; }
   .stage-a-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid rgba(255,255,255,0.06); }
-  .stage-a-spec { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }
+  .stage-a-spec { flex: 1; display: flex; flex-direction: column; min-width: 240px; overflow-y: auto; }
 
   .stage-a-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   .stage-a-input-bar { padding: 8px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; gap: 6px; }
@@ -3495,8 +3495,8 @@ const StageA = (() => {
 						try {
 							let fallbackJson = jsonBlockMatch[0].replace(/,\s*([}\]])/g, '$1');
 							const parsed = JSON.parse(fallbackJson);
-							if (parsed && typeof parsed === 'object' && (parsed.goal || parsed.inputs || parsed.outputs || parsed.internal_heat_gains)) {
-							_mergeSpec(parsed);
+						            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && (parsed.goal || parsed.inputs || parsed.outputs || parsed.internal_heat_gains)) {
+						              _mergeSpec(parsed);
 							console.log('[StageA] Spec merged from fallback JSON, fields:', Object.keys(parsed).join(', '));
 							yield { type: 'spec_updated', spec: getSpec() };
 							}
@@ -3525,6 +3525,7 @@ const StageA = (() => {
   }
 
 		function _mergeSpec(update) {
+		    if (!update || typeof update !== 'object' || Array.isArray(update)) return;
 		    for (const key of Object.keys(update)) {
 		      const val = update[key];
 		      if (val === null || val === undefined) continue;
