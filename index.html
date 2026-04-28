@@ -3350,25 +3350,17 @@ const EMPTY_SPEC = Object.freeze({
   deployment_target: ''                // NEW (script, package, web app, CLI, etc.)
 });
 
-const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST, high-quality requirements interview for a Python program.
+	const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
 
-	STRICT RULES:
-	1. Ask **ONE** short, specific, high-value question at a time about the SINGLE most important missing gap.
-	2. Prefer concrete questions ("Give me an example of...", "What should happen when...") over vague ones.
-	3. After your question, ALWAYS output a valid <spec_update> JSON block with any fields you can now fill or improve. Mark uncertain values with "(assumed)".
-	4. Output format must be:
-	[Your short question here]
+	RULES:
+	1. Read the spec state below.
+	2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
+	3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
+	4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
+	5. NEVER ask more than 4 total questions. After 4, output <ready_for_skeleton> with best guesses.
+	6. Keep questions under 25 words. No implementation details.
 
-	<spec_update>
-	{valid JSON object with updated fields}
-	</spec_update>
-
-	5. If user says "skip", "just build it", "go ahead", "enough", or after maximum 4 questions → immediately output:
-	<ready_for_skeleton>{"rationale":"Spec is sufficiently complete"}</ready_for_skeleton>
-
-	6. NEVER ask more than 4 questions total. After the 4th question, always trigger ready_for_skeleton with best assumptions.
-	7. Prioritize gathering in this order: Goal → Usage & Users → Inputs/Outputs → Core Operations → Constraints & Non-functional (performance, security, scalability) → Acceptance Criteria.
-	8. Be aggressive filling fields from context and previous answers. Do not ask obvious things.
+	IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
 
 	Current spec:
 	{spec_json}`;
@@ -3454,30 +3446,64 @@ const StageA = (() => {
 		      }
 
 				if (specUpdateMatch) {
-				try {
-					let raw = specUpdateMatch[1].trim();
-					// More robust JSON extraction
-					const jsonStart = raw.indexOf('{');
-					const jsonEnd = raw.lastIndexOf('}');
-					if (jsonStart >= 0 && jsonEnd > jsonStart) {
-					raw = raw.slice(jsonStart, jsonEnd + 1);
-					}
-					// Clean common markdown/quote issues
-					raw = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-					
-						const update = JSON.parse(raw);
-			          if (update && typeof update === 'object') _mergeSpec(update);
-					yield { type: 'spec_updated', spec: getSpec() };
-				} catch (parseErr) {
+			        try {
+			          let raw = specUpdateMatch[1].trim();
+			          // Strip markdown fences
+			          raw = raw.replace(/^```(?:json)?\s*\n?/g, '').replace(/\n?```\s*$/g, '');
+			          // Find outermost { }
+			          let depth = 0, jStart = -1, jEnd = -1;
+			          for (let ci = 0; ci < raw.length; ci++) {
+			            if (raw[ci] === '{') { if (depth === 0) jStart = ci; depth++; }
+			            else if (raw[ci] === '}') { depth--; if (depth === 0 && jStart >= 0) { jEnd = ci; break; } }
+			          }
+			          if (jStart >= 0 && jEnd > jStart) {
+			            let jsonStr = raw.slice(jStart, jEnd + 1);
+			            // Fix trailing commas
+			            jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+			            let update;
+			            try { update = JSON.parse(jsonStr); } catch {
+			              console.warn('[StageA] spec_update JSON parse failed, attempting repair');
+			              // Try removing problematic characters
+			              jsonStr = jsonStr.replace(/[\x00-\x1f]/g, ' ');
+			              try { update = JSON.parse(jsonStr); } catch(e2) {
+			                console.error('[StageA] spec_update unfixable:', e2.message, jsonStr.slice(0, 300));
+			                throw e2;
+			              }
+			            }
+			            if (update && typeof update === 'object') {
+			              _mergeSpec(update);
+			              console.log('[StageA] Spec merged, fields:', Object.keys(update).join(', '));
+			            }
+			          } else {
+			            console.warn('[StageA] No JSON object found in spec_update');
+			          }
+			          yield { type: 'spec_updated', spec: getSpec() };
+			        } catch (parseErr) {
 					console.warn("Spec update parse failed:", parseErr);
 					if (tryCount === 0) {
 					_messages.push({ role: 'user', content: 'Please re-send the <spec_update> with valid JSON only. Do not add extra text outside the tags.' });
 					continue;
 					}
 					yield { type: 'parse_error', error: parseErr };
-				}
+					}
 				}
 		
+					// Fallback: if no spec_update tag found, look for any JSON object in response
+					if (!specUpdateMatch) {
+						const jsonBlockMatch = fullText.match(/\{[\s\S]{50,}\}/);
+						if (jsonBlockMatch) {
+						try {
+							let fallbackJson = jsonBlockMatch[0].replace(/,\s*([}\]])/g, '$1');
+							const parsed = JSON.parse(fallbackJson);
+							if (parsed && typeof parsed === 'object' && (parsed.goal || parsed.inputs || parsed.outputs || parsed.internal_heat_gains)) {
+							_mergeSpec(parsed);
+							console.log('[StageA] Spec merged from fallback JSON, fields:', Object.keys(parsed).join(', '));
+							yield { type: 'spec_updated', spec: getSpec() };
+							}
+						} catch {}
+						}
+					}
+					
 		      _messages.push({ role: 'assistant', content: fullText });
 		
 		      if (question) yield { type: 'question_final', text: question };
@@ -7327,31 +7353,36 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     const states = CodeSmith.stageC.getModuleStates();
     const state = states[modId] || 'pending';
 
-    $('#sc-active-name').textContent = mod ? mod.name : modId;
-    const badge = $('#sc-active-badge');
-    badge.className = 'build-badge badge-' + (state === 'building' || state === 'testing' ? 'running' : state);
-    badge.textContent = state;
+			const activeName = $('#sc-active-name');
+			const badge = $('#sc-active-badge');
+			if (activeName) activeName.textContent = mod ? mod.name : modId;
+			if (badge) {
+			badge.className = 'build-badge badge-' + (state === 'building' || state === 'testing' ? 'running' : state);
+			badge.textContent = state;
+			}
 
-	const codeEl = $('#sc-code-display');
-	    codeEl.textContent = data.code || '';
+		const codeEl = $('#sc-code-display');
+	    if (codeEl) codeEl.textContent = data.code || '';
 	    if (data.code && window.hljs) {
 	      delete codeEl.dataset.highlighted;
 	      codeEl.className = 'language-python';
 	      hljs.highlightElement(codeEl);
 	    }
 	
-	    const testsEl = $('#sc-tests-display');
-	    testsEl.textContent = data.tests || '';
+		const testsEl = $('#sc-tests-display');
+	    if (testsEl) testsEl.textContent = data.tests || '';
 	    if (data.tests && window.hljs) {
 	      delete testsEl.dataset.highlighted;
 	      testsEl.className = 'language-python';
 	      hljs.highlightElement(testsEl);
 	    }
 
-    $('#sc-output-display').textContent = data.output || '';
+		const outEl = $('#sc-output-display');
+    	if (outEl) outEl.textContent = data.output || '';
 
     // Show escalation bar if escalated
-    $('#sc-escalation-bar').hidden = state !== 'escalated';
+    const escBar = $('#sc-escalation-bar');
+    if (escBar) escBar.hidden = state !== 'escalated';
   }
 
   function _scUpdateProgress() {
@@ -7493,6 +7524,12 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       // Reset controls
       $('#btn-sc-start').hidden = false;
       $('#btn-sc-start').textContent = 'Restart build';
+	  // Enable restart even after escalation
+      $('#btn-sc-start').disabled = false;
+      $('#btn-sc-start').addEventListener('click', () => {
+				CodeSmith.stageC.stop();
+				setTimeout(() => _scStartBuild(), 200);
+			}, { once: true });
       $('#btn-sc-pause').hidden = true;
       $('#btn-sc-stop').hidden = true;
       $('#btn-sc-resume').hidden = true;
@@ -7686,11 +7723,24 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
         $('#btn-sc-resume').hidden = false;
         CodeSmith.stageC.resume();
         escBar.hidden = true;
-      } else {
-        _scLog('✗ Still failing after edit', 'log-fail');
-        _scModuleData[modId].output = output;
-        _scSelectModule(modId);
-      }
+		} else {
+			_scLog('✗ Still failing after edit', 'log-fail');
+			_scModuleData[modId].output = output;
+			_scSelectModule(modId);
+			// Add skip button
+			const skipBtn = document.createElement('button');
+			skipBtn.className = 'btn';
+			skipBtn.style.cssText = 'font-size:11px;margin-left:6px;';
+			skipBtn.textContent = 'Skip module';
+			skipBtn.addEventListener('click', () => {
+			_scLog('Skipped ' + modId, 'log-warn');
+			CodeSmith.stageC.resume();
+			$('#btn-sc-resume').hidden = true;
+			$('#btn-sc-pause').hidden = false;
+			escBar.hidden = true;
+			});
+			escBar.appendChild(skipBtn);
+		}
     });
     escBar.appendChild(rerunBtn);
   }
