@@ -3331,24 +3331,16 @@ CodeSmith.builder = Builder;
  * @property {string[]} non_goals
  * @property {string[]} acceptance_criteria
  */
-const EMPTY_SPEC = Object.freeze({
-  goal: '',
-  target_users: '',                    // NEW
-  usage_scenarios: [],                 // NEW
-  inputs:  { format: '', example: '', size_estimate: '' },
-  outputs: { format: '', example: '' },
-  core_operations: [],
-  constraints: { 
-    libraries_allowed: '', 
-    performance: '', 
-    security: '',                      // NEW
-    scalability: ''                    // NEW
-  },
-  non_goals: [],
-  acceptance_criteria: [],             // Already exists but keep
-  integrations: [],                    // NEW
-  deployment_target: ''                // NEW (script, package, web app, CLI, etc.)
-});
+		const EMPTY_SPEC = Object.freeze({
+		  goal: '',
+		  inputs:  { format: '', example: '', size_estimate: '' },
+		  outputs: { format: '', example: '' },
+		  core_operations: [],
+		  constraints: { libraries_allowed: '', performance: '' },
+		  non_goals: [],
+		  acceptance_criteria: [],
+		  // Extensible fields — _mergeSpec adds any unknown keys here
+		});
 
 	const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
 
@@ -3431,10 +3423,11 @@ const StageA = (() => {
 		      // Parse the completed response
 			const specUpdateMatch = fullText.match(/<spec_update>\s*([\s\S]*?)\s*<\/spec_update>/i);
 			const readyMatch = fullText.match(/<ready_for_skeleton>\s*([\s\S]*?)\s*<\/ready_for_skeleton>/i);
-				      const question = fullText
-		        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
-		        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
-		        .trim();
+			const question = fullText
+					        .replace(/<spec_update>[\s\S]*?<\/spec_update>/g, '')
+					        .replace(/<ready_for_skeleton>[\s\S]*?<\/ready_for_skeleton>/g, '')
+					        .replace(/```json[\s\S]*?```/g, '')
+					        .trim();
 		
 		      if (!question && !readyMatch && !specUpdateMatch && tryCount === 0) {
 		        _messages.push({ role: 'assistant', content: fullText });
@@ -3506,7 +3499,14 @@ const StageA = (() => {
 					
 		      _messages.push({ role: 'assistant', content: fullText });
 		
-		      if (question) yield { type: 'question_final', text: question };
+		      if (question) {
+		        // Clean up: remove any remaining XML-like tags the model might output
+		        const cleanQuestion = question
+		          .replace(/<[^>]+>/g, '')
+		          .replace(/\n{3,}/g, '\n\n')
+		          .trim();
+		        if (cleanQuestion) yield { type: 'question_final', text: cleanQuestion };
+		      }
 		
 		      if (readyMatch) {
 		        _ready = true;
@@ -3570,10 +3570,10 @@ const StageA = (() => {
 		            _spec[key] = val;
 		          }
 		        }
-		      } else {
-		        // Unknown top-level field — store it anyway
-		        _spec[key] = val;
-		      }
+				} else {
+				        // Unknown top-level field — store it anyway
+				        if (val !== null && val !== undefined) _spec[key] = val;
+				      }
 		    }
 		  }
 
