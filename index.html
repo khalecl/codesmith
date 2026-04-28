@@ -3439,39 +3439,44 @@ const StageA = (() => {
 		        continue;
 		      }
 
-				if (specUpdateMatch) {
+					if (specUpdateMatch) {
 			        try {
 			          let raw = specUpdateMatch[1].trim();
-			          // Strip markdown fences
 			          raw = raw.replace(/^```(?:json)?\s*\n?/g, '').replace(/\n?```\s*$/g, '');
-			          // Find outermost { }
-			          let depth = 0, jStart = -1, jEnd = -1;
-			          for (let ci = 0; ci < raw.length; ci++) {
-			            if (raw[ci] === '{') { if (depth === 0) jStart = ci; depth++; }
-			            else if (raw[ci] === '}') { depth--; if (depth === 0 && jStart >= 0) { jEnd = ci; break; } }
-			          }
-			          if (jStart >= 0 && jEnd > jStart) {
-			            let jsonStr = raw.slice(jStart, jEnd + 1);
-			            // Fix trailing commas
-			            jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-			            let update;
-			            try { update = JSON.parse(jsonStr); } catch {
-			              console.warn('[StageA] spec_update JSON parse failed, attempting repair');
-			              // Try removing problematic characters
-			              jsonStr = jsonStr.replace(/[\x00-\x1f]/g, ' ');
-			              try { update = JSON.parse(jsonStr); } catch(e2) {
-			                console.error('[StageA] spec_update unfixable:', e2.message, jsonStr.slice(0, 300));
-			                throw e2;
+			          // Try direct parse first
+			          let update = null;
+			          try { update = JSON.parse(raw); } catch {}
+			          // If failed, find outermost braces
+			          if (!update) {
+			            let depth = 0, jStart = -1, jEnd = -1, inStr = false, esc = false;
+			            for (let ci = 0; ci < raw.length; ci++) {
+			              const ch = raw[ci];
+			              if (esc) { esc = false; continue; }
+			              if (ch === '\\') { esc = true; continue; }
+			              if (ch === '"') { inStr = !inStr; continue; }
+			              if (inStr) continue;
+			              if (ch === '{') { if (depth === 0) jStart = ci; depth++; }
+			              else if (ch === '}') { depth--; if (depth === 0 && jStart >= 0) { jEnd = ci; break; } }
+			            }
+			            if (jStart >= 0 && jEnd > jStart) {
+			              let jsonStr = raw.slice(jStart, jEnd + 1);
+			              jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+			              try { update = JSON.parse(jsonStr); } catch {
+			                jsonStr = jsonStr.replace(/[\x00-\x1f]/g, ' ');
+			                try { update = JSON.parse(jsonStr); } catch(e2) {
+			                  console.error('[StageA] spec_update parse failed:', e2.message);
+			                }
 			              }
 			            }
-			            if (update && typeof update === 'object') {
-			              _mergeSpec(update);
-			              console.log('[StageA] Spec merged, fields:', Object.keys(update).join(', '));
-			            }
-			          } else {
-			            console.warn('[StageA] No JSON object found in spec_update');
 			          }
-			          yield { type: 'spec_updated', spec: getSpec() };
+			          if (update && typeof update === 'object' && !Array.isArray(update)) {
+			            _mergeSpec(update);
+			            console.log('[StageA] Spec merged, fields:', Object.keys(update).join(', '));
+			            yield { type: 'spec_updated', spec: getSpec() };
+			          } else {
+			            console.warn('[StageA] spec_update: no valid object found. Raw:', raw.slice(0, 200));
+			            yield { type: 'spec_updated', spec: getSpec() };
+			          }
 			        } catch (parseErr) {
 					console.warn("Spec update parse failed:", parseErr);
 					if (tryCount === 0) {
@@ -6330,56 +6335,7 @@ function wireComposer() {
 					container.appendChild(div);
 					}
 
-				for (const field of fields) {
-				const div = el('div', { class: 'spec-field' });
-				const label = el('div', { class: 'spec-field-label' }, field.label);
-				div.appendChild(label);
-
-				if (field.type === 'string') {
-					const val = spec[field.key] || '';
-					const valEl = el('div', { class: 'spec-field-value' + (val ? '' : ' empty') });
-					valEl.textContent = val || '—';
-					if (assumptions[field.key]) {
-					const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
-					valEl.appendChild(tag);
-					}
-					div.appendChild(valEl);
-				} else if (field.type === 'array') {
-					const arr = spec[field.key] || [];
-					if (arr.length === 0) {
-					div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
-					} else {
-					for (const item of arr) {
-						const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
-						itemEl.textContent = '• ' + item;
-						const aKey = field.key + '.' + item;
-						if (assumptions[aKey]) {
-						const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
-						itemEl.appendChild(tag);
-						}
-						div.appendChild(itemEl);
-					}
-					}
-				} else if (field.type === 'object') {
-					const obj = spec[field.key] || {};
-					for (const sk of (field.subkeys || [])) {
-					const sv = obj[sk] || '';
-					const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
-					row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
-					const svEl = el('span', { class: 'spec-field-value' + (sv ? '' : ' empty'), style: 'font-size:12px;' });
-					svEl.textContent = sv || '—';
-					const aKey = field.key + '.' + sk;
-					if (assumptions[aKey]) {
-						const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
-						svEl.appendChild(tag);
-					}
-					row.appendChild(svEl);
-					div.appendChild(row);
-					}
-				}
-
-				container.appendChild(div);
-				}
+		
 			}
   async function refreshDebugFiles() {
     const container = $('#debug-files');
