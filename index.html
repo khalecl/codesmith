@@ -1703,6 +1703,7 @@
 									<option value="worker">Worker (code generation)</option>
 									<option value="fast">Fast (quick answers)</option>
 									</select>
+									<span id="model-for-label" style="font-size:8px;color:#3a3f4a;">for: all</span>
 								</div>
 						  <!-- Analysis tab -->
 						  <div class="explorer-ai-content active" data-aicontent="analysis">
@@ -4474,16 +4475,7 @@ CodeSmith.explorer = Explorer;
 			const result = await CodeSmith.llm.chatComplete({
 			  messages: [
 				{ role: 'system', content: ANALYSIS_SYSTEM },
-				{ role: 'user', content: (() => {
-					const lines = code.split('\n');
-					if (lines.length <= 500) return `File: ${filename} (${language})\nLines: ${lines.length}\n\n${code}`;
-					// Large file: send structure map + first/last chunks
-					const map = CodeSmith.chunker.getStructureMap(code, language);
-					const mapStr = map.map(s => `L${s.startLine}-${s.endLine}: ${s.kind} ${s.name}`).join('\n');
-					const head = lines.slice(0, 150).join('\n');
-					const tail = lines.slice(-100).join('\n');
-					return `File: ${filename} (${language})\nLines: ${lines.length} (LARGE FILE — showing structure + head/tail)\n\nSTRUCTURE MAP:\n${mapStr}\n\nFIRST 150 LINES:\n${head}\n\n...[${lines.length - 250} lines omitted]...\n\nLAST 100 LINES:\n${tail}`;
-					})() },
+				{ role: 'user', content: `File: ${filename} (${language})\nLines: ${code.split('\n').length}\n\n${code}` },
 			  ],
 			  tier: 'orchestrator',
 			  temperature: 0.2,
@@ -4501,29 +4493,7 @@ CodeSmith.explorer = Explorer;
 		  }
 
 		  async function* askPair(code, filename, language, question) {
-				const lines = code.split('\n');
-				const structureMap = CodeSmith.chunker.getStructureMap(code, language);
-				const mapSummary = structureMap.map(s => `L${s.startLine}-${s.endLine}: ${s.kind} ${s.name}(${s.params})`).join('\n');
-
-				let numberedCode;
-				let chunkNote = '';
-				if (lines.length > CodeSmith.chunker.MAX_CHUNK_LINES) {
-				// Large file: send structure map + relevant chunk only
-				const chunks = CodeSmith.chunker.chunkByStructure(code, language);
-				// Find most relevant chunk based on question
-				const qLower = question.toLowerCase();
-				let bestChunk = chunks[0];
-				for (const chunk of chunks) {
-					if (chunk.label.toLowerCase().split(/[\s(]/)[0] && qLower.includes(chunk.label.toLowerCase().split(/[\s(]/)[0])) {
-					bestChunk = chunk; break;
-					}
-				}
-				numberedCode = bestChunk.content;
-				chunkNote = `\n\nNOTE: This file has ${lines.length} lines. Showing lines ${bestChunk.startLine}-${bestChunk.endLine} ("${bestChunk.label}"). Full structure map:\n${mapSummary}\n\nIf you need to see other sections, say which function/line range.`;
-				} else {
-				numberedCode = lines.map((l, i) => `${i + 1}\t${l}`).join('\n');
-				}
-
+			const numberedCode = code.split('\n').map((l, i) => `${i + 1}\t${l}`).join('\n');
 			let docsContext = '';
 			    if (language === 'python') {
 			      try { docsContext = await CodeSmith.pydocs.gatherContext(code); } catch {}
@@ -4549,7 +4519,7 @@ CodeSmith.explorer = Explorer;
 					
 						const messages = [
 						{ role: 'system', content: PAIR_SYSTEM },
-						{ role: 'user', content: `File: ${filename} (${language})${chunkNote}\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}${projectSection}\n\nRequest: ${question}` },
+						{ role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}${projectSection}\n\nRequest: ${question}` },
 						];
 					
 						for await (const ev of CodeSmith.llm.chat({
@@ -4909,122 +4879,6 @@ CodeSmith.explorer = Explorer;
 				return { learnFromFile, getProjectContext, getFileKnowledge, getSymbolsAcrossProject, getKnownIssues, getDependencies, reset };
 				})();
 				CodeSmith.knowledge = ProjectKnowledge;
-	// === CODE CHUNKER — splits large files intelligently ========================
-				const Chunker = (() => {
-				const MAX_CHUNK_LINES = 300;
-				const OVERLAP_LINES = 10;
-
-				function chunkByStructure(content, language) {
-					const lines = content.split('\n');
-					if (lines.length <= MAX_CHUNK_LINES) {
-					return [{ startLine: 1, endLine: lines.length, content, label: 'full file' }];
-					}
-
-					const boundaries = _findBoundaries(lines, language);
-					const chunks = [];
-					let currentStart = 0;
-
-					for (const boundary of boundaries) {
-					if (boundary - currentStart >= MAX_CHUNK_LINES) {
-						// Flush current chunk
-						chunks.push(_makeChunk(lines, currentStart, boundary - 1));
-						currentStart = Math.max(0, boundary - OVERLAP_LINES);
-					}
-					}
-					// Final chunk
-					if (currentStart < lines.length) {
-					chunks.push(_makeChunk(lines, currentStart, lines.length - 1));
-					}
-
-					// If no boundaries found, split by line count
-					if (chunks.length === 0) {
-					for (let i = 0; i < lines.length; i += MAX_CHUNK_LINES - OVERLAP_LINES) {
-						const end = Math.min(i + MAX_CHUNK_LINES - 1, lines.length - 1);
-						chunks.push(_makeChunk(lines, i, end));
-					}
-					}
-
-					return chunks;
-				}
-
-				function _findBoundaries(lines, language) {
-					const boundaries = [];
-					const pattern = language === 'python'
-					? /^(class |def |async def )/
-					: /^(function |class |const \w+ = |export |module\.)/;
-
-					for (let i = 0; i < lines.length; i++) {
-					if (pattern.test(lines[i].trimStart()) && lines[i].search(/\S/) === 0) {
-						boundaries.push(i);
-					}
-					}
-					return boundaries;
-				}
-
-				function _makeChunk(lines, start, end) {
-					const slice = lines.slice(start, end + 1);
-					// Find label from first function/class in chunk
-					let label = 'lines ' + (start + 1) + '-' + (end + 1);
-					for (const line of slice) {
-					const m = line.match(/^(?:def|class|function|const|export)\s+(\w+)/);
-					if (m) { label = m[1] + ' (L' + (start + 1) + '-' + (end + 1) + ')'; break; }
-					}
-					return {
-					startLine: start + 1,
-					endLine: end + 1,
-					content: slice.map((l, i) => (start + i + 1) + '\t' + l).join('\n'),
-					rawContent: slice.join('\n'),
-					label,
-					};
-				}
-
-				function getStructureMap(content, language) {
-					const lines = content.split('\n');
-					const map = [];
-					const pattern = language === 'python'
-					? /^(\s*)(def|class|async\s+def)\s+(\w+)\s*\(([^)]*)\)/
-					: /^(\s*)(function|class|const|let|export\s+(?:default\s+)?(?:function|class|const))\s+(\w+)/;
-
-					for (let i = 0; i < lines.length; i++) {
-					const m = lines[i].match(pattern);
-					if (m) {
-						const indent = m[1].length;
-						const kind = m[2].replace(/async\s+/, '').replace(/export\s+(?:default\s+)?/, '');
-						const name = m[3];
-						const params = m[4] || '';
-						// Find end of this block
-						let end = i + 1;
-						while (end < lines.length) {
-						const nextLine = lines[end];
-						if (nextLine.trim() === '') { end++; continue; }
-						const nextIndent = nextLine.search(/\S/);
-						if (nextIndent <= indent && nextLine.trim() !== '') break;
-						end++;
-						}
-						map.push({ name, kind, params, startLine: i + 1, endLine: end, indent, lineCount: end - i });
-					}
-					}
-					return map;
-				}
-
-				function extractFunction(content, funcName, language) {
-					const map = getStructureMap(content, language);
-					const entry = map.find(m => m.name === funcName);
-					if (!entry) return null;
-					const lines = content.split('\n');
-					const slice = lines.slice(entry.startLine - 1, entry.endLine);
-					return {
-					content: slice.map((l, i) => (entry.startLine + i) + '\t' + l).join('\n'),
-					rawContent: slice.join('\n'),
-					startLine: entry.startLine,
-					endLine: entry.endLine,
-					name: funcName,
-					};
-				}
-
-				return { chunkByStructure, getStructureMap, extractFunction, MAX_CHUNK_LINES };
-				})();
-				CodeSmith.chunker = Chunker;
 	// === MONACO EDITOR MANAGER ==================================================
 		const MonacoMgr = (() => {
 		  let _editor = null;
@@ -8082,6 +7936,14 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			  const tgt = tab.dataset.aitab;
 			  const content = document.querySelector(`[data-aicontent="${tgt}"]`);
 			  if (content) content.classList.add('active');
+			  // Update model selector default per tab
+				const sel = document.querySelector('#explorer-model-select');
+				const label = document.querySelector('#model-for-label');
+				if (sel && label) {
+					const defaults = { analysis: 'orchestrator', pair: 'auto', algo: 'worker' };
+					sel.value = defaults[tgt] || 'auto';
+					label.textContent = 'for: ' + tgt;
+				}
 			});
 		  }
 
@@ -8350,6 +8212,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		    _runLiveDiagnostics(name);
 		  }
 		 
+		 	// Reset AI panels for new file
+			const analysisEl = document.querySelector('#explorer-analysis');
+			if (analysisEl) analysisEl.replaceChildren();
+			const pairChat = document.querySelector('#pair-chat');
+			if (pairChat) pairChat.innerHTML = '<div class="explorer-empty" style="padding:16px;"><div class="explorer-empty-icon">🤝</div><div class="explorer-empty-title">AI Pair Programmer</div><div class="explorer-empty-desc">Ask for changes, improvements, or bug fixes.</div></div>';
+			const algoContainer = document.querySelector('#algo-container');
+			if (algoContainer) algoContainer.innerHTML = '<div class="explorer-empty"><div class="explorer-empty-icon">🔀</div><div class="explorer-empty-title">Algorithm Flowchart</div><div class="explorer-empty-desc">Generates a visual flowchart of the code\'s logic</div></div>';
 		  // Run local analysis
 		  const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
 			// Feed basic structure into knowledge graph (no AI needed)
