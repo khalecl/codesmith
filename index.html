@@ -1492,13 +1492,13 @@
 				  </div>
 				</div>
 				<!-- A: live spec -->
-<div class="stage-a-spec">
-  <div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
-    <span class="text-[12px] text-muted font-semibold">Live Spec</span>
-    <button id="btn-edit-spec-a" class="btn btn-ghost" style="font-size:11px;margin-left:auto;">Edit spec</button>
-  </div>
-  <div id="stage-a-spec-card" class="spec-live-card"></div>
-</div>
+				<div class="stage-a-spec">
+				<div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+					<span class="text-[12px] text-muted font-semibold">Live Spec</span>
+					<button id="btn-edit-spec-a" class="btn btn-ghost" style="font-size:11px;margin-left:auto;">Edit spec</button>
+				</div>
+				<div id="stage-a-spec-card" class="spec-live-card"></div>
+				</div>
 			  </div>
 
 			  <!-- Stage B: Skeleton -->
@@ -6282,7 +6282,100 @@ function wireComposer() {
     dur.style.color = r.ok ? '#4ade80' : '#ff6b6b';
     out.appendChild(dur);
   }
+		function _renderSpecCard(spec, assumptions) {
+				const container = $('#stage-a-spec-card');
+				container.replaceChildren();
 
+				// Render ALL fields in spec, not just hardcoded ones
+					for (const [key, val] of Object.entries(spec)) {
+					const div = el('div', { class: 'spec-field' });
+					const label = el('div', { class: 'spec-field-label' }, key.replace(/_/g, ' '));
+					div.appendChild(label);
+				
+					if (val === null || val === undefined || val === '') {
+						div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+					} else if (typeof val === 'string') {
+						const valEl = el('div', { class: 'spec-field-value' });
+						valEl.textContent = val;
+						if (assumptions[key]) valEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
+						div.appendChild(valEl);
+					} else if (Array.isArray(val)) {
+						if (val.length === 0) {
+						div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+						} else {
+						for (const item of val) {
+							const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
+							itemEl.textContent = '• ' + (typeof item === 'string' ? item : JSON.stringify(item));
+							div.appendChild(itemEl);
+						}
+						}
+					} else if (typeof val === 'object') {
+						for (const [sk, sv] of Object.entries(val)) {
+						const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
+						row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
+						const svEl = el('span', { class: 'spec-field-value', style: 'font-size:12px;' });
+						svEl.textContent = typeof sv === 'string' ? (sv || '—') : JSON.stringify(sv);
+						const aKey = key + '.' + sk;
+						if (assumptions[aKey]) svEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
+						row.appendChild(svEl);
+						div.appendChild(row);
+						}
+					}
+				
+					container.appendChild(div);
+					}
+
+				for (const field of fields) {
+				const div = el('div', { class: 'spec-field' });
+				const label = el('div', { class: 'spec-field-label' }, field.label);
+				div.appendChild(label);
+
+				if (field.type === 'string') {
+					const val = spec[field.key] || '';
+					const valEl = el('div', { class: 'spec-field-value' + (val ? '' : ' empty') });
+					valEl.textContent = val || '—';
+					if (assumptions[field.key]) {
+					const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
+					valEl.appendChild(tag);
+					}
+					div.appendChild(valEl);
+				} else if (field.type === 'array') {
+					const arr = spec[field.key] || [];
+					if (arr.length === 0) {
+					div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+					} else {
+					for (const item of arr) {
+						const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
+						itemEl.textContent = '• ' + item;
+						const aKey = field.key + '.' + item;
+						if (assumptions[aKey]) {
+						const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
+						itemEl.appendChild(tag);
+						}
+						div.appendChild(itemEl);
+					}
+					}
+				} else if (field.type === 'object') {
+					const obj = spec[field.key] || {};
+					for (const sk of (field.subkeys || [])) {
+					const sv = obj[sk] || '';
+					const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
+					row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
+					const svEl = el('span', { class: 'spec-field-value' + (sv ? '' : ' empty'), style: 'font-size:12px;' });
+					svEl.textContent = sv || '—';
+					const aKey = field.key + '.' + sk;
+					if (assumptions[aKey]) {
+						const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
+						svEl.appendChild(tag);
+					}
+					row.appendChild(svEl);
+					div.appendChild(row);
+					}
+				}
+
+				container.appendChild(div);
+				}
+			}
   async function refreshDebugFiles() {
     const container = $('#debug-files');
     const preview = $('#debug-file-preview');
@@ -6995,100 +7088,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		    await _persistStageState();
 		  }
 
-	  function _renderSpecCard(spec, assumptions) {
-		const container = $('#stage-a-spec-card');
-		container.replaceChildren();
-
-		// Render ALL fields in spec, not just hardcoded ones
-		    for (const [key, val] of Object.entries(spec)) {
-		      const div = el('div', { class: 'spec-field' });
-		      const label = el('div', { class: 'spec-field-label' }, key.replace(/_/g, ' '));
-		      div.appendChild(label);
-		
-		      if (val === null || val === undefined || val === '') {
-		        div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
-		      } else if (typeof val === 'string') {
-		        const valEl = el('div', { class: 'spec-field-value' });
-		        valEl.textContent = val;
-		        if (assumptions[key]) valEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
-		        div.appendChild(valEl);
-		      } else if (Array.isArray(val)) {
-		        if (val.length === 0) {
-		          div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
-		        } else {
-		          for (const item of val) {
-		            const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
-		            itemEl.textContent = '• ' + (typeof item === 'string' ? item : JSON.stringify(item));
-		            div.appendChild(itemEl);
-		          }
-		        }
-		      } else if (typeof val === 'object') {
-		        for (const [sk, sv] of Object.entries(val)) {
-		          const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
-		          row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
-		          const svEl = el('span', { class: 'spec-field-value', style: 'font-size:12px;' });
-		          svEl.textContent = typeof sv === 'string' ? (sv || '—') : JSON.stringify(sv);
-		          const aKey = key + '.' + sk;
-		          if (assumptions[aKey]) svEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
-		          row.appendChild(svEl);
-		          div.appendChild(row);
-		        }
-		      }
-		
-		      container.appendChild(div);
-		    }
-
-		for (const field of fields) {
-		  const div = el('div', { class: 'spec-field' });
-		  const label = el('div', { class: 'spec-field-label' }, field.label);
-		  div.appendChild(label);
-
-		  if (field.type === 'string') {
-			const val = spec[field.key] || '';
-			const valEl = el('div', { class: 'spec-field-value' + (val ? '' : ' empty') });
-			valEl.textContent = val || '—';
-			if (assumptions[field.key]) {
-			  const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
-			  valEl.appendChild(tag);
-			}
-			div.appendChild(valEl);
-		  } else if (field.type === 'array') {
-			const arr = spec[field.key] || [];
-			if (arr.length === 0) {
-			  div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
-			} else {
-			  for (const item of arr) {
-				const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
-				itemEl.textContent = '• ' + item;
-				const aKey = field.key + '.' + item;
-				if (assumptions[aKey]) {
-				  const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
-				  itemEl.appendChild(tag);
-				}
-				div.appendChild(itemEl);
-			  }
-			}
-		  } else if (field.type === 'object') {
-			const obj = spec[field.key] || {};
-			for (const sk of (field.subkeys || [])) {
-			  const sv = obj[sk] || '';
-			  const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
-			  row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
-			  const svEl = el('span', { class: 'spec-field-value' + (sv ? '' : ' empty'), style: 'font-size:12px;' });
-			  svEl.textContent = sv || '—';
-			  const aKey = field.key + '.' + sk;
-			  if (assumptions[aKey]) {
-				const tag = el('span', { class: 'spec-assumed-tag' }, '(assumed)');
-				svEl.appendChild(tag);
-			  }
-			  row.appendChild(svEl);
-			  div.appendChild(row);
-			}
-		  }
-
-		  container.appendChild(div);
-		}
-	  }
+	
 
 	  async function _transitionToB() {
 		const spec = CodeSmith.stageA.getSpec();
