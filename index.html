@@ -2171,8 +2171,22 @@ const DB = (() => {
   function getSession(id) {
     return pReq(tx(CodeSmith.STORES.SESSIONS, 'readonly').get(id));
   }
-  function putSession(session) {
-    return pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').put(session));
+	function putSession(session) {
+		return pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').put(session)).catch(err => {
+		if (err.name === 'QuotaExceededError') {
+			console.warn('[DB] Storage quota exceeded — clearing old sessions');
+			return clearOldSessions().then(() => pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').put(session)));
+		}
+		throw err;
+		});
+	}
+	async function clearOldSessions() {
+    const all = await listSessions();
+    const keep = all.slice(0, 20);
+    const remove = all.slice(20);
+    for (const s of remove) {
+      try { await pReq(tx(CodeSmith.STORES.SESSIONS, 'readwrite').delete(s.id)); } catch {}
+    }
   }
   async function createSession() {
     const now = Date.now();
@@ -2426,7 +2440,7 @@ const Sandbox = (() => {
     if (typeof code !== 'string') throw new TypeError('runPython: code must be a string');
 
     // Ensure Pyodide is loaded
-    try { await warmUp(); } catch (err) {
+    try { if (!_pyodide) await warmUp(); } catch (err) {
       return {
         ok: false, stdout: '', stderr: '', result: null,
         error: { type: 'LoadError', message: err.message, traceback: '' },
@@ -3274,7 +3288,9 @@ print('\\n__EXIT_CODE__=' + str(exit_code))
     if (start >= 0 && end > start) {
       try { return JSON.parse(cleaned.slice(start, end + 1)); } catch {}
     }
-    throw new Error('Failed to parse JSON from model response');
+    // Log truncated JSON attempts for debugging
+    console.warn('[parseJSON] All parse attempts failed. Input length:', text.length, 'First 200 chars:', text.slice(0, 200));
+	throw new Error('Failed to parse JSON from model response');
   }
 
   function _parsePytestOutput(output) {
@@ -4206,6 +4222,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
         tier: 'orchestrator',
         temperature: 0.2,
         maxTokens: 8000,
+		timeoutMs: 120000,
       });
       let code = (result.text || '').trim();
       if (code.startsWith('```')) code = code.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
@@ -4249,6 +4266,9 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
       .replace(/[^a-z0-9_]/g, '')
       .replace(/^[0-9]/, '_$&');
     if (!clean || !/^[a-z_]/.test(clean)) clean = 'mod_' + clean;
+	// Prevent path traversal
+    clean = clean.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+    if (clean.length > 60) clean = clean.slice(0, 60);
     return clean || 'module';
   }
 	
@@ -6721,7 +6741,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		          } else {
 		            _showStep(target);
 		          }
-		        }
+		        })
 		      };
 		    }
 		  // Quick build button
@@ -6773,8 +6793,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  CodeSmith.stageA.setSpec(CodeSmith.stageA.getSpec()); // keep current
 		  _stageAHandleUserInput(changePrompt);
 		});
-	  }
-
+	  
 	function _showStep(step) {
 	    _currentStep = step;
 	    document.querySelectorAll('.step-item').forEach(si => {
@@ -7373,8 +7392,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     };
     SymbolTable.onDiff(diffListener);
 
-    try {
-      for await (const ev of CodeSmith.stageC.run(skeleton, spec)) {
+		try {
+		for await (const ev of CodeSmith.stageC.run(skeleton, spec)) { try {
         switch (ev.type) {
           case 'symbols_init':
             _scLog('Symbol table initialized');
@@ -7465,9 +7484,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				const controls = document.querySelector('.stage-c-controls');
 				if (controls && !$('#btn-sc-run')) controls.appendChild(runBtn);
 				break;
-        }
+			}
+    	  } catch(evErr) { _scLog('Event error: ' + evErr.message, 'log-fail'); }
       }
     } finally {
+
       SymbolTable.offDiff(diffListener);
       // Reset controls
       $('#btn-sc-start').hidden = false;
