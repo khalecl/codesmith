@@ -3550,7 +3550,7 @@ const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE
 4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises.
 5. PEP 8; type hints on public functions.
 6. Do not catch exceptions you cannot handle meaningfully.
-
+7. If the user provides REFERENCE DOCS, use the latest API signatures from those docs — not outdated patterns.
 Output ONLY valid JSON:
 {"code":"full source","tests":"full pytest source","imports_needed":["pkg"],"requested_symbols":[{"kind":"function|type|constant","name":"symbol_name","why":"reason"}],"notes":"optional"}`;
 
@@ -4239,10 +4239,15 @@ CodeSmith.explorer = Explorer;
 
 		  async function* askPair(code, filename, language, question) {
 			const numberedCode = code.split('\n').map((l, i) => `${i + 1}\t${l}`).join('\n');
-			const messages = [
-			  { role: 'system', content: PAIR_SYSTEM },
-			  { role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`\n\nRequest: ${question}` },
-			];
+			let docsContext = '';
+			    if (language === 'python') {
+			      try { docsContext = await CodeSmith.pydocs.gatherContext(code); } catch {}
+			    }
+			    const docsSection = docsContext ? `\n\nREFERENCE DOCS (use latest APIs from these):\n${docsContext.slice(0, 6000)}` : '';
+			    const messages = [
+			      { role: 'system', content: PAIR_SYSTEM },
+			      { role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}\n\nRequest: ${question}` },
+			    ];
 
 			for await (const ev of CodeSmith.llm.chat({
 			  messages,
@@ -4303,6 +4308,84 @@ CodeSmith.explorer = Explorer;
 		  return { analyzeWithAI, askPair, parseEdits, generateFlowchart };
 		})();
 		CodeSmith.pair = PairProgrammer;
+			// === PYTHON DOCS FETCHER ====================================================
+		const PyDocs = (() => {
+		  const _cache = {};
+		
+		  async function fetchPackageInfo(packageName) {
+		    if (_cache[packageName]) return _cache[packageName];
+		    try {
+		      const resp = await fetch(`https://pypi.org/pypi/${packageName}/json`);
+		      if (!resp.ok) return null;
+		      const data = await resp.json();
+		      const info = {
+		        name: data.info.name,
+		        version: data.info.version,
+		        summary: data.info.summary,
+		        description: (data.info.description || '').slice(0, 3000),
+		        requires_python: data.info.requires_python,
+		        homepage: data.info.home_page || data.info.project_url,
+		      };
+		      _cache[packageName] = info;
+		      return info;
+		    } catch { return null; }
+		  }
+		
+		  async function getStdlibHelp(moduleName) {
+		    if (_cache['stdlib_' + moduleName]) return _cache['stdlib_' + moduleName];
+		    try {
+		      const resp = await fetch(`https://docs.python.org/3/library/${moduleName}.html`);
+		      if (!resp.ok) return null;
+		      const html = await resp.text();
+		      // Extract text content, strip tags, limit size
+		      const text = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+		        .replace(/<style[\s\S]*?<\/style>/gi, '')
+		        .replace(/<[^>]+>/g, ' ')
+		        .replace(/\s+/g, ' ')
+		        .trim()
+		        .slice(0, 4000);
+		      const result = { module: moduleName, docs: text };
+		      _cache['stdlib_' + moduleName] = result;
+		      return result;
+		    } catch { return null; }
+		  }
+		
+		  function extractImports(code) {
+		    const imports = new Set();
+		    const re = /^(?:from\s+(\S+)|import\s+(\S+))/gm;
+		    let m;
+		    while ((m = re.exec(code)) !== null) {
+		      const pkg = (m[1] || m[2]).split('.')[0];
+		      imports.add(pkg);
+		    }
+		    return Array.from(imports);
+		  }
+		
+		  async function gatherContext(code) {
+		    const imports = extractImports(code);
+		    const stdlib = ['sys','os','json','re','math','datetime','collections','itertools',
+		      'functools','pathlib','typing','dataclasses','enum','abc','io','csv','string',
+		      'textwrap','unittest','copy','operator','contextlib','warnings','argparse',
+		      'logging','hashlib','http','urllib','socket','struct','array','bisect',
+		      'heapq','statistics','decimal','fractions','random','secrets','subprocess',
+		      'shutil','glob','tempfile','pickle','shelve','sqlite3','xml','configparser',
+		      'asyncio','threading','multiprocessing','queue','signal','time','calendar'];
+		    const results = [];
+		    for (const pkg of imports) {
+		      if (stdlib.includes(pkg)) {
+		        const doc = await getStdlibHelp(pkg);
+		        if (doc) results.push(`[stdlib ${pkg}] ${doc.docs.slice(0, 2000)}`);
+		      } else {
+		        const info = await fetchPackageInfo(pkg);
+		        if (info) results.push(`[pypi ${info.name} v${info.version}] ${info.summary}\n${info.description.slice(0, 1500)}`);
+		      }
+		    }
+		    return results.join('\n\n---\n\n');
+		  }
+		
+		  return { fetchPackageInfo, getStdlibHelp, extractImports, gatherContext };
+		})();
+		CodeSmith.pydocs = PyDocs;
 /* ============================================================================
  * 4. UI — rendering, events, modal, composer, status strip.
  *    No innerHTML with user content — textContent or element builders only.
