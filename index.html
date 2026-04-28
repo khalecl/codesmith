@@ -36,14 +36,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-	<!-- Monaco Editor -->
+<!-- Monaco Editor -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" />
 <script>
   var require = { paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.nls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.js"></script>
+<script>
+  require(['vs/editor/editor.main'], function() {
+    window._monacoReady = true;
+    console.log('[CodeSmith] Monaco loaded');
+  });
+</script>
 <!-- xterm.js Terminal -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
@@ -4598,10 +4602,19 @@ CodeSmith.explorer = Explorer;
 		 
 		  async function init(containerEl) {
 		    if (_initialized && _editor) return;
-		    if (typeof monaco === 'undefined') {
-		      console.warn('[MonacoMgr] Monaco not loaded yet');
-		      return;
-		    }
+			if (typeof monaco === 'undefined') {
+		      // Wait for Monaco to load
+			      await new Promise((resolve) => {
+			        const check = setInterval(() => {
+			          if (typeof monaco !== 'undefined') { clearInterval(check); resolve(); }
+			        }, 100);
+			        setTimeout(() => { clearInterval(check); resolve(); }, 10000);
+			      });
+			      if (typeof monaco === 'undefined') {
+			        console.warn('[MonacoMgr] Monaco failed to load');
+			        return;
+			      }
+			    }
 		 
 		    // Define CodeSmith dark theme
 		    monaco.editor.defineTheme('codesmith-dark', {
@@ -5768,19 +5781,19 @@ function wireComposer() {
 	      await CodeSmith.db.clearArtifacts();
 	      renderArtifactList();
 	    });
-    wireDebugPanel(); // Day 2
-	wireMode();          // Day 4
-	wireStepper();       // Day 5
-	wireStageC();       // Day 6
-	wireOnboarding();   // Day 7
-    wireTemplates();    // Day 7
-    wireKeyboardShortcuts(); // Day 7
-    wireErrorRecovery(); // Day 7
-	wireExplorer();     // Code Explorer
-    // Help button
-    const helpBtn = $('#btn-help');
-    if (helpBtn) helpBtn.addEventListener('click', openHelp);
-  }
+		    wireDebugPanel(); // Day 2
+			wireMode();          // Day 4
+			wireStepper();       // Day 5
+			wireStageC();       // Day 6
+			wireOnboarding();   // Day 7
+		    wireTemplates();    // Day 7
+		    wireKeyboardShortcuts(); // Day 7
+		    wireErrorRecovery(); // Day 7
+			if (document.getElementById('explorer-tabs')) wireExplorer();     // Code Explorer
+		    // Help button
+		    const helpBtn = $('#btn-help');
+		    if (helpBtn) helpBtn.addEventListener('click', openHelp);
+		  }
 
   // ---- debug panel (Day 2) ------------------------------------------------
   function wireDebugPanel() {
