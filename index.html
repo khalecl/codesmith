@@ -36,8 +36,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<!-- Monaco Editor -->
+<script>mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
 <script>
   var require = { paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } };
 </script>
@@ -45,14 +46,17 @@
 <script>
   require(['vs/editor/editor.main'], function() {
     window._monacoReady = true;
-    console.log('[CodeSmith] Monaco loaded');
+    // Load xterm AFTER Monaco owns the AMD loader
+    var s1 = document.createElement('script');
+    s1.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
+    s1.onload = function() {
+      var s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s1);
   });
 </script>
-<!-- xterm.js Terminal -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-<script>mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
 <script>
   // Tailwind config must be set before the runtime script renders anything.
   tailwind.config = {
@@ -5789,8 +5793,8 @@ function wireComposer() {
 		    wireTemplates();    // Day 7
 		    wireKeyboardShortcuts(); // Day 7
 		    wireErrorRecovery(); // Day 7
-			if (document.getElementById('explorer-tabs')) wireExplorer();     // Code Explorer
-		    // Help button
+			try { wireExplorer(); } catch(e) { console.warn('[CodeSmith] Explorer wire skipped:', e.message); }
+	  // Help button
 		    const helpBtn = $('#btn-help');
 		    if (helpBtn) helpBtn.addEventListener('click', openHelp);
 		  }
@@ -8370,7 +8374,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const $ = (sel) => document.querySelector(sel);
 		 
 		  // Bottom bar toggles
-		  $('#btn-toggle-problems').addEventListener('click', () => {
+		  if (!$('#btn-toggle-problems')) return; // Explorer panel not in DOM
+			$('#btn-toggle-problems').addEventListener('click', () => {
 		    const panel = $('#diagnostics-panel');
 		    panel.hidden = !panel.hidden;
 		    $('#btn-toggle-problems').classList.toggle('active', !panel.hidden);
