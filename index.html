@@ -3568,7 +3568,7 @@ async function generate(spec, onStream) {
         { role: 'system', content: systemContent },
         { role: 'user', content: 'Design the architecture.' },
       ],
-      tier: 'fast',
+      tier: 'worker',
       temperature: 0.2,
       maxTokens: 6000,
     })) {
@@ -6698,7 +6698,12 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		            // Going back to A from B
 		            _showStep('a');
 		            _renderSpecCard(CodeSmith.stageA.getSpec(), CodeSmith.stageA.getAssumptions());
-		          } else if (target === 'b' && _currentStep === 'c') {
+		      		 // Pre-fill spec card with goal
+					const specCard = document.querySelector('#stage-a-spec-card');
+					if (specCard && specCard.children.length === 0) {
+					_renderSpecCard(CodeSmith.stageA.getSpec(), {});
+					}
+			      } else if (target === 'b' && _currentStep === 'c') {
 		            _showStep('b');
 		          } else {
 		            _showStep(target);
@@ -6734,7 +6739,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		$('#btn-b-approve').addEventListener('click', async () => {
 			  const skel = CodeSmith.stageB.approve();
 			  if (!skel) return;
-			  await _persistStageState();
+				// Force spec card refresh with latest data
+				_renderSpecCard(CodeSmith.stageA.getSpec(), CodeSmith.stageA.getAssumptions());
+				await _persistStageState();
 			  _showStep('c');
 			  // Day 6: Stage C handles multi-module build; auto-start
 			  _scRenderModuleList();
@@ -6830,7 +6837,31 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		
 		    try {
 		      for await (const ev of CodeSmith.stageA.userTurn(text)) {
-		        if (ev.type === 'spec_updated') {
+		       if (ev.type === 'thinking_delta' || ev.type === 'token_delta') {
+					// Show streaming text in a live bubble
+					if (typingRow.parentNode) typingRow.remove();
+					if (!msgArea._liveBubble) {
+						const aiRow = el('div', { class: 'flex justify-start' });
+						const aiBubble = el('div', { class: 'bubble bubble-assistant', style: 'font-size:13px;max-width:400px;' });
+						aiRow.appendChild(aiBubble);
+						msgArea.appendChild(aiRow);
+						msgArea._liveBubble = aiBubble;
+						msgArea._liveRow = aiRow;
+					}
+					if (ev.type === 'token_delta') {
+						msgArea._liveBubble.textContent += ev.delta;
+					}
+					msgArea.scrollTop = msgArea.scrollHeight;
+					continue;
+					} else if (ev.type === 'spec_updated' || ev.type === 'question_final' || ev.type === 'question' || ev.type === 'ready' || ev.type === 'error') {
+					// Clear live bubble before showing final message
+					if (msgArea._liveBubble) {
+						if (msgArea._liveRow) msgArea._liveRow.remove();
+						msgArea._liveBubble = null;
+						msgArea._liveRow = null;
+					}
+					}
+				if (ev.type === 'spec_updated') {
 		          _renderSpecCard(ev.spec, CodeSmith.stageA.getAssumptions());
 		          const specBody = $('#build-spec-body');
 		          if (specBody) specBody.textContent = JSON.stringify(ev.spec, null, 2);
