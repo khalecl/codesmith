@@ -1290,6 +1290,49 @@
 			body.zen-mode .hairline-t.p-3 { display: none; }
 			body.zen-mode .explorer-editor-header { padding: 4px 12px; }
 			body.zen-mode .explorer-editor { border: none; }
+			/* Explorer model bar */
+				.explorer-model-bar {
+				display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+				border-bottom: 1px solid rgba(255,255,255,0.04);
+				background: #0f1319; flex-shrink: 0;
+				}
+				
+				/* Smart routing indicator */
+				.route-indicator {
+				font-size: 9px; color: #5b6474; font-family: monospace;
+				padding: 2px 0; text-align: center;
+				border-bottom: 1px solid rgba(255,255,255,0.03);
+				}
+				.route-indicator .route-model { color: #4f8cff; }
+				.route-indicator .route-reason { color: #5b6474; font-style: italic; }
+				
+				/* Knowledge panel */
+				.knowledge-section {
+				padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
+				}
+				.knowledge-badge {
+				display: inline-flex; align-items: center; gap: 4px;
+				font-size: 9px; padding: 2px 6px; border-radius: 3px;
+				background: rgba(79,140,255,0.08); color: #4f8cff;
+				font-family: monospace; margin: 1px;
+				}
+				.knowledge-badge.dep { background: rgba(168,85,247,0.08); color: #a855f7; }
+				.knowledge-badge.issue { background: rgba(255,107,107,0.08); color: #ff6b6b; }
+				.knowledge-badge.pattern { background: rgba(74,222,128,0.08); color: #4ade80; }
+				
+				/* Contextual action menu for functions */
+				.fn-action-menu {
+				position: absolute; z-index: 20; min-width: 180px;
+				background: #1a1f2a; border: 1px solid rgba(255,255,255,0.10);
+				border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+				padding: 4px 0; font-size: 11px;
+				}
+				.fn-action-item {
+				padding: 5px 10px; cursor: pointer; color: #8b92a1;
+				display: flex; align-items: center; gap: 6px;
+				}
+				.fn-action-item:hover { background: rgba(79,140,255,0.10); color: #e8ecf1; }
+				.fn-action-icon { font-size: 12px; width: 16px; text-align: center; }
 	</style>
 </head>
 <body class="bg-bg text-text">
@@ -1652,9 +1695,19 @@
 							<button class="ai-tab" data-aitab="pair">Pair Programmer</button>
 							<button class="ai-tab" data-aitab="algo">Algorithm</button>
 						  </div>
-
+								 <div class="explorer-model-bar" id="explorer-model-bar">
+									<span style="font-size:9px;color:#5b6474;text-transform:uppercase;letter-spacing:0.5px;">Model</span>
+									<select id="explorer-model-select" style="flex:1;background:#0f1319;color:#e8ecf1;border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:3px 6px;font-size:10px;font-family:'JetBrains Mono',monospace;">
+									<option value="auto">🧠 Auto (smart routing)</option>
+									<option value="orchestrator">Orchestrator (deep analysis)</option>
+									<option value="worker">Worker (code generation)</option>
+									<option value="fast">Fast (quick answers)</option>
+									</select>
+								</div>
 						  <!-- Analysis tab -->
 						  <div class="explorer-ai-content active" data-aicontent="analysis">
+		        	      <div id="route-indicator" class="route-indicator" hidden></div>
+             				 <div id="knowledge-summary" class="knowledge-section" hidden></div>
 							<div id="explorer-analysis" style="overflow-y:auto;flex:1;">
 							  <div class="explorer-empty">
 								<div class="explorer-empty-icon">🔍</div>
@@ -4445,17 +4498,36 @@ CodeSmith.explorer = Explorer;
 			      try { docsContext = await CodeSmith.pydocs.gatherContext(code); } catch {}
 			    }
 			    const docsSection = docsContext ? `\n\nREFERENCE DOCS (use latest APIs from these):\n${docsContext.slice(0, 6000)}` : '';
-			    const messages = [
-			      { role: 'system', content: PAIR_SYSTEM },
-			      { role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}\n\nRequest: ${question}` },
-			    ];
-
-			for await (const ev of CodeSmith.llm.chat({
-			  messages,
-			  tier: 'orchestrator',
-			  temperature: 0.2,
-			  maxTokens: 8000,
-			})) {
+					 // Smart routing
+						const userModelChoice = document.getElementById('explorer-model-select')?.value || 'auto';
+						const routing = CodeSmith.router.route(question, userModelChoice);
+					
+						// Project context from knowledge graph
+						let projectContext = '';
+						try { projectContext = CodeSmith.knowledge.getProjectContext(); } catch {}
+						const projectSection = projectContext ? `\n\nPROJECT CONTEXT (other files in this project):\n${projectContext.slice(0, 3000)}` : '';
+					
+						// Show routing decision
+						const routeEl = document.getElementById('route-indicator');
+						if (routeEl) {
+						const modelName = CodeSmith.llm.getModelForTier(routing.tier);
+						const displayName = typeof modelName === 'string' ? modelName.split('/').pop() : routing.tier;
+						routeEl.innerHTML = `<span class="route-model">${displayName}</span> <span class="route-reason">— ${routing.reason}</span>`;
+						routeEl.hidden = false;
+						}
+					
+						const messages = [
+						{ role: 'system', content: PAIR_SYSTEM },
+						{ role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}${projectSection}\n\nRequest: ${question}` },
+						];
+					
+						for await (const ev of CodeSmith.llm.chat({
+						messages,
+						tier: routing.tier,
+						temperature: routing.temperature,
+						maxTokens: routing.maxTokens,
+						})) {
+					
 			  if (ev.type === 'token') yield { type: 'token', delta: ev.delta };
 			  else if (ev.type === 'thinking') yield { type: 'thinking', delta: ev.delta };
 			  else if (ev.type === 'done') yield { type: 'done', text: ev.text, thinking: ev.thinking };
@@ -4588,6 +4660,224 @@ CodeSmith.explorer = Explorer;
 		})();
 		CodeSmith.pydocs = PyDocs;
 
+			// === SMART ROUTER — picks best model per task =============================
+				const SmartRouter = (() => {
+				const TASK_PROFILES = {
+					// Task → { tier, reason, maxTokens, temperature }
+					'analyze':      { tier: 'orchestrator', reason: 'deep reasoning needed for quality analysis', maxTokens: 4000, temperature: 0.2 },
+					'fix':          { tier: 'orchestrator', reason: 'bug fixing needs careful reasoning', maxTokens: 6000, temperature: 0.15 },
+					'optimize':     { tier: 'orchestrator', reason: 'optimization needs architectural thinking', maxTokens: 6000, temperature: 0.2 },
+					'refactor':     { tier: 'worker',       reason: 'refactoring is code transformation — worker strength', maxTokens: 8000, temperature: 0.2 },
+					'tests':        { tier: 'worker',       reason: 'test generation is routine code — worker is fast', maxTokens: 8000, temperature: 0.2 },
+					'docs':         { tier: 'fast',         reason: 'docstrings are formulaic — fast model is enough', maxTokens: 4000, temperature: 0.3 },
+					'types':        { tier: 'fast',         reason: 'type hints follow patterns — fast model handles it', maxTokens: 4000, temperature: 0.1 },
+					'explain':      { tier: 'fast',         reason: 'explanation is straightforward', maxTokens: 3000, temperature: 0.3 },
+					'flowchart':    { tier: 'worker',       reason: 'Mermaid generation needs code understanding', maxTokens: 3000, temperature: 0.1 },
+					'security':     { tier: 'orchestrator', reason: 'security review needs careful analysis', maxTokens: 4000, temperature: 0.1 },
+					'general':      { tier: 'orchestrator', reason: 'complex query — using strongest model', maxTokens: 6000, temperature: 0.2 },
+				};
+				
+				function classify(query) {
+					const q = query.toLowerCase();
+					if (/\b(bug|fix|error|crash|fail|broken|wrong|issue)\b/.test(q)) return 'fix';
+					if (/\b(optimi[zs]e|perf|fast|slow|speed|efficien|bottleneck)\b/.test(q)) return 'optimize';
+					if (/\b(refactor|clean|restructure|reorgani[zs]e|simplif)\b/.test(q)) return 'refactor';
+					if (/\b(test|spec|assert|coverage|pytest|unittest)\b/.test(q)) return 'tests';
+					if (/\b(doc|comment|docstring|jsdoc|explain|what does)\b/.test(q)) return 'docs';
+					if (/\b(type|hint|annotation|typing|mypy)\b/.test(q)) return 'types';
+					if (/\b(explain|how|why|what|describe|walk through)\b/.test(q)) return 'explain';
+					if (/\b(flow|chart|diagram|visual|algorithm|mermaid)\b/.test(q)) return 'flowchart';
+					if (/\b(secur|vulnerab|inject|xss|csrf|auth|exploit|sanitiz)\b/.test(q)) return 'security';
+					if (/\b(analy[zs]e|review|audit|assess|evaluat)\b/.test(q)) return 'analyze';
+					return 'general';
+				}
+				
+				function route(query, userOverride) {
+					const taskType = classify(query);
+					const profile = TASK_PROFILES[taskType] || TASK_PROFILES.general;
+				
+					if (userOverride && userOverride !== 'auto') {
+					return {
+						tier: userOverride,
+						taskType,
+						reason: 'user selected ' + userOverride,
+						maxTokens: profile.maxTokens,
+						temperature: profile.temperature,
+						wasOverridden: true,
+					};
+					}
+				
+					return {
+					tier: profile.tier,
+					taskType,
+					reason: profile.reason,
+					maxTokens: profile.maxTokens,
+					temperature: profile.temperature,
+					wasOverridden: false,
+					};
+				}
+				
+				function getTaskProfiles() { return { ...TASK_PROFILES }; }
+				
+				return { classify, route, getTaskProfiles };
+				})();
+				CodeSmith.router = SmartRouter;
+				
+				
+				// === PROJECT KNOWLEDGE GRAPH — accumulates understanding ==================
+				const ProjectKnowledge = (() => {
+				let _knowledge = {
+					files: {},          // { filename: { summary, language, symbols, imports, lastAnalyzed } }
+					callGraph: {},      // { 'module.func': ['module2.func2', ...] }
+					patterns: [],       // detected design patterns
+					issues: [],         // known issues across project
+					dependencies: {},   // external deps with versions
+					conventions: {},    // detected coding conventions (indent, naming, etc.)
+				};
+				
+				function learnFromFile(filename, content, language, analysisResult) {
+					const symbols = [];
+					const fnRegex = language === 'python'
+					? /^(\s*)(def|class|async\s+def)\s+(\w+)\s*\(([^)]*)\)/gm
+					: /^(\s*)(function|class|const|let|var|async\s+function)\s+(\w+)/gm;
+				
+					let match;
+					while ((match = fnRegex.exec(content)) !== null) {
+					const lineNum = content.substring(0, match.index).split('\n').length;
+					const kind = match[2].replace(/async\s+/, '');
+					const name = match[3];
+					const params = match[4] || '';
+					symbols.push({ name, kind, line: lineNum, params });
+					}
+				
+					// Extract imports
+					const imports = [];
+					const importRegex = language === 'python'
+					? /^(?:from\s+(\S+)\s+import\s+(.*)|import\s+(\S+))/gm
+					: /^import\s+(?:{([^}]+)}|(\w+))\s+from\s+['"]([^'"]+)['"]/gm;
+					while ((match = importRegex.exec(content)) !== null) {
+					imports.push({ module: match[1] || match[3] || match[6], names: match[2] || match[4] || match[5] || '' });
+					}
+				
+					// Detect conventions
+					const lines = content.split('\n');
+					const indentCounts = { tab: 0, space2: 0, space4: 0 };
+					for (const line of lines) {
+					if (line.startsWith('\t')) indentCounts.tab++;
+					else if (line.startsWith('    ')) indentCounts.space4++;
+					else if (line.startsWith('  ') && !line.startsWith('    ')) indentCounts.space2++;
+					}
+					const indent = indentCounts.tab > indentCounts.space4 ? 'tabs' : indentCounts.space2 > indentCounts.space4 ? '2 spaces' : '4 spaces';
+				
+					_knowledge.files[filename] = {
+					language,
+					symbols,
+					imports,
+					lineCount: lines.length,
+					indent,
+					lastAnalyzed: Date.now(),
+					summary: analysisResult?.summary || '',
+					};
+				
+					// Update external dependencies
+					for (const imp of imports) {
+					const pkg = (imp.module || '').split('.')[0];
+					if (pkg && !_isStdlib(pkg, language)) {
+						_knowledge.dependencies[pkg] = _knowledge.dependencies[pkg] || { files: [] };
+						if (!_knowledge.dependencies[pkg].files.includes(filename)) {
+						_knowledge.dependencies[pkg].files.push(filename);
+						}
+					}
+					}
+				
+					// Store AI-detected issues
+					if (analysisResult?.issues) {
+					_knowledge.issues = _knowledge.issues.filter(i => i.file !== filename);
+					for (const issue of analysisResult.issues) {
+						_knowledge.issues.push({ ...issue, file: filename });
+					}
+					}
+				}
+				
+				function getProjectContext() {
+					const fileCount = Object.keys(_knowledge.files).length;
+					if (fileCount === 0) return '';
+				
+					const parts = [`Project: ${fileCount} files analyzed`];
+				
+					// File summaries
+					for (const [name, info] of Object.entries(_knowledge.files)) {
+					const symNames = info.symbols.map(s => s.kind + ' ' + s.name).join(', ');
+					parts.push(`${name} (${info.language}, ${info.lineCount}L): ${info.summary || 'no summary'} — defines: ${symNames || 'none'}`);
+					}
+				
+					// Cross-file dependencies
+					const crossDeps = [];
+					for (const [name, info] of Object.entries(_knowledge.files)) {
+					for (const imp of info.imports) {
+						const target = Object.keys(_knowledge.files).find(f => f.replace(/\.\w+$/, '') === imp.module);
+						if (target) crossDeps.push(`${name} imports from ${target}: ${imp.names}`);
+					}
+					}
+					if (crossDeps.length > 0) {
+					parts.push('Cross-file imports: ' + crossDeps.join('; '));
+					}
+				
+					// Known issues
+					const highIssues = _knowledge.issues.filter(i => i.severity === 'high');
+					if (highIssues.length > 0) {
+					parts.push('Known high-severity issues: ' + highIssues.map(i => `${i.file}:${i.line} ${i.message}`).join('; '));
+					}
+				
+					// Conventions
+					const conventions = Object.values(_knowledge.files).map(f => f.indent);
+					const commonIndent = conventions.sort((a, b) => conventions.filter(v => v === a).length - conventions.filter(v => v === b).length).pop();
+					if (commonIndent) parts.push('Convention: ' + commonIndent + ' indentation');
+				
+					return parts.join('\n');
+				}
+				
+				function getFileKnowledge(filename) {
+					return _knowledge.files[filename] || null;
+				}
+				
+				function getSymbolsAcrossProject() {
+					const all = [];
+					for (const [file, info] of Object.entries(_knowledge.files)) {
+					for (const sym of info.symbols) {
+						all.push({ ...sym, file });
+					}
+					}
+					return all;
+				}
+				
+				function getKnownIssues(filename) {
+					if (filename) return _knowledge.issues.filter(i => i.file === filename);
+					return _knowledge.issues.slice();
+				}
+				
+				function getDependencies() { return { ..._knowledge.dependencies }; }
+				
+				function _isStdlib(pkg, language) {
+					if (language !== 'python') return false;
+					const stdlib = ['sys','os','json','re','math','datetime','collections','itertools',
+					'functools','pathlib','typing','dataclasses','enum','abc','io','csv','string',
+					'textwrap','unittest','copy','operator','contextlib','warnings','argparse',
+					'logging','hashlib','http','urllib','socket','struct','array','bisect',
+					'heapq','statistics','decimal','fractions','random','secrets','subprocess',
+					'shutil','glob','tempfile','pickle','shelve','sqlite3','xml','configparser',
+					'asyncio','threading','multiprocessing','queue','signal','time','calendar',
+					'pytest','setuptools','pip'];
+					return stdlib.includes(pkg);
+				}
+				
+				function reset() {
+					_knowledge = { files: {}, callGraph: {}, patterns: [], issues: [], dependencies: {}, conventions: {} };
+				}
+				
+				return { learnFromFile, getProjectContext, getFileKnowledge, getSymbolsAcrossProject, getKnownIssues, getDependencies, reset };
+				})();
+				CodeSmith.knowledge = ProjectKnowledge;
 	// === MONACO EDITOR MANAGER ==================================================
 		const MonacoMgr = (() => {
 		  let _editor = null;
@@ -7749,8 +8039,19 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				docs: 'Add clear docstrings and inline comments explaining the logic.',
 				types: 'Add type hints to all functions and variables.',
 			  };
-			  $('#pair-input').value = map[q] || q;
-			  _pairSend();
+				    const queryText = map[q] || q;
+						$('#pair-input').value = queryText;
+						// Show routing preview
+						const routing = CodeSmith.router.route(queryText, $('#explorer-model-select')?.value || 'auto');
+						const routeEl = $('#route-indicator');
+						if (routeEl) {
+							const modelName = CodeSmith.llm.getModelForTier(routing.tier);
+							const displayName = typeof modelName === 'string' ? modelName.split('/').pop() : routing.tier;
+							routeEl.innerHTML = `<span class="route-model">${displayName}</span> <span class="route-reason">— ${routing.reason}</span>`;
+							routeEl.hidden = false;
+						}
+						_switchToAiTab('pair');
+						_pairSend();
 			});
 		  }
 		  // Wire bottom bar and terminal
@@ -7904,6 +8205,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		 
 		  // Run local analysis
 		  const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
+			// Feed basic structure into knowledge graph (no AI needed)
+			try { CodeSmith.knowledge.learnFromFile(name, file.content, file.language, null); } catch {}
 		  _explorerRenderLocalAnalysis(analysis);
 		}
 
@@ -7968,6 +8271,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				  setTimeout(() => row.classList.remove('highlighted'), 2000);
 				}
 			  });
+			        item.addEventListener('contextmenu', (ev) => {
+						ev.preventDefault();
+						const activeFile = CodeSmith.explorer.getActiveFile();
+						_showFunctionActions(ev.clientX, ev.clientY, sym.name, activeFile, sym.line);
+					});
 			  symSection.appendChild(item);
 			}
 			container.appendChild(symSection);
@@ -8107,6 +8415,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			}
 
 			container.appendChild(aiSection);
+			    // Feed into project knowledge graph
+				try { CodeSmith.knowledge.learnFromFile(name, file.content, file.language, result); } catch {}
+			
+				// Render knowledge summary
+				_renderKnowledgeSummary();
 		  } catch (err) {
 		    console.error('[Explorer] AI analysis error:', err);
 			    const sp = $('#analysis-spinner');
@@ -8332,7 +8645,99 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		  return card;
 		}
-
+				function _renderKnowledgeSummary() {
+					const $ = (sel) => document.querySelector(sel);
+					const el = $('#knowledge-summary');
+					if (!el) return;
+					
+					const files = Object.keys(CodeSmith.knowledge.getDependencies() || {});
+					const allSymbols = CodeSmith.knowledge.getSymbolsAcrossProject();
+					const issues = CodeSmith.knowledge.getKnownIssues();
+					const deps = CodeSmith.knowledge.getDependencies();
+					
+					if (allSymbols.length === 0 && issues.length === 0) { el.hidden = true; return; }
+					el.hidden = false;
+					el.replaceChildren();
+					
+					const label = document.createElement('div');
+					label.className = 'analysis-label';
+					label.style.color = '#a855f7';
+					label.textContent = 'Project Knowledge';
+					el.appendChild(label);
+					
+					// Symbol count
+					const funcs = allSymbols.filter(s => s.kind === 'def' || s.kind === 'function');
+					const classes = allSymbols.filter(s => s.kind === 'class');
+					if (funcs.length > 0 || classes.length > 0) {
+						const line = document.createElement('div');
+						line.style.cssText = 'font-size:10px;color:#8b92a1;margin-bottom:4px;';
+						line.textContent = funcs.length + ' functions, ' + classes.length + ' classes across project';
+						el.appendChild(line);
+					}
+					
+					// External deps
+					const depNames = Object.keys(deps);
+					if (depNames.length > 0) {
+						const depLine = document.createElement('div');
+						depLine.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px;margin-bottom:4px;';
+						for (const d of depNames) {
+						const badge = document.createElement('span');
+						badge.className = 'knowledge-badge dep';
+						badge.textContent = d;
+						badge.title = 'Used in: ' + deps[d].files.join(', ');
+						depLine.appendChild(badge);
+						}
+						el.appendChild(depLine);
+					}
+					
+					// High issues
+					const highIssues = issues.filter(i => i.severity === 'high');
+					if (highIssues.length > 0) {
+						const issLine = document.createElement('div');
+						issLine.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px;';
+						for (const iss of highIssues.slice(0, 5)) {
+						const badge = document.createElement('span');
+						badge.className = 'knowledge-badge issue';
+						badge.textContent = (iss.file || '?') + ':' + (iss.line || '?');
+						badge.title = iss.message;
+						badge.style.cursor = 'pointer';
+						badge.addEventListener('click', () => {
+							const editor = CodeSmith.monaco.getEditor();
+							if (editor && iss.line) {
+							editor.revealLineInCenter(iss.line);
+							editor.setPosition({ lineNumber: iss.line, column: 1 });
+							editor.focus();
+							}
+						});
+						issLine.appendChild(badge);
+						}
+						el.appendChild(issLine);
+					}
+					}
+					
+					// Contextual function actions (right-click on function names in analysis)
+					function _showFunctionActions(x, y, funcName, filename, lineNum) {
+					const pairInput = document.querySelector('#pair-input');
+					_showContextMenu(x, y, [
+						{ label: '🐛 Find bugs in ' + funcName, action: () => { pairInput.value = 'Find bugs in the function ' + funcName + ' (line ' + lineNum + ')'; document.querySelector('#btn-pair-send')?.click(); _switchToAiTab('pair'); } },
+						{ label: '⚡ Optimize ' + funcName, action: () => { pairInput.value = 'Optimize the function ' + funcName + ' for performance'; document.querySelector('#btn-pair-send')?.click(); _switchToAiTab('pair'); } },
+						{ label: '🧪 Write tests for ' + funcName, action: () => { pairInput.value = 'Write comprehensive tests for ' + funcName; document.querySelector('#btn-pair-send')?.click(); _switchToAiTab('pair'); } },
+						{ label: '📝 Document ' + funcName, action: () => { pairInput.value = 'Add a detailed docstring to ' + funcName; document.querySelector('#btn-pair-send')?.click(); _switchToAiTab('pair'); } },
+						'sep',
+						{ label: '🔀 Show flowchart', action: () => { document.querySelector('#btn-explorer-algo')?.click(); _switchToAiTab('algo'); } },
+						{ label: '📋 Go to line ' + lineNum, action: () => { const editor = CodeSmith.monaco.getEditor(); if (editor) { editor.revealLineInCenter(lineNum); editor.setPosition({ lineNumber: lineNum, column: 1 }); editor.focus(); } } },
+					]);
+					}
+					
+					function _switchToAiTab(tabName) {
+					document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+					document.querySelectorAll('.explorer-ai-content').forEach(c => c.classList.remove('active'));
+					const tab = document.querySelector(`.ai-tab[data-aitab="${tabName}"]`);
+					const content = document.querySelector(`[data-aicontent="${tabName}"]`);
+					if (tab) tab.classList.add('active');
+					if (content) content.classList.add('active');
+					}
+					
 	function _showContextMenu(x, y, items) {
 		  // Remove existing
 		  document.querySelectorAll('.ctx-menu').forEach(m => m.remove());
