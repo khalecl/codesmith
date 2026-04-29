@@ -1508,7 +1508,8 @@
 				  <div class="text-muted text-[13px]">Generating skeleton…</div>
 				</div>
 				<div id="stage-b-module-list" class="module-list"></div>
-				<div class="stage-b-actions">
+<div class="stage-b-actions">
+				  <button id="btn-b-export" class="btn" style="font-size:12px;">📥 Export</button>
 				  <button id="btn-b-changes" class="btn" style="font-size:12px;">Request changes</button>
 				  <button id="btn-b-regenerate" class="btn" style="font-size:12px;">Regenerate</button>
 				  <button id="btn-b-approve" class="btn btn-primary" style="font-size:12px;margin-left:auto;">Approve &amp; build</button>
@@ -1641,8 +1642,8 @@
 					        <span style="margin-left:auto;font-size:10px;color:#5b6474;" id="explorer-cursor-pos">Ln 1, Col 1</span>
 					        <span style="font-size:10px;color:#5b6474;" id="explorer-line-info"></span>
 					        <button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Copy</button>
-					        <button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">📸 Snapshot</button>
-					      </div>
+							<button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">📸 Snapshot</button>
+					        <button id="btn-explorer-preview" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" hidden>👁 Preview</button>					      </div>
 					 
 					      <!-- Monaco editor container -->
 					      <div id="monaco-container" class="monaco-container">
@@ -1723,13 +1724,13 @@
 								<div class="explorer-empty-desc">Upload or paste code to see analysis</div>
 							  </div>
 							</div>
-							<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);">
-							 <div id="explorer-token-usage" style="font-size:10px;color:#5b6474;font-family:monospace;text-align:center;padding:2px 0;"></div>
-								<button id="btn-explorer-analyze" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
-								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-								Analyze with AI
-							  </button>
-							</div>
+								<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:4px;">
+								<button id="btn-explorer-algo" class="btn btn-primary" style="font-size:11px;flex:1;" disabled>
+									<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+									Generate Flowchart
+								</button>
+								<button id="btn-explorer-algo-export" class="btn" style="font-size:11px;" disabled title="Export flowchart">📥</button>
+								</div>
 						  </div>
 
 						  <!-- Pair Programmer tab -->
@@ -1779,7 +1780,7 @@
 					  </div>
 					</div>
 					<input type="file" id="explorer-file-input" hidden multiple
-					accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini,.zip" />
+										accept=".py,.js,.ts,.jsx,.tsx,.vue,.html,.css,.json,.md,.txt,.cfg,.toml,.yaml,.yml,.sh,.bat,.sql,.csv,.xml,.env,.gitignore,.ini,.zip,.mmd" />
 						<input type="file" id="explorer-folder-input" hidden webkitdirectory directory multiple />
  
 			</div>
@@ -4361,149 +4362,171 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 CodeSmith.stageC = StageC;
 
 // === CODE EXPLORER MODULE ===================================================
-const Explorer = (() => {
-  let _files = {};       // { filename: { content, language, modified } }
-  let _activeFile = null;
-  let _openTabs = [];    // [filename, ...]
-  let _editMode = false;
+	const Explorer = (() => {
+	let _files = {};       // { filename: { content, language, modified } }
+	let _activeFile = null;
+	let _openTabs = [];    // [filename, ...]
+	let _editMode = false;
+	let _editHistory = [];
 
-  function addFile(name, content) {
-    const lang = _detectLang(name);
-    _files[name] = { content, language: lang, modified: false, original: content };
-    return { name, language: lang, lines: content.split('\n').length };
-  }
+	function addFile(name, content) {
+		const lang = _detectLang(name);
+		_files[name] = { content, language: lang, modified: false, original: content };
+		return { name, language: lang, lines: content.split('\n').length };
+	}
 
-  function getFile(name) { return _files[name] || null; }
-  function getAllFiles() { return { ..._files }; }
-  function getFileList() {
-    return Object.entries(_files).map(([name, f]) => ({
-      name, language: f.language, lines: f.content.split('\n').length, modified: f.modified,
-    }));
-  }
-  function getActiveFile() { return _activeFile; }
-  function setActiveFile(name) { _activeFile = name; }
-  function getOpenTabs() { return _openTabs.slice(); }
+	function getFile(name) { return _files[name] || null; }
+	function getAllFiles() { return { ..._files }; }
+	function getFileList() {
+		return Object.entries(_files).map(([name, f]) => ({
+		name, language: f.language, lines: f.content.split('\n').length, modified: f.modified,
+		}));
+	}
+	function getActiveFile() { return _activeFile; }
+	function setActiveFile(name) { _activeFile = name; }
+	function getOpenTabs() { return _openTabs.slice(); }
 
-  function openTab(name) {
-    if (!_openTabs.includes(name)) _openTabs.push(name);
-    _activeFile = name;
-  }
-  function closeTab(name) {
-    _openTabs = _openTabs.filter(n => n !== name);
-    if (_activeFile === name) _activeFile = _openTabs[_openTabs.length - 1] || null;
-  }
-
-  function updateFileContent(name, newContent) {
-    if (!_files[name]) return;
-    _files[name].content = newContent;
-    _files[name].modified = newContent !== _files[name].original;
-  }
-
-  function applyEdit(filename, edit) {
-    const file = _files[filename];
-    if (!file) return { ok: false, error: 'File not found' };
-    const lines = file.content.split('\n');
-
-    if (edit.type === 'replace') {
-      const start = Math.max(0, edit.startLine - 1);
-      const end = Math.min(lines.length, edit.endLine);
-      const newLines = edit.newCode.split('\n');
-      lines.splice(start, end - start, ...newLines);
-    } else if (edit.type === 'add') {
-      const insertAt = Math.min(lines.length, edit.afterLine);
-      const newLines = edit.newCode.split('\n');
-      lines.splice(insertAt, 0, ...newLines);
-    } else if (edit.type === 'delete') {
-      const start = Math.max(0, edit.startLine - 1);
-      const end = Math.min(lines.length, edit.endLine);
-      lines.splice(start, end - start);
-    }
-
-    file.content = lines.join('\n');
-    file.modified = true;
-    return { ok: true, newContent: file.content };
-  }
-	function deleteFile(name) {
-		delete _files[name];
+	function openTab(name) {
+		if (!_openTabs.includes(name)) _openTabs.push(name);
+		_activeFile = name;
+	}
+	function closeTab(name) {
 		_openTabs = _openTabs.filter(n => n !== name);
 		if (_activeFile === name) _activeFile = _openTabs[_openTabs.length - 1] || null;
 	}
-  function clearAll() {
-    _files = {};
-    _activeFile = null;
-    _openTabs = [];
-  }
 
-  function analyzeCode(content, language) {
-    const lines = content.split('\n');
-    const totalLines = lines.length;
-    const blankLines = lines.filter(l => l.trim() === '').length;
-    const commentLines = lines.filter(l => {
-      const t = l.trim();
-      return t.startsWith('#') || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*');
-    }).length;
-    const codeLines = totalLines - blankLines - commentLines;
+	function updateFileContent(name, newContent) {
+		if (!_files[name]) return;
+		_files[name].content = newContent;
+		_files[name].modified = newContent !== _files[name].original;
+	}
 
-    // Extract functions/classes
-    const symbols = [];
-    const fnRegex = language === 'python'
-      ? /^(\s*)(def|class|async\s+def)\s+(\w+)/gm
-      : /^(\s*)(function|class|const|let|var|export\s+(?:default\s+)?(?:function|class|const))\s+(\w+)/gm;
+		function applyEdit(filename, edit) {
+			const file = _files[filename];
+			if (!file) return { ok: false, error: 'File not found' };
+			const before = file.content;
+			const lines = file.content.split('\n');
 
-    let match;
-    while ((match = fnRegex.exec(content)) !== null) {
-      const lineNum = content.substring(0, match.index).split('\n').length;
-      const indent = match[1].length;
-      const kind = match[2].replace(/async\s+/, '').replace(/export\s+(?:default\s+)?/, '');
-      symbols.push({ name: match[3], kind, line: lineNum, indent });
-    }
+			if (edit.type === 'replace') {
+			const start = Math.max(0, (edit.startLine || 1) - 1);
+			const end = Math.min(lines.length, edit.endLine || edit.startLine);
+			const newLines = (edit.newCode || '').split('\n');
+			lines.splice(start, end - start, ...newLines);
+			} else if (edit.type === 'add') {
+			const insertAt = Math.min(lines.length, edit.afterLine || lines.length);
+			const newLines = (edit.newCode || '').split('\n');
+			lines.splice(insertAt, 0, ...newLines);
+			} else if (edit.type === 'delete') {
+			const start = Math.max(0, (edit.startLine || 1) - 1);
+			const end = Math.min(lines.length, edit.endLine || edit.startLine);
+			lines.splice(start, end - start);
+			} else {
+			return { ok: false, error: 'Unknown edit type: ' + edit.type };
+			}
 
-    // Complexity estimate
-    const branchKeywords = language === 'python'
-      ? ['if ', 'elif ', 'for ', 'while ', 'except ', 'with ']
-      : ['if ', 'else if', 'for ', 'while ', 'catch ', 'switch ', '? ', '&&', '||'];
-    let branchCount = 0;
-    for (const line of lines) {
-      const t = line.trim();
-      for (const kw of branchKeywords) {
-        if (t.startsWith(kw) || t.includes(kw)) { branchCount++; break; }
-      }
-    }
-    const complexityScore = Math.min(100, Math.round((branchCount / Math.max(codeLines, 1)) * 200));
+			file.content = lines.join('\n');
+			file.modified = true;
+			_editHistory.push({
+			filename, before, after: file.content,
+			label: (edit.reason || edit.type), timestamp: Date.now(), edit,
+			});
+			if (_editHistory.length > 50) _editHistory.shift();
+			return { ok: true, newContent: file.content };
+		}
 
-    // Imports
-    const imports = [];
-    const importRegex = language === 'python'
-      ? /^(?:from\s+(\S+)\s+import|import\s+(\S+))/gm
-      : /^import\s+.*?from\s+['"]([^'"]+)['"]/gm;
-    while ((match = importRegex.exec(content)) !== null) {
-      imports.push(match[1] || match[2] || match[3]);
-    }
+		function getEditHistory() { return _editHistory.slice(); }
 
-    return {
-      totalLines, blankLines, commentLines, codeLines,
-      symbols, imports, branchCount, complexityScore,
-      commentRatio: totalLines > 0 ? Math.round((commentLines / totalLines) * 100) : 0,
-    };
-  }
+		function undoLastEdit() {
+			const last = _editHistory.pop();
+			if (!last) return null;
+			const f = _files[last.filename];
+			if (!f) return null;
+			f.content = last.before;
+			f.modified = f.content !== f.original;
+			return last;
+		}
+		function deleteFile(name) {
+			delete _files[name];
+			_openTabs = _openTabs.filter(n => n !== name);
+			if (_activeFile === name) _activeFile = _openTabs[_openTabs.length - 1] || null;
+		}
+	function clearAll() {
+		_files = {};
+		_activeFile = null;
+		_openTabs = [];
+	}
 
-  function _detectLang(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const map = {
-      py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript',
-      tsx: 'typescript', vue: 'vue', html: 'html', css: 'css',
-      json: 'json', md: 'markdown', txt: 'text', sh: 'bash',
-      sql: 'sql', yaml: 'yaml', yml: 'yaml', toml: 'toml',
-    };
-    return map[ext] || 'text';
-  }
+	function analyzeCode(content, language) {
+		const lines = content.split('\n');
+		const totalLines = lines.length;
+		const blankLines = lines.filter(l => l.trim() === '').length;
+		const commentLines = lines.filter(l => {
+		const t = l.trim();
+		return t.startsWith('#') || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*');
+		}).length;
+		const codeLines = totalLines - blankLines - commentLines;
 
-  return {
-    addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
-    getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
-    clearAll, deleteFile, analyzeCode,
-  };
-})();
+		// Extract functions/classes
+		const symbols = [];
+		const fnRegex = language === 'python'
+		? /^(\s*)(def|class|async\s+def)\s+(\w+)/gm
+		: /^(\s*)(function|class|const|let|var|export\s+(?:default\s+)?(?:function|class|const))\s+(\w+)/gm;
+
+		let match;
+		while ((match = fnRegex.exec(content)) !== null) {
+		const lineNum = content.substring(0, match.index).split('\n').length;
+		const indent = match[1].length;
+		const kind = match[2].replace(/async\s+/, '').replace(/export\s+(?:default\s+)?/, '');
+		symbols.push({ name: match[3], kind, line: lineNum, indent });
+		}
+
+		// Complexity estimate
+		const branchKeywords = language === 'python'
+		? ['if ', 'elif ', 'for ', 'while ', 'except ', 'with ']
+		: ['if ', 'else if', 'for ', 'while ', 'catch ', 'switch ', '? ', '&&', '||'];
+		let branchCount = 0;
+		for (const line of lines) {
+		const t = line.trim();
+		for (const kw of branchKeywords) {
+			if (t.startsWith(kw) || t.includes(kw)) { branchCount++; break; }
+		}
+		}
+		const complexityScore = Math.min(100, Math.round((branchCount / Math.max(codeLines, 1)) * 200));
+
+		// Imports
+		const imports = [];
+		const importRegex = language === 'python'
+		? /^(?:from\s+(\S+)\s+import|import\s+(\S+))/gm
+		: /^import\s+.*?from\s+['"]([^'"]+)['"]/gm;
+		while ((match = importRegex.exec(content)) !== null) {
+		imports.push(match[1] || match[2] || match[3]);
+		}
+
+		return {
+		totalLines, blankLines, commentLines, codeLines,
+		symbols, imports, branchCount, complexityScore,
+		commentRatio: totalLines > 0 ? Math.round((commentLines / totalLines) * 100) : 0,
+		};
+	}
+
+	function _detectLang(filename) {
+		const ext = filename.split('.').pop().toLowerCase();
+		const map = {
+		py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript',
+		tsx: 'typescript', vue: 'vue', html: 'html', css: 'css',
+		json: 'json', md: 'markdown', txt: 'text', sh: 'bash',
+		sql: 'sql', yaml: 'yaml', yml: 'yaml', toml: 'toml',
+		};
+		return map[ext] || 'text';
+	}
+
+		return {
+			addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
+			getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
+			getEditHistory, undoLastEdit,
+			clearAll, deleteFile, analyzeCode,
+		};
+	})();
 CodeSmith.explorer = Explorer;
 
 
@@ -6219,6 +6242,88 @@ function wireComposer() {
 		const scModList = $('#sc-module-list');
 		if (scModList) scModList.replaceChildren();
 	}
+
+			function downloadSVGAsImage(svgEl, filename) {
+			if (!svgEl) return;
+			const clone = svgEl.cloneNode(true);
+			if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+			const bbox = svgEl.getBBox ? svgEl.getBBox() : { width: svgEl.clientWidth || 800, height: svgEl.clientHeight || 600 };
+			const w = bbox.width || 800;
+			const h = bbox.height || 600;
+			if (!clone.getAttribute('width')) clone.setAttribute('width', w);
+			if (!clone.getAttribute('height')) clone.setAttribute('height', h);
+			const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			bg.setAttribute('width', '100%');
+			bg.setAttribute('height', '100%');
+			bg.setAttribute('fill', '#0b0d10');
+			clone.insertBefore(bg, clone.firstChild);
+			const svgStr = new XMLSerializer().serializeToString(clone);
+			const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(svgBlob);
+			a.download = filename + '.svg';
+			a.click();
+			URL.revokeObjectURL(a.href);
+			const img = new Image();
+			const url = URL.createObjectURL(svgBlob);
+			img.onload = () => {
+			const canvas = document.createElement('canvas');
+			const scale = 2;
+			canvas.width = w * scale;
+			canvas.height = h * scale;
+			const ctx = canvas.getContext('2d');
+			ctx.fillStyle = '#0b0d10';
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			ctx.scale(scale, scale);
+			ctx.drawImage(img, 0, 0, w, h);
+			canvas.toBlob((blob) => {
+				const a2 = document.createElement('a');
+				a2.href = URL.createObjectURL(blob);
+				a2.download = filename + '.png';
+				a2.click();
+				URL.revokeObjectURL(a2.href);
+			}, 'image/png');
+			URL.revokeObjectURL(url);
+			};
+			img.onerror = () => URL.revokeObjectURL(url);
+			img.src = url;
+		}
+
+		function downloadMermaidDef(def, filename) {
+			const blob = new Blob([def], { type: 'text/plain;charset=utf-8' });
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(blob);
+			a.download = filename + '.mmd';
+			a.click();
+			URL.revokeObjectURL(a.href);
+		}
+
+		function showDiagramExportMenu(anchorBtn, svgEl, mermaidDef, baseName) {
+			document.querySelectorAll('.ctx-menu').forEach(m => m.remove());
+			const rect = anchorBtn.getBoundingClientRect();
+			const menu = document.createElement('div');
+			menu.className = 'ctx-menu';
+			menu.style.left = rect.left + 'px';
+			menu.style.top = (rect.bottom + 4) + 'px';
+			const items = [
+			{ label: '📷 Download as PNG', action: () => downloadSVGAsImage(svgEl, baseName) },
+			{ label: '🎨 Download as SVG', action: () => downloadSVGAsImage(svgEl, baseName) },
+			{ label: '📄 Download .mmd source', action: () => downloadMermaidDef(mermaidDef, baseName) },
+			{ label: '📋 Copy Mermaid source', action: () => navigator.clipboard.writeText(mermaidDef) },
+			];
+			for (const item of items) {
+			const row = document.createElement('div');
+			row.className = 'ctx-menu-item';
+			row.textContent = item.label;
+			row.addEventListener('click', () => { menu.remove(); item.action(); });
+			menu.appendChild(row);
+			}
+			document.body.appendChild(menu);
+			setTimeout(() => {
+			const close = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', close); } };
+			document.addEventListener('click', close);
+			}, 0);
+		}
   // ---- wiring -------------------------------------------------------------
   function wire() {
     $('#btn-new-session').addEventListener('click', newSession);
@@ -6979,7 +7084,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		$('#btn-b-regenerate').addEventListener('click', () => {
 		  _generateSkeleton();
 		});
-
+		$('#btn-b-export').addEventListener('click', (ev) => {
+			const svg = $('#mermaid-container').querySelector('svg');
+			const def = CodeSmith.stageB.getMermaidDef();
+			const skel = CodeSmith.stageB.getSkeleton();
+			const name = (skel && skel.summary) ? skel.summary.slice(0, 30).replace(/\W+/g, '_') : 'skeleton';
+			showDiagramExportMenu(ev.target, svg, def, name);
+			});
 		$('#btn-b-changes').addEventListener('click', () => {
 		  const changePrompt = prompt('What would you like to change?');
 		  if (!changePrompt) return;
@@ -8344,8 +8455,22 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			$('#explorer-file-input').click();
 		  });
 			$('#explorer-file-input').addEventListener('change', async (ev) => {
-				for (const file of ev.target.files) {
-				if (file.name.endsWith('.zip') && typeof JSZip !== 'undefined') {
+					for (const file of ev.target.files) {
+					if (file.name.endsWith('.mmd')) {
+						const text = await file.text();
+						CodeSmith.explorer.addFile(file.name, text);
+						window._lastAlgoDef = text;
+						const container = $('#algo-container');
+						container.innerHTML = '';
+						const div = document.createElement('div');
+						div.className = 'mermaid';
+						div.textContent = text;
+						container.appendChild(div);
+						try { await mermaid.run({ nodes: [div] }); } catch {}
+						$('#btn-explorer-algo-export').disabled = false;
+						continue;
+					}
+					if (file.name.endsWith('.zip') && typeof JSZip !== 'undefined') {
 					// Extract zip
 					try {
 					const zip = await JSZip.loadAsync(file);
@@ -8466,6 +8591,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		  // Algorithm button
 		  $('#btn-explorer-algo').addEventListener('click', _explorerRunAlgo);
+		  const algoExportBtn = $('#btn-explorer-algo-export');
+		  if (algoExportBtn) algoExportBtn.addEventListener('click', (ev) => {
+		    const svg = $('#algo-container').querySelector('svg');
+		    const def = window._lastAlgoDef || '';
+		    const name = (CodeSmith.explorer.getActiveFile() || 'flowchart').replace(/\W+/g, '_');
+		    showDiagramExportMenu(ev.target, svg, def, name + '_flow');
+		  });
 
 		  // Pair programmer send
 		  $('#btn-pair-send').addEventListener('click', _pairSend);
@@ -8502,8 +8634,35 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  }
 		  // Wire bottom bar and terminal
 		  _wireExploreMode();
-		  // Copy file button
-		  $('#btn-explorer-copy-file').addEventListener('click', () => {
+
+				// Preview button
+				const previewBtn = $('#btn-explorer-preview');
+				if (previewBtn) previewBtn.addEventListener('click', () => {
+					const name = CodeSmith.explorer.getActiveFile();
+					if (!name) return;
+					const file = CodeSmith.explorer.getFile(name);
+					if (!file) return;
+					let html = file.content;
+					if (file.language !== 'html') {
+					if (file.language === 'css') {
+						html = '<!DOCTYPE html><html><head><style>' + html + '</style></head><body><div style="padding:20px;font-family:system-ui;"><h1>Heading 1</h1><h2>Heading 2</h2><p>Paragraph with <a href="#">a link</a> and <strong>bold</strong>.</p><button>Button</button><input placeholder="input"/></div></body></html>';
+					} else if (file.language === 'javascript') {
+						const escaped = html.replace(/<\/script>/gi, '<\\/script>');
+						html = '<!DOCTYPE html><html><head><title>JS Preview</title><style>body{font-family:monospace;background:#0b0d10;color:#e8ecf1;padding:20px;}</style></head><body><div id="output" style="white-space:pre-wrap;"></div><script>const _log=console.log;console.log=(...a)=>{document.getElementById("output").textContent+=a.join(" ")+"\\n";_log(...a);};window.onerror=(m)=>{document.getElementById("output").textContent+="ERROR: "+m+"\\n";};try{' + escaped + '}catch(e){document.getElementById("output").textContent+="ERROR: "+e.message;}</script></body></html>';
+					} else {
+						alert('Preview only works for HTML, CSS, and JS files.');
+						return;
+					}
+					}
+					const blob = new Blob([html], { type: 'text/html' });
+					const url = URL.createObjectURL(blob);
+					const win = window.open(url, '_blank');
+					if (!win) { alert('Popup blocked. Allow popups for this site.'); URL.revokeObjectURL(url); return; }
+					setTimeout(() => URL.revokeObjectURL(url), 60000);
+				});
+
+		// Copy file button
+		$('#btn-explorer-copy-file').addEventListener('click', () => {
 			const name = CodeSmith.explorer.getActiveFile();
 			if (!name) return;
 			const file = CodeSmith.explorer.getFile(name);
@@ -8627,10 +8786,15 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const file = CodeSmith.explorer.getFile(name);
 		  if (!file) return;
 		 
-		  $('#explorer-editor-header').hidden = false;
-		  $('#explorer-file-path').textContent = name;
-		  const lines = file.content.split('\n');
-		  $('#explorer-line-info').textContent = lines.length + ' lines';
+			$('#explorer-editor-header').hidden = false;
+			$('#explorer-file-path').textContent = name;
+			const lines = file.content.split('\n');
+			$('#explorer-line-info').textContent = lines.length + ' lines';
+			const previewBtn2 = $('#btn-explorer-preview');
+			if (previewBtn2) {
+				const previewable = ['html', 'css', 'javascript'];
+				previewBtn2.hidden = !previewable.includes(file.language);
+			}
 		 
 		  // Remove drop zone if present
 		  const dz = $('#explorer-drop-zone');
@@ -8660,7 +8824,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
 			// Feed basic structure into knowledge graph (no AI needed)
 			try { CodeSmith.knowledge.learnFromFile(name, file.content, file.language, null); } catch {}
-		  _explorerRenderLocalAnalysis(analysis);
+			_explorerRenderLocalAnalysis(analysis);
+					_renderEditHistory();
 		}
 
 		function _explorerRenderLocalAnalysis(analysis) {
@@ -8749,7 +8914,49 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			container.appendChild(impSection);
 		  }
 		}
-
+		function _renderEditHistory() {
+			let panel = document.getElementById('edit-history-panel');
+			if (!panel) {
+			panel = document.createElement('div');
+			panel.id = 'edit-history-panel';
+			panel.style.cssText = 'border-top:1px solid rgba(255,255,255,0.06);max-height:140px;overflow-y:auto;background:#0f1319;';
+			const pairChat = document.getElementById('pair-chat');
+			if (pairChat && pairChat.parentElement) {
+				pairChat.parentElement.insertBefore(panel, pairChat.nextSibling);
+			}
+			}
+			panel.replaceChildren();
+			const history = CodeSmith.explorer.getEditHistory();
+			if (history.length === 0) { panel.style.display = 'none'; return; }
+			panel.style.display = 'block';
+			const header = document.createElement('div');
+			header.style.cssText = 'padding:4px 10px;font-size:10px;color:#5b6474;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;display:flex;align-items:center;';
+			header.textContent = 'Edit History (' + history.length + ')';
+			const undoBtn = document.createElement('button');
+			undoBtn.className = 'btn btn-ghost';
+			undoBtn.style.cssText = 'margin-left:auto;font-size:10px;padding:1px 6px;';
+			undoBtn.textContent = '↶ Undo last';
+			undoBtn.addEventListener('click', () => {
+			const last = CodeSmith.explorer.undoLastEdit();
+			if (last && CodeSmith.monaco.isInitialized()) {
+				CodeSmith.monaco.updateContent(last.filename, last.before);
+			}
+			_renderEditHistory();
+			_explorerRenderTree();
+			});
+			header.appendChild(undoBtn);
+			panel.appendChild(header);
+			for (const h of history.slice().reverse()) {
+			const row = document.createElement('div');
+			row.style.cssText = 'padding:3px 10px;font-size:11px;color:#8b92a1;display:flex;gap:6px;';
+			const time = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+			row.innerHTML = '<span style="color:#5b6474;font-family:monospace;font-size:10px;">' + time +
+							'</span><span style="color:#4ade80;">✓</span>' +
+							'<span style="font-family:monospace;font-size:10px;">' + h.filename + '</span>' +
+							'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + h.label + '</span>';
+			panel.appendChild(row);
+			}
+		}
 		function _explorerResetAnalysis() {
 		  const $ = (sel) => document.querySelector(sel);
 		  const container = $('#explorer-analysis');
@@ -8899,8 +9106,10 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  btn.textContent = 'Generating…';
 
 		  try {
-			const mermaidDef = await CodeSmith.pair.generateFlowchart(file.content, name, file.language);
-			const container = $('#algo-container');
+				const mermaidDef = await CodeSmith.pair.generateFlowchart(file.content, name, file.language);
+				window._lastAlgoDef = mermaidDef;
+				$('#btn-explorer-algo-export').disabled = false;
+				const container = $('#algo-container');
 			container.innerHTML = '';
 			const mermaidDiv = document.createElement('div');
 			mermaidDiv.className = 'mermaid';
@@ -8981,15 +9190,76 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			}
 
 			// Parse edit instructions from response
-			const edits = CodeSmith.pair.parseEdits(fullText);
-			if (edits.length > 0) {
-			  for (let i = 0; i < edits.length; i++) {
-				const edit = edits[i];
-				const card = _createEditCard(edit, i, name);
-				aiCol.appendChild(card);
-			  }
-			  chat.scrollTop = chat.scrollHeight;
-			}
+				const edits = CodeSmith.pair.parseEdits(fullText);
+				if (edits.length > 0) {
+				for (let i = 0; i < edits.length; i++) {
+					const edit = edits[i];
+					const card = _createEditCard(edit, i, name);
+					aiCol.appendChild(card);
+				}
+				if (edits.length > 1) {
+					const applyAllBtn = document.createElement('button');
+					applyAllBtn.className = 'edit-apply-btn';
+					applyAllBtn.style.cssText = 'margin:4px 0;width:100%;padding:6px;font-size:11px;';
+					applyAllBtn.textContent = '✓ Apply all ' + edits.length + ' edits';
+					applyAllBtn.addEventListener('click', () => {
+					const sorted = [...edits].sort((a, b) => (b.startLine || b.afterLine || 0) - (a.startLine || a.afterLine || 0));
+					let applied = 0;
+					for (const e of sorted) {
+						const r = CodeSmith.explorer.applyEdit(name, e);
+						if (r.ok) applied++;
+					}
+					const file2 = CodeSmith.explorer.getFile(name);
+					if (file2 && CodeSmith.monaco.isInitialized()) {
+						CodeSmith.monaco.updateContent(name, file2.content);
+					}
+					_explorerRenderTree();
+					_renderEditHistory();
+					applyAllBtn.textContent = '✓ Applied ' + applied + ' / ' + edits.length;
+					applyAllBtn.disabled = true;
+					aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
+					});
+					aiCol.insertBefore(applyAllBtn, aiCol.children[1]);
+				}
+				chat.scrollTop = chat.scrollHeight;
+				} else if (fullText.includes('```')) {
+				const codeBlocks = [...fullText.matchAll(/```(?:\w+)?\n([\s\S]*?)```/g)].map(m => m[1]);
+				if (codeBlocks.length > 0) {
+					const hint = document.createElement('div');
+					hint.style.cssText = 'margin:6px 0;padding:8px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:11px;color:#f59e0b;';
+					hint.textContent = '⚠ The AI returned code blocks but not in the structured edit format. Pick how to apply:';
+					aiCol.appendChild(hint);
+					codeBlocks.forEach((code, i) => {
+					const row = document.createElement('div');
+					row.style.cssText = 'display:flex;gap:4px;margin:4px 0;';
+					const replaceBtn = document.createElement('button');
+					replaceBtn.className = 'edit-apply-btn';
+					replaceBtn.style.fontSize = '10px';
+					replaceBtn.textContent = 'Replace entire file with block ' + (i + 1);
+					replaceBtn.addEventListener('click', () => {
+						if (!confirm('Replace the entire file with this code block?')) return;
+						CodeSmith.explorer.updateFileContent(name, code);
+						if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.updateContent(name, code);
+						try { CodeSmith.snapshots.take(name, code, 'Manual replace from chat'); } catch {}
+						_explorerRenderTree();
+						replaceBtn.textContent = '✓ Replaced';
+						replaceBtn.disabled = true;
+					});
+					const copyBtn = document.createElement('button');
+					copyBtn.className = 'edit-show-btn';
+					copyBtn.style.fontSize = '10px';
+					copyBtn.textContent = 'Copy block ' + (i + 1);
+					copyBtn.addEventListener('click', () => {
+						navigator.clipboard.writeText(code);
+						copyBtn.textContent = '✓ Copied';
+					});
+					row.appendChild(replaceBtn);
+					row.appendChild(copyBtn);
+					aiCol.appendChild(row);
+					});
+					chat.scrollTop = chat.scrollHeight;
+				}
+				}
 		  // Update token display
 		    const budget = CodeSmith.llm.getBudget();
 		    const tokenEl = document.querySelector('#explorer-token-usage');
@@ -9058,18 +9328,27 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const applyBtn = document.createElement('button');
 		  applyBtn.className = 'edit-apply-btn';
 		  applyBtn.textContent = '✓ Apply';
-		  applyBtn.addEventListener('click', () => {
-			const result = CodeSmith.explorer.applyEdit(filename, edit);
-			if (result.ok) {
-			  card.classList.add('edit-applied');
-			  applyBtn.textContent = 'Applied';
-			  _explorerShowFile(filename);
-			  _explorerRenderTree();
-			} else {
-			  applyBtn.textContent = 'Failed: ' + result.error;
-			  applyBtn.style.color = '#ff6b6b';
-			}
-		  });
+			applyBtn.addEventListener('click', () => {
+				const result = CodeSmith.explorer.applyEdit(filename, edit);
+				if (result.ok) {
+				card.classList.add('edit-applied');
+				applyBtn.textContent = '✓ Applied';
+				if (CodeSmith.monaco.isInitialized()) {
+					CodeSmith.monaco.updateContent(filename, result.newContent);
+				}
+				_explorerRenderTree();
+				_renderEditHistory();
+				try { CodeSmith.snapshots.take(filename, result.newContent, 'After: ' + (edit.reason || edit.type).slice(0, 40)); } catch {}
+				const toast = document.createElement('div');
+				toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#4ade80;color:#0b0d10;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;';
+				toast.textContent = '✓ Edit applied to ' + filename;
+				document.body.appendChild(toast);
+				setTimeout(() => toast.remove(), 2000);
+				} else {
+				applyBtn.textContent = '✗ ' + result.error;
+				applyBtn.style.color = '#ff6b6b';
+				}
+			});
 		  actions.appendChild(applyBtn);
 
 		  const showBtn = document.createElement('button');
