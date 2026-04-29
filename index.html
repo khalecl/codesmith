@@ -8646,20 +8646,33 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 					if (file.language !== 'html') {
 					if (file.language === 'css') {
 						html = '<!DOCTYPE html><html><head><style>' + html + '</style></head><body><div style="padding:20px;font-family:system-ui;"><h1>Heading 1</h1><h2>Heading 2</h2><p>Paragraph with <a href="#">a link</a> and <strong>bold</strong>.</p><button>Button</button><input placeholder="input"/></div></body></html>';
-					} else if (file.language === 'javascript') {
-						const escaped = html.replace(/<\/script>/gi, '<\\/script>');
-						html = '<!DOCTYPE html><html><head><title>JS Preview</title><style>body{font-family:monospace;background:#0b0d10;color:#e8ecf1;padding:20px;}</style></head><body><div id="output" style="white-space:pre-wrap;"></div><script>const _log=console.log;console.log=(...a)=>{document.getElementById("output").textContent+=a.join(" ")+"\\n";_log(...a);};window.onerror=(m)=>{document.getElementById("output").textContent+="ERROR: "+m+"\\n";};try{' + escaped + '}catch(e){document.getElementById("output").textContent+="ERROR: "+e.message;}</script></body></html>';
-					} else {
-						alert('Preview only works for HTML, CSS, and JS files.');
-						return;
-					}
-					}
-					const blob = new Blob([html], { type: 'text/html' });
-					const url = URL.createObjectURL(blob);
-					const win = window.open(url, '_blank');
-					if (!win) { alert('Popup blocked. Allow popups for this site.'); URL.revokeObjectURL(url); return; }
-					setTimeout(() => URL.revokeObjectURL(url), 60000);
-				});
+								} else if (file.language === 'javascript') {
+									const SCRIPT_OPEN  = '<' + 'script>';
+									const SCRIPT_CLOSE = '<' + '/' + 'script>';
+									const escaped = html.split(SCRIPT_CLOSE).join('<' + '\\/' + 'script>');
+										html = [
+										'<!DOCTYPE html><html><head><title>JS Preview</title>',
+										'<style>body{font-family:monospace;background:#0b0d10;color:#e8ecf1;padding:20px;}</style>',
+										'</head><body><div id="output" style="white-space:pre-wrap;"></div>',
+										SCRIPT_OPEN,
+										'const _log=console.log;',
+										'console.log=(...a)=>{document.getElementById("output").textContent+=a.join(" ")+"\\n";_log(...a);};',
+										'window.onerror=(m)=>{document.getElementById("output").textContent+="ERROR: "+m+"\\n";};',
+										'try{', escaped, '}catch(e){document.getElementById("output").textContent+="ERROR: "+e.message;}',
+										SCRIPT_CLOSE,
+										'</body></html>'
+										].join('');
+		   					   } else {
+								alert('Preview only works for HTML, CSS, and JS files.');
+								return;
+						}
+						}
+						const blob = new Blob([html], { type: 'text/html' });
+						const url = URL.createObjectURL(blob);
+						const win = window.open(url, '_blank');
+						if (!win) { alert('Popup blocked. Allow popups for this site.'); URL.revokeObjectURL(url); return; }
+						setTimeout(() => URL.revokeObjectURL(url), 60000);
+					});
 
 		// Copy file button
 		$('#btn-explorer-copy-file').addEventListener('click', () => {
