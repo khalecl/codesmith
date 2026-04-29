@@ -1508,6 +1508,7 @@
 				  <div class="text-muted text-[13px]">Generating skeleton…</div>
 				</div>
 				<div id="stage-b-module-list" class="module-list"></div>
+				<button id="btn-b-export" class="btn" style="font-size:12px;">📥 Export</button>
 				<div class="stage-b-actions">
 				  <button id="btn-b-changes" class="btn" style="font-size:12px;">Request changes</button>
 				  <button id="btn-b-regenerate" class="btn" style="font-size:12px;">Regenerate</button>
@@ -1642,6 +1643,7 @@
 					        <span style="font-size:10px;color:#5b6474;" id="explorer-line-info"></span>
 					        <button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Copy</button>
 					        <button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">📸 Snapshot</button>
+							<button id="btn-explorer-preview" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" hidden>👁 Preview</button>
 					      </div>
 					 
 					      <!-- Monaco editor container -->
@@ -1768,12 +1770,13 @@
 								<div class="explorer-empty-desc">Generates a visual flowchart of the code's logic and control flow</div>
 							  </div>
 							</div>
-							<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);">
-							  <button id="btn-explorer-algo" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
-								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-								Generate Flowchart
-							  </button>
-							</div>
+								<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:4px;">
+								<button id="btn-explorer-algo" class="btn btn-primary" style="font-size:11px;flex:1;" disabled>
+									<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+									Generate Flowchart
+								</button>
+								<button id="btn-explorer-algo-export" class="btn" style="font-size:11px;" disabled title="Export flowchart">📥</button>
+								</div>
 						  </div>
 						</div>
 					  </div>
@@ -4362,6 +4365,7 @@ CodeSmith.stageC = StageC;
 
 // === CODE EXPLORER MODULE ===================================================
 const Explorer = (() => {
+  let _editHistory = [];  // [{ filename, before, after, label, timestamp, edits }]
   let _files = {};       // { filename: { content, language, modified } }
   let _activeFile = null;
   let _openTabs = [];    // [filename, ...]
@@ -4399,30 +4403,50 @@ const Explorer = (() => {
     _files[name].modified = newContent !== _files[name].original;
   }
 
-  function applyEdit(filename, edit) {
-    const file = _files[filename];
-    if (!file) return { ok: false, error: 'File not found' };
-    const lines = file.content.split('\n');
+	function applyEdit(filename, edit) {
+		const file = _files[filename];
+		if (!file) return { ok: false, error: 'File not found' };
+		const before = file.content;
+		const lines = file.content.split('\n');
 
-    if (edit.type === 'replace') {
-      const start = Math.max(0, edit.startLine - 1);
-      const end = Math.min(lines.length, edit.endLine);
-      const newLines = edit.newCode.split('\n');
-      lines.splice(start, end - start, ...newLines);
-    } else if (edit.type === 'add') {
-      const insertAt = Math.min(lines.length, edit.afterLine);
-      const newLines = edit.newCode.split('\n');
-      lines.splice(insertAt, 0, ...newLines);
-    } else if (edit.type === 'delete') {
-      const start = Math.max(0, edit.startLine - 1);
-      const end = Math.min(lines.length, edit.endLine);
-      lines.splice(start, end - start);
-    }
+		if (edit.type === 'replace') {
+		const start = Math.max(0, (edit.startLine || 1) - 1);
+		const end = Math.min(lines.length, edit.endLine || edit.startLine);
+		const newLines = (edit.newCode || '').split('\n');
+		lines.splice(start, end - start, ...newLines);
+		} else if (edit.type === 'add') {
+		const insertAt = Math.min(lines.length, edit.afterLine || lines.length);
+		const newLines = (edit.newCode || '').split('\n');
+		lines.splice(insertAt, 0, ...newLines);
+		} else if (edit.type === 'delete') {
+		const start = Math.max(0, (edit.startLine || 1) - 1);
+		const end = Math.min(lines.length, edit.endLine || edit.startLine);
+		lines.splice(start, end - start);
+		} else {
+		return { ok: false, error: 'Unknown edit type: ' + edit.type };
+		}
 
-    file.content = lines.join('\n');
-    file.modified = true;
-    return { ok: true, newContent: file.content };
-  }
+		file.content = lines.join('\n');
+		file.modified = true;
+		_editHistory.push({
+		filename, before, after: file.content,
+		label: (edit.reason || edit.type), timestamp: Date.now(), edit,
+		});
+		if (_editHistory.length > 50) _editHistory.shift();
+		return { ok: true, newContent: file.content };
+	}
+
+	function getEditHistory() { return _editHistory.slice(); }
+
+	function undoLastEdit() {
+		const last = _editHistory.pop();
+		if (!last) return null;
+		const f = _files[last.filename];
+		if (!f) return null;
+		f.content = last.before;
+		f.modified = f.content !== f.original;
+		return last;
+	}
 	function deleteFile(name) {
 		delete _files[name];
 		_openTabs = _openTabs.filter(n => n !== name);
@@ -6219,6 +6243,92 @@ function wireComposer() {
 		const scModList = $('#sc-module-list');
 		if (scModList) scModList.replaceChildren();
 	}
+		function downloadSVGAsImage(svgEl, filename) {
+			if (!svgEl) return;
+			const clone = svgEl.cloneNode(true);
+			if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+			const bbox = svgEl.getBBox ? svgEl.getBBox() : { width: svgEl.clientWidth || 800, height: svgEl.clientHeight || 600 };
+			const w = bbox.width || 800;
+			const h = bbox.height || 600;
+			if (!clone.getAttribute('width')) clone.setAttribute('width', w);
+			if (!clone.getAttribute('height')) clone.setAttribute('height', h);
+			// Wrap with dark background
+			const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			bg.setAttribute('width', '100%');
+			bg.setAttribute('height', '100%');
+			bg.setAttribute('fill', '#0b0d10');
+			clone.insertBefore(bg, clone.firstChild);
+			const svgStr = new XMLSerializer().serializeToString(clone);
+			const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+
+			// Download SVG directly
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(svgBlob);
+			a.download = filename + '.svg';
+			a.click();
+			URL.revokeObjectURL(a.href);
+
+			// Also offer PNG via canvas
+			const img = new Image();
+			const url = URL.createObjectURL(svgBlob);
+			img.onload = () => {
+			const canvas = document.createElement('canvas');
+			const scale = 2;
+			canvas.width = w * scale;
+			canvas.height = h * scale;
+			const ctx = canvas.getContext('2d');
+			ctx.fillStyle = '#0b0d10';
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			ctx.scale(scale, scale);
+			ctx.drawImage(img, 0, 0, w, h);
+			canvas.toBlob((blob) => {
+				const a2 = document.createElement('a');
+				a2.href = URL.createObjectURL(blob);
+				a2.download = filename + '.png';
+				a2.click();
+				URL.revokeObjectURL(a2.href);
+			}, 'image/png');
+			URL.revokeObjectURL(url);
+			};
+			img.onerror = () => URL.revokeObjectURL(url);
+			img.src = url;
+		}
+
+		function downloadMermaidDef(def, filename) {
+			const blob = new Blob([def], { type: 'text/plain;charset=utf-8' });
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(blob);
+			a.download = filename + '.mmd';
+			a.click();
+			URL.revokeObjectURL(a.href);
+		}
+
+		function showDiagramExportMenu(anchorBtn, svgEl, mermaidDef, baseName) {
+			document.querySelectorAll('.ctx-menu').forEach(m => m.remove());
+			const rect = anchorBtn.getBoundingClientRect();
+			const menu = document.createElement('div');
+			menu.className = 'ctx-menu';
+			menu.style.left = rect.left + 'px';
+			menu.style.top = (rect.bottom + 4) + 'px';
+			const items = [
+			{ label: '📷 Download as PNG', action: () => downloadSVGAsImage(svgEl, baseName) },
+			{ label: '🎨 Download as SVG', action: () => downloadSVGAsImage(svgEl, baseName) },
+			{ label: '📄 Download .mmd source', action: () => downloadMermaidDef(mermaidDef, baseName) },
+			{ label: '📋 Copy Mermaid source', action: () => navigator.clipboard.writeText(mermaidDef) },
+			];
+			for (const item of items) {
+			const row = document.createElement('div');
+			row.className = 'ctx-menu-item';
+			row.textContent = item.label;
+			row.addEventListener('click', () => { menu.remove(); item.action(); });
+			menu.appendChild(row);
+			}
+			document.body.appendChild(menu);
+			setTimeout(() => {
+			const close = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', close); } };
+			document.addEventListener('click', close);
+			}, 0);
+		}
   // ---- wiring -------------------------------------------------------------
   function wire() {
     $('#btn-new-session').addEventListener('click', newSession);
@@ -6988,6 +7098,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  CodeSmith.stageA.setSpec(CodeSmith.stageA.getSpec()); // keep current
 		  _stageAHandleUserInput(changePrompt);
 		});
+		$('#btn-b-export').addEventListener('click', (ev) => {
+			const svg = $('#mermaid-container').querySelector('svg');
+			const def = CodeSmith.stageB.getMermaidDef();
+			const skel = CodeSmith.stageB.getSkeleton();
+			const name = (skel && skel.summary) ? skel.summary.slice(0, 30).replace(/\W+/g, '_') : 'skeleton';
+			showDiagramExportMenu(ev.target, svg, def, name);
+			});
 	  
 	function _showStep(step) {
 	    _currentStep = step;
@@ -8304,6 +8421,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		function wireExplorer() {
 		  const $ = (sel) => document.querySelector(sel);
+		  const algoExportBtn = $('#btn-explorer-algo-export');
+			if (algoExportBtn) algoExportBtn.addEventListener('click', (ev) => {
+				const svg = $('#algo-container').querySelector('svg');
+				const def = window._lastAlgoDef || '';
+				const name = (CodeSmith.explorer.getActiveFile() || 'flowchart').replace(/\W+/g, '_');
+				showDiagramExportMenu(ev.target, svg, def, name + '_flow');
+			});
 		  function el(tag, props = {}, children = []) {
 			const n = document.createElement(tag);
 			for (const [k, v] of Object.entries(props)) {
@@ -8426,7 +8550,21 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			$('#explorer-code-area').appendChild(dz);
 			_explorerResetAnalysis();
 		  });
-
+				if (file.name.endsWith('.mmd')) {
+				const text = await file.text();
+				CodeSmith.explorer.addFile(file.name, text);
+				window._lastAlgoDef = text;
+				// Render in algo tab
+				const container = $('#algo-container');
+				container.innerHTML = '';
+				const div = document.createElement('div');
+				div.className = 'mermaid';
+				div.textContent = text;
+				container.appendChild(div);
+				try { await mermaid.run({ nodes: [div] }); } catch {}
+				$('#btn-explorer-algo-export').disabled = false;
+				continue;
+				}
 		  // Drop zone
 			// Click on drop zone triggers upload
 			  const dropZone = $('#explorer-drop-zone');
@@ -8502,6 +8640,34 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  }
 		  // Wire bottom bar and terminal
 		  _wireExploreMode();
+		  const previewBtn = $('#btn-explorer-preview');
+			if (previewBtn) previewBtn.addEventListener('click', () => {
+				const name = CodeSmith.explorer.getActiveFile();
+				if (!name) return;
+				const file = CodeSmith.explorer.getFile(name);
+				if (!file) return;
+				let html = file.content;
+				if (file.language !== 'html') {
+				// Wrap non-HTML in basic page
+				if (file.language === 'css') {
+					html = '<!DOCTYPE html><html><head><style>' + html + '</style></head><body><div style="padding:20px;font-family:system-ui;">CSS preview — body, headings, paragraphs, links:<h1>Heading 1</h1><h2>Heading 2</h2><p>Paragraph with <a href="#">a link</a> and <strong>bold</strong>.</p><button>Button</button></div></body></html>';
+				} else if (file.language === 'javascript') {
+					html = '<!DOCTYPE html><html><head><title>JS Preview</title></head><body><div id="output" style="font-family:monospace;padding:20px;white-space:pre-wrap;"></div><script>const _log=console.log;console.log=(...a)=>{document.getElementById("output").textContent+=a.join(" ")+"\\n";_log(...a);};try{' + html + '}catch(e){document.getElementById("output").textContent+="ERROR: "+e.message;}</script></body></html>';
+				} else {
+					alert('Preview only works for HTML, CSS, and JS files.');
+					return;
+				}
+				}
+				const blob = new Blob([html], { type: 'text/html' });
+				const url = URL.createObjectURL(blob);
+				const win = window.open(url, '_blank');
+				if (!win) {
+				alert('Popup blocked. Allow popups for this site.');
+				URL.revokeObjectURL(url);
+				return;
+				}
+				setTimeout(() => URL.revokeObjectURL(url), 60000);
+			});
 		  // Copy file button
 		  $('#btn-explorer-copy-file').addEventListener('click', () => {
 			const name = CodeSmith.explorer.getActiveFile();
@@ -8629,6 +8795,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		 
 		  $('#explorer-editor-header').hidden = false;
 		  $('#explorer-file-path').textContent = name;
+		  const previewBtn2 = $('#btn-explorer-preview');
+			if (previewBtn2) {
+				const previewable = ['html', 'css', 'javascript'];
+				previewBtn2.hidden = !previewable.includes(file.language);
+			}
 		  const lines = file.content.split('\n');
 		  $('#explorer-line-info').textContent = lines.length + ' lines';
 		 
@@ -8657,11 +8828,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			const algoContainer = document.querySelector('#algo-container');
 			if (algoContainer) algoContainer.innerHTML = '<div class="explorer-empty"><div class="explorer-empty-icon">🔀</div><div class="explorer-empty-title">Algorithm Flowchart</div><div class="explorer-empty-desc">Generates a visual flowchart of the code\'s logic</div></div>';
 		  // Run local analysis
-		  const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
+			const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
 			// Feed basic structure into knowledge graph (no AI needed)
 			try { CodeSmith.knowledge.learnFromFile(name, file.content, file.language, null); } catch {}
-		  _explorerRenderLocalAnalysis(analysis);
-		}
+			_explorerRenderLocalAnalysis(analysis);
+			_renderEditHistory();
+			}			
+
 
 		function _explorerRenderLocalAnalysis(analysis) {
 		  const $ = (sel) => document.querySelector(sel);
@@ -8900,6 +9073,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		  try {
 			const mermaidDef = await CodeSmith.pair.generateFlowchart(file.content, name, file.language);
+			window._lastAlgoDef = mermaidDef;
+			$('#btn-explorer-algo-export').disabled = false;
 			const container = $('#algo-container');
 			container.innerHTML = '';
 			const mermaidDiv = document.createElement('div');
@@ -8990,6 +9165,71 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			  }
 			  chat.scrollTop = chat.scrollHeight;
 			}
+				else if (fullText.includes('```')) {
+					// Model returned code blocks but not in edit format — offer manual apply
+					const codeBlocks = [...fullText.matchAll(/```(?:\w+)?\n([\s\S]*?)```/g)].map(m => m[1]);
+					if (codeBlocks.length > 0) {
+					const hint = document.createElement('div');
+					hint.style.cssText = 'margin:6px 0;padding:8px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:11px;color:#f59e0b;';
+					hint.innerHTML = '⚠ The AI returned code blocks but not in the structured edit format. Pick how to apply:';
+					aiCol.appendChild(hint);
+					codeBlocks.forEach((code, i) => {
+						const row = document.createElement('div');
+						row.style.cssText = 'display:flex;gap:4px;margin:4px 0;';
+						const replaceBtn = document.createElement('button');
+						replaceBtn.className = 'edit-apply-btn';
+						replaceBtn.style.fontSize = '10px';
+						replaceBtn.textContent = 'Replace entire file with block ' + (i + 1);
+						replaceBtn.addEventListener('click', () => {
+						if (!confirm('Replace the entire file with this code block?')) return;
+						CodeSmith.explorer.updateFileContent(name, code);
+						if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.updateContent(name, code);
+						try { CodeSmith.snapshots.take(name, code, 'Manual replace from chat'); } catch {}
+						_explorerRenderTree();
+						replaceBtn.textContent = '✓ Replaced';
+						replaceBtn.disabled = true;
+						});
+						const copyBtn = document.createElement('button');
+						copyBtn.className = 'edit-show-btn';
+						copyBtn.style.fontSize = '10px';
+						copyBtn.textContent = 'Copy block ' + (i + 1);
+						copyBtn.addEventListener('click', () => {
+						navigator.clipboard.writeText(code);
+						copyBtn.textContent = '✓ Copied';
+						});
+						row.appendChild(replaceBtn);
+						row.appendChild(copyBtn);
+						aiCol.appendChild(row);
+					});
+					}
+				}
+				if (edits.length > 1) {
+					const applyAllBtn = document.createElement('button');
+					applyAllBtn.className = 'edit-apply-btn';
+					applyAllBtn.style.cssText = 'margin:4px 0;width:100%;padding:6px;font-size:11px;';
+					applyAllBtn.textContent = '✓ Apply all ' + edits.length + ' edits';
+					applyAllBtn.addEventListener('click', () => {
+					// Apply in reverse order so line numbers stay valid
+					const sorted = [...edits].sort((a, b) => (b.startLine || b.afterLine || 0) - (a.startLine || a.afterLine || 0));
+					let applied = 0;
+					for (const e of sorted) {
+						const r = CodeSmith.explorer.applyEdit(name, e);
+						if (r.ok) applied++;
+					}
+					const file = CodeSmith.explorer.getFile(name);
+					if (file && CodeSmith.monaco.isInitialized()) {
+						CodeSmith.monaco.updateContent(name, file.content);
+					}
+					_explorerRenderTree();
+					_renderEditHistory();
+					applyAllBtn.textContent = '✓ Applied ' + applied + ' / ' + edits.length;
+					applyAllBtn.disabled = true;
+					// Mark all cards
+					aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
+					});
+					aiCol.insertBefore(applyAllBtn, aiCol.children[1]);
+				}
+		 
 		  // Update token display
 		    const budget = CodeSmith.llm.getBudget();
 		    const tokenEl = document.querySelector('#explorer-token-usage');
@@ -9003,7 +9243,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			btn.textContent = 'Ask';
 		  }
 		}
-
+			
 		function _createEditCard(edit, index, filename) {
 		  const card = document.createElement('div');
 		  card.className = 'edit-card';
@@ -9058,18 +9298,31 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const applyBtn = document.createElement('button');
 		  applyBtn.className = 'edit-apply-btn';
 		  applyBtn.textContent = '✓ Apply';
-		  applyBtn.addEventListener('click', () => {
-			const result = CodeSmith.explorer.applyEdit(filename, edit);
-			if (result.ok) {
-			  card.classList.add('edit-applied');
-			  applyBtn.textContent = 'Applied';
-			  _explorerShowFile(filename);
-			  _explorerRenderTree();
-			} else {
-			  applyBtn.textContent = 'Failed: ' + result.error;
-			  applyBtn.style.color = '#ff6b6b';
-			}
-		  });
+
+			applyBtn.addEventListener('click', () => {
+				const result = CodeSmith.explorer.applyEdit(filename, edit);
+				if (result.ok) {
+				card.classList.add('edit-applied');
+				applyBtn.textContent = '✓ Applied';
+				// Update Monaco directly
+				if (CodeSmith.monaco.isInitialized()) {
+					CodeSmith.monaco.updateContent(filename, result.newContent);
+				}
+				_explorerRenderTree();
+				_renderEditHistory();
+				// Snapshot
+				try { CodeSmith.snapshots.take(filename, result.newContent, 'After: ' + (edit.reason || edit.type).slice(0, 40)); } catch {}
+				// Toast
+				const toast = document.createElement('div');
+				toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#4ade80;color:#0b0d10;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;';
+				toast.textContent = '✓ Edit applied to ' + filename;
+				document.body.appendChild(toast);
+				setTimeout(() => toast.remove(), 2000);
+				} else {
+				applyBtn.textContent = '✗ ' + result.error;
+				applyBtn.style.color = '#ff6b6b';
+				}
+			});
 		  actions.appendChild(applyBtn);
 
 		  const showBtn = document.createElement('button');
@@ -9098,6 +9351,50 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		  return card;
 		}
+
+			function _renderEditHistory() {
+					let panel = document.getElementById('edit-history-panel');
+					if (!panel) {
+					panel = document.createElement('div');
+					panel.id = 'edit-history-panel';
+					panel.style.cssText = 'border-top:1px solid rgba(255,255,255,0.06);max-height:140px;overflow-y:auto;background:#0f1319;';
+					const pairChat = document.getElementById('pair-chat');
+					if (pairChat && pairChat.parentElement) {
+						pairChat.parentElement.insertBefore(panel, pairChat.nextSibling);
+					}
+					}
+					panel.replaceChildren();
+					const history = CodeSmith.explorer.getEditHistory();
+					if (history.length === 0) { panel.style.display = 'none'; return; }
+					panel.style.display = 'block';
+					const header = document.createElement('div');
+					header.style.cssText = 'padding:4px 10px;font-size:10px;color:#5b6474;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;display:flex;align-items:center;';
+					header.innerHTML = 'Edit History (' + history.length + ')';
+					const undoBtn = document.createElement('button');
+					undoBtn.className = 'btn btn-ghost';
+					undoBtn.style.cssText = 'margin-left:auto;font-size:10px;padding:1px 6px;';
+					undoBtn.textContent = '↶ Undo last';
+					undoBtn.addEventListener('click', () => {
+					const last = CodeSmith.explorer.undoLastEdit();
+					if (last && CodeSmith.monaco.isInitialized()) {
+						CodeSmith.monaco.updateContent(last.filename, last.before);
+					}
+					_renderEditHistory();
+					_explorerRenderTree();
+					});
+					header.appendChild(undoBtn);
+					panel.appendChild(header);
+					for (const h of history.slice().reverse()) {
+					const row = document.createElement('div');
+					row.style.cssText = 'padding:3px 10px;font-size:11px;color:#8b92a1;cursor:pointer;display:flex;gap:6px;';
+					const time = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+					row.innerHTML = '<span style="color:#5b6474;font-family:monospace;font-size:10px;">' + time + '</span>' +
+									'<span style="color:#4ade80;">✓</span>' +
+									'<span style="font-family:monospace;font-size:10px;">' + h.filename + '</span>' +
+									'<span style="color:#8b92a1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + h.label + '</span>';
+					panel.appendChild(row);
+					}
+				}
 				function _renderKnowledgeSummary() {
 					const $ = (sel) => document.querySelector(sel);
 					const el = $('#knowledge-summary');
