@@ -1523,6 +1523,10 @@
 					  <button id="btn-sc-resume" class="btn btn-primary" style="font-size:12px;" hidden>Resume</button>
 					  <button id="btn-sc-stop" class="btn" style="font-size:12px;color:#ff6b6b;" hidden>Stop</button>
 					  <button id="btn-sc-symtable" class="btn btn-ghost" style="font-size:11px;" title="View symbol table">Symbols</button>
+					  <label style="font-size:11px;color:#8b92a1;display:flex;align-items:center;gap:4px;cursor:pointer;">
+						<input type="checkbox" id="sc-review-tests" style="accent-color:#4f8cff;"> Review tests
+						</label>
+					  <button id="btn-sc-download-draft" class="btn" style="font-size:12px;" title="Download untested draft package">Download draft</button>
 					  <div class="sc-progress"><div id="sc-progress-bar" class="sc-progress-bar" style="width:0%;"></div></div>
 					  <span id="sc-progress-text" class="sc-progress-text">0 / 0</span>
 					  <button id="btn-sc-download-all" class="btn" style="font-size:12px;margin-left:auto;" hidden title="Download all as zip">
@@ -1584,11 +1588,13 @@
 			                  <div id="sc-output-display"></div>
 			                  <div id="build-output-display" hidden></div>
 			                </div>
-			                <div id="sc-escalation-bar" class="escalation-bar" hidden>
-			                  <button id="btn-sc-edit-rerun" class="btn" style="font-size:11px;">Edit &amp; rerun</button>
-			                  <button id="btn-sc-regen" class="btn" style="font-size:11px;">Regenerate</button>
-			                  <button id="btn-sc-back-b" class="btn" style="font-size:11px;">Back to skeleton</button>
-			                </div>
+							<div id="sc-escalation-bar" class="escalation-bar" hidden>
+							<button id="btn-sc-edit-rerun" class="btn" style="font-size:11px;">Edit &amp; rerun</button>
+							<button id="btn-sc-regen" class="btn" style="font-size:11px;">Regenerate</button>
+							<button id="btn-sc-bypass" class="btn" style="font-size:11px;color:#f59e0b;">Bypass &amp; continue</button>
+							<button id="btn-sc-skip-mod" class="btn" style="font-size:11px;color:#ff6b6b;">Skip module</button>
+							<button id="btn-sc-back-b" class="btn" style="font-size:11px;">Back to skeleton</button>
+							</div>
 			              </div>
 
 					  <!-- Right: live log -->
@@ -3350,7 +3356,7 @@ CodeSmith.builder = Builder;
 	2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
 	3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
 	4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
-	5. NEVER ask more than 4 total questions. After 4, output <ready_for_skeleton> with best guesses.
+	5. NEVER ask more than 5 total questions. After 5, output <ready_for_skeleton> with best guesses.
 	6. Keep questions under 25 words. No implementation details.
 
 	IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
@@ -3583,8 +3589,14 @@ const StageA = (() => {
 				      }
 		    }
 		  }
+		function reset() {
+			_spec = null;
+			_messages = [];
+			_assumptions = {};
+			_ready = false;
+		}
 
-  return { start, getSpec, setSpec, getMessages, isReady, getAssumptions, userTurn, requestAdvance };
+		return { start, reset, getSpec, setSpec, getMessages, isReady, getAssumptions, userTurn, requestAdvance };
 })();
 CodeSmith.stageA = StageA;
  
@@ -3913,7 +3925,7 @@ For each requested symbol decide:
 Output ONLY valid JSON:
 {"decisions":[{"name":"symbol_name","action":"approve|reject|modify_skeleton","definition":"if approved","reason":"why"}]}`;
 
-const STAGE_C_INTEGRATION_PROMPT = `Generate a pytest integration test file. Import each module and exercise the data flow end-to-end.
+const STAGE_C_INTEGRATION_PROMPT = `Generate a pytest integration test file that exercises the FULL package end-to-end.
 Modules (all implemented):
 {MODULES_JSON}
 Data flow:
@@ -3922,7 +3934,14 @@ Dummy inputs:
 {DUMMY_INPUTS}
 Acceptance criteria:
 {CRITERIA}
-Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). The file must be runnable with: pytest test_integration.py -v`;
+
+Requirements:
+- Import every module listed above
+- Write at least 3 tests: (1) end-to-end happy path through the data_flow, (2) cross-module integration testing the main use case, (3) one criterion-based test per acceptance_criterion
+- Verify outputs match acceptance_criteria
+- Use realistic dummy data, not just None/empty values
+
+Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). Runnable with: pytest test_integration.py -v`;
 
 const StageC = (() => {
   let _state = 'idle'; // idle|running|paused|stopped|complete
@@ -5417,6 +5436,31 @@ CodeSmith.explorer = Explorer;
 const UI = (() => {
   // ---- tiny DOM helpers ---------------------------------------------------
   const $ = (sel) => document.querySelector(sel);
+	function approveTestsModal(moduleId, testsCode) {
+		return new Promise((resolve) => {
+		const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+		const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:720px;width:90vw;' });
+		modal.appendChild(el('div', { class: 'text-[14px] font-semibold mb-2' }, 'Review tests for ' + moduleId));
+		modal.appendChild(el('div', { class: 'text-[11px] text-muted mb-2' }, 'Edit or accept the test cases. Tests will run after you approve.'));
+		const ta = el('textarea', { class: 'escalated-editor', style: 'min-height:300px;' });
+		ta.value = testsCode || '';
+		modal.appendChild(ta);
+		const actions = el('div', { class: 'flex items-center justify-end gap-2 mt-3' });
+		const skipBtn = el('button', { class: 'btn' }, 'Skip tests');
+		const cancelBtn = el('button', { class: 'btn' }, 'Cancel build');
+		const approveBtn = el('button', { class: 'btn btn-primary' }, 'Approve & run');
+		actions.appendChild(skipBtn);
+		actions.appendChild(cancelBtn);
+		actions.appendChild(approveBtn);
+		modal.appendChild(actions);
+		const close = (result) => { backdrop.remove(); modal.remove(); resolve(result); };
+		skipBtn.addEventListener('click', () => close({ action: 'skip' }));
+		cancelBtn.addEventListener('click', () => close({ action: 'cancel' }));
+		approveBtn.addEventListener('click', () => close({ action: 'approve', tests: ta.value }));
+		document.body.appendChild(backdrop);
+		document.body.appendChild(modal);
+		});
+	}
   function el(tag, props = {}, children = []) {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(props)) {
@@ -5658,14 +5702,15 @@ function renderStatusStrip() {
     CodeSmith.state.sessions = await CodeSmith.db.listSessions();
     renderSessionList();
   }
-  async function newSession() {
-    const sess = await CodeSmith.db.createSession();
-    CodeSmith.state.sessions.unshift(sess);
-    CodeSmith.state.currentId = sess.id;
-    renderSessionList();
-    renderChat();
-    $('#composer').focus();
-  }
+		async function newSession() {
+			resetBuildUI();
+			const sess = await CodeSmith.db.createSession();
+			CodeSmith.state.sessions.unshift(sess);
+			CodeSmith.state.currentId = sess.id;
+			renderSessionList();
+			renderChat();
+			$('#composer').focus();
+		}
 	async function selectSession(id) {
 		CodeSmith.state.currentId = id;
 		const fresh = await CodeSmith.db.getSession(id);
@@ -6152,7 +6197,28 @@ function wireComposer() {
       btn.disabled = false;
     }
   }
-
+		function resetBuildUI() {
+		if (CodeSmith.stageA && CodeSmith.stageA.reset) CodeSmith.stageA.reset();
+		if (CodeSmith.stageB && CodeSmith.stageB.reset) CodeSmith.stageB.reset();
+		if (CodeSmith.stageC && CodeSmith.stageC.stop) { try { CodeSmith.stageC.stop(); } catch {} }
+		SymbolTable.reset();
+		_currentBuild = null;
+		_scActiveModuleId = null;
+		_scModuleData = {};
+		_currentStep = 'a';
+		const msgArea = $('#stage-a-messages');
+		if (msgArea) msgArea.replaceChildren();
+		const specCard = $('#stage-a-spec-card');
+		if (specCard) specCard.replaceChildren();
+		const mermaidC = $('#mermaid-container');
+		if (mermaidC) mermaidC.innerHTML = '<div class="text-muted text-[13px]">No skeleton yet</div>';
+		const modList = $('#stage-b-module-list');
+		if (modList) modList.replaceChildren();
+		const scLog = $('#sc-log');
+		if (scLog) scLog.replaceChildren();
+		const scModList = $('#sc-module-list');
+		if (scModList) scModList.replaceChildren();
+	}
   // ---- wiring -------------------------------------------------------------
   function wire() {
     $('#btn-new-session').addEventListener('click', newSession);
@@ -7306,13 +7372,42 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     $('#btn-sc-download-all').addEventListener('click', _scDownloadAll);
 
     // Escalation buttons
-    $('#btn-sc-edit-rerun').addEventListener('click', _scEditAndRerun);
-    $('#btn-sc-regen').addEventListener('click', () => {
-      // Re-start build from current module
-      _scStartBuild();
+   
+	$('#btn-sc-bypass').addEventListener('click', async () => {
+      const modId = _scActiveModuleId;
+      if (!modId) return;
+      const data = _scModuleData[modId] || {};
+      _scLog('⚠ ' + modId + ' bypassed (marked passed without verification)', 'log-warn');
+      const skeleton = CodeSmith.stageB.getSkeleton();
+      const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+      const artifact = {
+        id: modId + '_' + Date.now(),
+        sessionId: CodeSmith.state.currentId,
+        moduleName: modId,
+        code: data.code || '',
+        tests: data.tests || '',
+        spec: mod,
+        createdAt: Date.now(),
+        status: 'bypassed',
+      };
+      try { await CodeSmith.db.putArtifact(artifact); } catch {}
+      SymbolTable.markImplemented(modId);
+      const states = CodeSmith.stageC.getModuleStates();
+      states[modId] = 'passed';
+      $('#sc-escalation-bar').hidden = true;
+      _scRenderModuleList();
+      _scUpdateProgress();
+      $('#btn-sc-resume').hidden = false;
+      CodeSmith.stageC.resume();
     });
-    $('#btn-sc-back-b').addEventListener('click', () => {
-      _showStep('b');
+
+    $('#btn-sc-skip-mod').addEventListener('click', () => {
+      const modId = _scActiveModuleId;
+      if (!modId) return;
+      _scLog('Skipped ' + modId + ' — package may be incomplete', 'log-warn');
+      $('#sc-escalation-bar').hidden = true;
+      $('#btn-sc-resume').hidden = false;
+      CodeSmith.stageC.resume();
     });
   }
 
@@ -7458,14 +7553,29 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
               _scModuleData[ev.moduleId]._rawWorker = (_scModuleData[ev.moduleId]._rawWorker || '') + ev.delta;
             }
             break;
-          case 'worker_done':
-            if (_scModuleData[ev.moduleId]) {
-              _scModuleData[ev.moduleId].code = ev.result.code || '';
-              _scModuleData[ev.moduleId].tests = ev.result.tests || '';
-            }
-            _scSelectModule(ev.moduleId);
-            _scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
-            break;
+			case 'worker_done':
+				if (_scModuleData[ev.moduleId]) {
+				_scModuleData[ev.moduleId].code = ev.result.code || '';
+				_scModuleData[ev.moduleId].tests = ev.result.tests || '';
+				}
+				_scSelectModule(ev.moduleId);
+				_scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
+				if ($('#sc-review-tests')?.checked && ev.result.tests) {
+				CodeSmith.stageC.pause();
+				const decision = await approveTestsModal(ev.moduleId, ev.result.tests);
+				if (decision.action === 'cancel') { CodeSmith.stageC.stop(); return; }
+				if (decision.action === 'skip') {
+					_scModuleData[ev.moduleId].tests = '';
+					ev.result.tests = '';
+					try { await CodeSmith.sandbox.writeFile('/workdir/test_' + ev.moduleId + '.py', '# tests skipped by user\n'); } catch {}
+				} else if (decision.action === 'approve') {
+					_scModuleData[ev.moduleId].tests = decision.tests;
+					ev.result.tests = decision.tests;
+					try { await CodeSmith.sandbox.writeFile('/workdir/test_' + ev.moduleId + '.py', decision.tests); } catch {}
+				}
+				CodeSmith.stageC.resume();
+				}
+			break;
           case 'symbols_requested':
             _scLog('Symbols requested: ' + ev.symbols.map(s => s.name).join(', '), 'log-warn');
             break;
@@ -7498,6 +7608,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
             break;
           case 'module_escalated':
             if (_scModuleData[ev.moduleId]) {
+				_restoreEscalationBar();
+				$('#sc-escalation-bar').hidden = false;
               _scModuleData[ev.moduleId].code = ev.code;
               _scModuleData[ev.moduleId].tests = ev.tests;
               _scModuleData[ev.moduleId].output += ev.output + '\n';
@@ -7596,9 +7708,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     document.body.appendChild(modal);
   }
 
-	  async function _scDownloadAll() {
-		const arts = CodeSmith.stageC.getModuleArtifacts();
-		if (arts.length === 0) return;
+	async function _scDownloadAll(isDraft) {
+   		 const arts = isDraft
+		? Object.entries(_scModuleData).map(([id, d]) => ({ moduleName: id, code: d.code || '', tests: d.tests || '', status: 'draft', id }))
+		: CodeSmith.stageC.getModuleArtifacts();
+    	if (arts.length === 0) { alert('Nothing to download yet.'); return; }
 		if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
 		const zip = new JSZip();
 		const testsDir = zip.folder('tests');
@@ -7667,42 +7781,84 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 	  }
 	  
 
-  function _scEditAndRerun() {
-    // Make code/tests editable for the escalated module
-    const modId = _scActiveModuleId;
-    if (!modId) return;
-    const data = _scModuleData[modId] || {};
+		function _scEditAndRerun() {
+			const modId = _scActiveModuleId;
+			if (!modId) return;
+			const data = _scModuleData[modId] || {};
+			const originalCode = data.code || '';
+			const originalTests = data.tests || '';
 
-    const codePane = $('#sc-code');
-    const testsPane = $('#sc-tests');
+			const codePane = $('#sc-code');
+			const testsPane = $('#sc-tests');
 
-    codePane.replaceChildren();
-    const codeTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-code' });
-    codeTA.value = data.code || '';
-    codePane.appendChild(codeTA);
+			codePane.replaceChildren();
+			const codeTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-code' });
+			codeTA.value = originalCode;
+			codePane.appendChild(codeTA);
 
-    testsPane.replaceChildren();
-    const testsTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-tests' });
-    testsTA.value = data.tests || '';
-    testsPane.appendChild(testsTA);
+			testsPane.replaceChildren();
+			const testsTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-tests' });
+			testsTA.value = originalTests;
+			testsPane.appendChild(testsTA);
 
-    // Replace escalation bar with rerun button
-    const escBar = $('#sc-escalation-bar');
-    escBar.replaceChildren();
-    const rerunBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;' }, 'Save & rerun tests');
-    rerunBtn.addEventListener('click', async () => {
-      const code = $('#sc-edit-code').value;
-      const tests = $('#sc-edit-tests').value;
-      const skeleton = CodeSmith.stageB.getSkeleton();
-      const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
-      if (!mod) return;
+			const escBar = $('#sc-escalation-bar');
+			escBar.replaceChildren();
 
-      _scLog('Re-running ' + modId + ' with edits…');
+			const exitEditor = (restore) => {
+			const codeEl = $('#sc-code-display');
+			if (codeEl) {
+				codePane.replaceChildren();
+				const pre = el('pre');
+				const codeBlock = el('code', { class: 'language-python', id: 'sc-code-display' });
+				pre.appendChild(codeBlock);
+				codePane.appendChild(pre);
+			}
+			const testsEl = $('#sc-tests-display');
+			if (testsEl) {
+				testsPane.replaceChildren();
+				const pre = el('pre');
+				const tBlock = el('code', { class: 'language-python', id: 'sc-tests-display' });
+				pre.appendChild(tBlock);
+				testsPane.appendChild(pre);
+			}
+			if (restore) {
+				if (_scModuleData[modId]) {
+				_scModuleData[modId].code = originalCode;
+				_scModuleData[modId].tests = originalTests;
+				}
+			}
+			_restoreEscalationBar();
+			_scSelectModule(modId);
+			};
 
-      await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', code);
-      await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', tests);
+			const cancelBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Cancel');
+			cancelBtn.addEventListener('click', () => exitEditor(true));
 
-      const pytestCode = `
+			const discardBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#f59e0b;' }, 'Discard changes');
+			discardBtn.addEventListener('click', () => {
+			if (confirm('Discard your edits?')) exitEditor(true);
+			});
+
+			const rebuildBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Rebuild this module');
+			rebuildBtn.addEventListener('click', async () => {
+			if (!confirm('Regenerate this module from scratch? Your edits will be lost.')) return;
+			exitEditor(true);
+			await _scRebuildSingleModule(modId);
+			});
+
+			const rerunBtn = el('button', { class: 'btn btn-primary', style: 'font-size:11px;' }, 'Save & rerun tests');
+			rerunBtn.addEventListener('click', async () => {
+			const code = $('#sc-edit-code').value;
+			const tests = $('#sc-edit-tests').value;
+			const skeleton = CodeSmith.stageB.getSkeleton();
+			const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+			if (!mod) return;
+
+			_scLog('Re-running ' + modId + ' with edits…');
+			await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', code);
+			await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', tests);
+
+			const pytestCode = `
 		import sys, os
 		sys.path.insert(0, '/workdir')
 		os.chdir('/workdir')
@@ -7712,54 +7868,112 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		import pytest
 		exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
 		`;
-      const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
-      const output = (result.stdout || '') + (result.stderr || '');
-      const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
+			const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+			const output = (result.stdout || '') + (result.stderr || '');
+			const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
+			_scModuleData[modId] = { code, tests, output };
 
-      _scModuleData[modId] = { code, tests, output };
-
-      if (passed) {
-        _scLog('✓ ' + modId + ' passed after manual edit', 'log-pass');
-        SymbolTable.markImplemented(modId);
-        const artifact = {
-          id: modId + '_' + Date.now(),
-          sessionId: CodeSmith.state.currentId,
-          moduleName: modId,
-          code, tests,
-          spec: mod,
-          createdAt: Date.now(),
-          status: 'passed',
-        };
-        try { await CodeSmith.db.putArtifact(artifact); } catch {}
-        // Re-render and allow resume
-        _scRenderModuleList();
-        _scUpdateProgress();
-        _scSelectModule(modId);
-        // Show resume button to continue with next module
-        $('#btn-sc-resume').hidden = false;
-        CodeSmith.stageC.resume();
-        escBar.hidden = true;
-		} else {
-			_scLog('✗ Still failing after edit', 'log-fail');
-			_scModuleData[modId].output = output;
-			_scSelectModule(modId);
-			// Add skip button
-			const skipBtn = document.createElement('button');
-			skipBtn.className = 'btn';
-			skipBtn.style.cssText = 'font-size:11px;margin-left:6px;';
-			skipBtn.textContent = 'Skip module';
-			skipBtn.addEventListener('click', () => {
-			_scLog('Skipped ' + modId, 'log-warn');
-			CodeSmith.stageC.resume();
-			$('#btn-sc-resume').hidden = true;
-			$('#btn-sc-pause').hidden = false;
-			escBar.hidden = true;
+			if (passed) {
+				_scLog('✓ ' + modId + ' passed after manual edit', 'log-pass');
+				SymbolTable.markImplemented(modId);
+				const artifact = {
+				id: modId + '_' + Date.now(),
+				sessionId: CodeSmith.state.currentId,
+				moduleName: modId,
+				code, tests,
+				spec: mod,
+				createdAt: Date.now(),
+				status: 'passed',
+				};
+				try { await CodeSmith.db.putArtifact(artifact); } catch {}
+				exitEditor(false);
+				$('#btn-sc-resume').hidden = false;
+				CodeSmith.stageC.resume();
+			} else {
+				_scLog('✗ Still failing after edit', 'log-fail');
+				_scSelectModule(modId);
+				// Keep editor open with new output visible, restore action bar
+				const outEl = $('#sc-output-display');
+				if (outEl) outEl.textContent = output;
+			}
 			});
-			escBar.appendChild(skipBtn);
+
+			escBar.appendChild(cancelBtn);
+			escBar.appendChild(discardBtn);
+			escBar.appendChild(rebuildBtn);
+			escBar.appendChild(rerunBtn);
+			escBar.hidden = false;
 		}
-    });
-    escBar.appendChild(rerunBtn);
-  }
+
+		function _restoreEscalationBar() {
+			const escBar = $('#sc-escalation-bar');
+			escBar.replaceChildren();
+			const editBtn = el('button', { class: 'btn', id: 'btn-sc-edit-rerun', style: 'font-size:11px;' }, 'Edit & rerun');
+			editBtn.addEventListener('click', _scEditAndRerun);
+			const regenBtn = el('button', { class: 'btn', id: 'btn-sc-regen', style: 'font-size:11px;' }, 'Regenerate');
+			regenBtn.addEventListener('click', () => _scRebuildSingleModule(_scActiveModuleId));
+			const bypassBtn = el('button', { class: 'btn', id: 'btn-sc-bypass', style: 'font-size:11px;color:#f59e0b;' }, 'Bypass & continue');
+			bypassBtn.addEventListener('click', () => $('#btn-sc-bypass').click());
+			const skipBtn = el('button', { class: 'btn', id: 'btn-sc-skip-mod', style: 'font-size:11px;color:#ff6b6b;' }, 'Skip module');
+			skipBtn.addEventListener('click', () => $('#btn-sc-skip-mod').click());
+			const backBtn = el('button', { class: 'btn', id: 'btn-sc-back-b', style: 'font-size:11px;' }, 'Back to skeleton');
+			backBtn.addEventListener('click', () => _showStep('b'));
+			escBar.appendChild(editBtn);
+			escBar.appendChild(regenBtn);
+			escBar.appendChild(bypassBtn);
+			escBar.appendChild(skipBtn);
+			escBar.appendChild(backBtn);
+		}
+
+		async function _scRebuildSingleModule(modId) {
+			if (!modId) return;
+			const skeleton = CodeSmith.stageB.getSkeleton();
+			const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+			if (!mod) { _scLog('Module not found in skeleton', 'log-fail'); return; }
+			_scLog('🔄 Rebuilding ' + modId + ' only…', 'log-warn');
+
+			const states = CodeSmith.stageC.getModuleStates();
+			states[modId] = 'building';
+			_scRenderModuleList();
+
+			const depCode = SymbolTable.getDependencyCode(modId, skeleton, CodeSmith.stageC.getModuleArtifacts());
+			const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
+			const dummyInputs = (spec && spec.inputs && spec.inputs.example) ? spec.inputs.example : '';
+			const workOrder = {
+			module_spec: mod,
+			symbol_table: SymbolTable.get(),
+			dependency_code: depCode,
+			dummy_inputs: dummyInputs,
+			};
+
+			try {
+			const result = await CodeSmith.llm.chatComplete({
+				messages: [
+				{ role: 'system', content: 'You are a senior Python engineer. Output ONLY valid JSON: {"code":"…","tests":"…","imports_needed":[],"requested_symbols":[]}' },
+				{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+				],
+				tier: 'worker',
+				temperature: 0.2,
+				maxTokens: 20000,
+			});
+			let txt = (result.text || '').trim();
+			if (txt.startsWith('```')) txt = txt.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+			const parsed = JSON.parse(txt);
+			_scModuleData[modId] = { code: parsed.code, tests: parsed.tests || '', output: '' };
+			try {
+				await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', parsed.code);
+				if (parsed.tests) await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', parsed.tests);
+			} catch {}
+			states[modId] = 'escalated';
+			_scLog('Rebuild complete — review and rerun tests', 'log-info');
+			_scSelectModule(modId);
+			_scRenderModuleList();
+			} catch (err) {
+			_scLog('Rebuild failed: ' + (err.message || err), 'log-fail');
+			states[modId] = 'escalated';
+			_scRenderModuleList();
+			}
+		}
   
 	  // ---- Day 7: Onboarding -------------------------------------------------
 	  let _onbPreset = 'nvidia';
