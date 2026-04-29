@@ -3756,8 +3756,13 @@ async function generate(spec, onStream) {
 
     return lines.join('\n');
   }
+		function setSkeleton(skel, spec, mermaidDef) {
+		_skeleton = skel ? JSON.parse(JSON.stringify(skel)) : null;
+		_approvedSpec = spec ? JSON.parse(JSON.stringify(spec)) : null;
+		_mermaidDef = mermaidDef || (skel ? _buildMermaid(skel) : '');
+		}
 
-  return { generate, getSkeleton, getApprovedSpec, getMermaidDef, approve };
+		return { generate, getSkeleton, getApprovedSpec, getMermaidDef, approve, setSkeleton };
 })();
 CodeSmith.stageB = StageB;
 
@@ -5661,18 +5666,29 @@ function renderStatusStrip() {
     renderChat();
     $('#composer').focus();
   }
-  async function selectSession(id) {
-    CodeSmith.state.currentId = id;
-    // Refresh the single session from DB in case of stale state.
-    const fresh = await CodeSmith.db.getSession(id);
-    if (fresh) {
-      const idx = CodeSmith.state.sessions.findIndex(s => s.id === id);
-      if (idx >= 0) CodeSmith.state.sessions[idx] = fresh;
-    }
-    renderSessionList();
-    renderChat();
-    $('#composer').focus();
-  }
+	async function selectSession(id) {
+		CodeSmith.state.currentId = id;
+		const fresh = await CodeSmith.db.getSession(id);
+		if (fresh) {
+		const idx = CodeSmith.state.sessions.findIndex(s => s.id === id);
+		if (idx >= 0) CodeSmith.state.sessions[idx] = fresh;
+		// Rehydrate Stage A & B from persisted state
+		if (fresh.stageA && fresh.stageA.spec) {
+			CodeSmith.stageA.start(fresh.stageA.spec.goal || '');
+			CodeSmith.stageA.setSpec(fresh.stageA.spec);
+		}
+		if (fresh.stageB && fresh.stageB.skeleton) {
+			CodeSmith.stageB.setSkeleton(
+			fresh.stageB.skeleton,
+			fresh.stageB.approvedSpec,
+			fresh.stageB.mermaidDef
+			);
+		}
+		}
+		renderSessionList();
+		renderChat();
+		$('#composer').focus();
+	}
 
   async function sendMessage(text) {
     const t = text.trim();
@@ -6293,51 +6309,57 @@ function wireComposer() {
     dur.style.color = r.ok ? '#4ade80' : '#ff6b6b';
     out.appendChild(dur);
   }
+
 		function _renderSpecCard(spec, assumptions) {
-				const container = $('#stage-a-spec-card');
-				container.replaceChildren();
+			const container = $('#stage-a-spec-card');
+			if (!container) return;
+			container.replaceChildren();
+			if (!spec || typeof spec !== 'object') return;
+			assumptions = assumptions || {};
 
-				// Render ALL fields in spec, not just hardcoded ones
-					for (const [key, val] of Object.entries(spec)) {
-					const div = el('div', { class: 'spec-field' });
-					const label = el('div', { class: 'spec-field-label' }, key.replace(/_/g, ' '));
-					div.appendChild(label);
-				
-					if (val === null || val === undefined || val === '') {
-						div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
-					} else if (typeof val === 'string') {
-						const valEl = el('div', { class: 'spec-field-value' });
-						valEl.textContent = val;
-						if (assumptions[key]) valEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
-						div.appendChild(valEl);
-					} else if (Array.isArray(val)) {
-						if (val.length === 0) {
-						div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
-						} else {
-						for (const item of val) {
-							const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
-							itemEl.textContent = '• ' + (typeof item === 'string' ? item : JSON.stringify(item));
-							div.appendChild(itemEl);
-						}
-						}
-					} else if (typeof val === 'object') {
-						for (const [sk, sv] of Object.entries(val)) {
-						const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
-						row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
-						const svEl = el('span', { class: 'spec-field-value', style: 'font-size:12px;' });
-						svEl.textContent = typeof sv === 'string' ? (sv || '—') : JSON.stringify(sv);
-						const aKey = key + '.' + sk;
-						if (assumptions[aKey]) svEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
-						row.appendChild(svEl);
-						div.appendChild(row);
-						}
-					}
-				
-					container.appendChild(div);
-					}
+			for (const [key, val] of Object.entries(spec)) {
+			const div = el('div', { class: 'spec-field' });
+			const label = el('div', { class: 'spec-field-label' }, key.replace(/_/g, ' '));
+			div.appendChild(label);
 
-		
+			if (val === null || val === undefined || val === '') {
+				div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+			} else if (typeof val === 'string') {
+				const valEl = el('div', { class: 'spec-field-value' });
+				valEl.textContent = val;
+				if (assumptions[key]) valEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
+				div.appendChild(valEl);
+			} else if (Array.isArray(val)) {
+				if (val.length === 0) {
+				div.appendChild(el('div', { class: 'spec-field-value empty' }, '—'));
+				} else {
+				for (const item of val) {
+					const itemEl = el('div', { class: 'spec-field-value', style: 'padding-left:8px;' });
+					itemEl.textContent = '• ' + (typeof item === 'string' ? item : JSON.stringify(item));
+					div.appendChild(itemEl);
+				}
+				}
+			} else if (typeof val === 'object') {
+				for (const [sk, sv] of Object.entries(val)) {
+				const row = el('div', { style: 'display:flex;gap:6px;padding-left:8px;margin-top:2px;' });
+				row.appendChild(el('span', { class: 'spec-field-label', style: 'min-width:80px;margin-bottom:0;font-size:10px;' }, sk + ':'));
+				const svEl = el('span', { class: 'spec-field-value', style: 'font-size:12px;' });
+				if (sv === null || sv === undefined || sv === '') {
+					svEl.textContent = '—';
+					svEl.classList.add('empty');
+				} else {
+					svEl.textContent = typeof sv === 'string' ? sv : JSON.stringify(sv);
+				}
+				const aKey = key + '.' + sk;
+				if (assumptions[aKey]) svEl.appendChild(el('span', { class: 'spec-assumed-tag' }, '(assumed)'));
+				row.appendChild(svEl);
+				div.appendChild(row);
+				}
 			}
+
+			container.appendChild(div);
+			}
+		}
   async function refreshDebugFiles() {
     const container = $('#debug-files');
     const preview = $('#debug-file-preview');
@@ -9344,9 +9366,21 @@ CodeSmith.ui = UI;
     CodeSmith.state.settings = saved || { ...CodeSmith.DEFAULTS };
     await CodeSmith.ui.refreshSessions();
     // Select most recent session if any
-    if (CodeSmith.state.sessions.length > 0) {
-      CodeSmith.state.currentId = CodeSmith.state.sessions[0].id;
-    }
+	if (CodeSmith.state.sessions.length > 0) {
+		const first = CodeSmith.state.sessions[0];
+		CodeSmith.state.currentId = first.id;
+		if (first.stageA && first.stageA.spec) {
+			CodeSmith.stageA.start(first.stageA.spec.goal || '');
+			CodeSmith.stageA.setSpec(first.stageA.spec);
+		}
+		if (first.stageB && first.stageB.skeleton) {
+			CodeSmith.stageB.setSkeleton(
+			first.stageB.skeleton,
+			first.stageB.approvedSpec,
+			first.stageB.mermaidDef
+			);
+		}
+		}
     CodeSmith.ui.wire();
     CodeSmith.ui.renderStatusStrip();
     CodeSmith.ui.renderComposerHelp();
