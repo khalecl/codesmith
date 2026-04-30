@@ -3948,6 +3948,7 @@ const SymbolTable = (() => {
  * ==========================================================================*/
 const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE module. Rules:
 1. Only define public names listed in your module spec.
+0. SANDBOX: Code runs in Pyodide (browser WASM Python). Do NOT use: real network calls (requests/urllib/socket), subprocess, threading, multiprocessing, GUI libraries (tkinter/PyQt), or C extensions. For tests, use local data/fixtures, never live HTTP.
 2. Use exact signatures from the symbol table for dependency calls.
 3. If you genuinely need a symbol not in the table, list it in requested_symbols. Do not use it until approved.
 4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises.
@@ -6330,30 +6331,38 @@ function wireComposer() {
 			a.download = filename + '.svg';
 			a.click();
 			URL.revokeObjectURL(a.href);
-			const img = new Image();
-			const url = URL.createObjectURL(svgBlob);
-			img.onload = () => {
-			const canvas = document.createElement('canvas');
-			const scale = 2;
-			canvas.width = w * scale;
-			canvas.height = h * scale;
-			const ctx = canvas.getContext('2d');
-			ctx.fillStyle = '#0b0d10';
-			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			ctx.scale(scale, scale);
-			ctx.drawImage(img, 0, 0, w, h);
-			canvas.toBlob((blob) => {
-				const a2 = document.createElement('a');
-				a2.href = URL.createObjectURL(blob);
-				a2.download = filename + '.png';
-				a2.click();
-				URL.revokeObjectURL(a2.href);
-			}, 'image/png');
-			URL.revokeObjectURL(url);
-			};
-			img.onerror = () => URL.revokeObjectURL(url);
-			img.src = url;
-		}
+			// PNG via canvas — only works if SVG has no external resources
+				const img = new Image();
+				img.crossOrigin = 'anonymous';
+				const url = URL.createObjectURL(svgBlob);
+				img.onload = () => {
+				try {
+					const canvas = document.createElement('canvas');
+					const scale = 2;
+					canvas.width = w * scale;
+					canvas.height = h * scale;
+					const ctx = canvas.getContext('2d');
+					ctx.fillStyle = '#0b0d10';
+					ctx.fillRect(0, 0, canvas.width, canvas.height);
+					ctx.scale(scale, scale);
+					ctx.drawImage(img, 0, 0, w, h);
+					canvas.toBlob((blob) => {
+					if (!blob) { URL.revokeObjectURL(url); return; }
+					const a2 = document.createElement('a');
+					a2.href = URL.createObjectURL(blob);
+					a2.download = filename + '.png';
+					a2.click();
+					URL.revokeObjectURL(a2.href);
+					URL.revokeObjectURL(url);
+					}, 'image/png');
+				} catch (err) {
+					console.warn('[CodeSmith] PNG export blocked (tainted canvas). SVG was downloaded instead.');
+					URL.revokeObjectURL(url);
+				}
+				};
+				img.onerror = () => URL.revokeObjectURL(url);
+				img.src = url;
+			}
 
 		function downloadMermaidDef(def, filename) {
 			const blob = new Blob([def], { type: 'text/plain;charset=utf-8' });
@@ -7655,15 +7664,44 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       list.appendChild(item);
     }
   }
-
-  function _scSelectModule(modId) {
-    _scActiveModuleId = modId;
-    _scRenderModuleList();
-    const data = _scModuleData[modId] || {};
-    const skeleton = CodeSmith.stageB.getSkeleton();
-    const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
-    const states = CodeSmith.stageC.getModuleStates();
-    const state = states[modId] || 'pending';
+		function _scEnsureDisplayElements() {
+			const codePane = $('#sc-code');
+			const testsPane = $('#sc-tests');
+			const outPane = $('#sc-output');
+			if (codePane && !$('#sc-code-display')) {
+			codePane.replaceChildren();
+			const pre = document.createElement('pre');
+			const code = document.createElement('code');
+			code.className = 'language-python';
+			code.id = 'sc-code-display';
+			pre.appendChild(code);
+			codePane.appendChild(pre);
+			}
+			if (testsPane && !$('#sc-tests-display')) {
+			testsPane.replaceChildren();
+			const pre = document.createElement('pre');
+			const code = document.createElement('code');
+			code.className = 'language-python';
+			code.id = 'sc-tests-display';
+			pre.appendChild(code);
+			testsPane.appendChild(pre);
+			}
+			if (outPane && !$('#sc-output-display')) {
+			outPane.replaceChildren();
+			const div = document.createElement('div');
+			div.id = 'sc-output-display';
+			outPane.appendChild(div);
+			}
+		}
+			function _scSelectModule(modId) {
+				_scActiveModuleId = modId;
+				_scEnsureDisplayElements();
+				_scRenderModuleList();
+			const data = _scModuleData[modId] || {};
+			const skeleton = CodeSmith.stageB.getSkeleton();
+			const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+			const states = CodeSmith.stageC.getModuleStates();
+			const state = states[modId] || 'pending';
 
 			const activeName = $('#sc-active-name');
 			const badge = $('#sc-active-badge');
@@ -7673,29 +7711,32 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			badge.textContent = state;
 			}
 
-		const codeEl = $('#sc-code-display');
-	    if (codeEl) codeEl.textContent = data.code || '';
-	    if (data.code && window.hljs) {
-	      delete codeEl.dataset.highlighted;
-	      codeEl.className = 'language-python';
-	      hljs.highlightElement(codeEl);
-	    }
-	
-		const testsEl = $('#sc-tests-display');
-	    if (testsEl) testsEl.textContent = data.tests || '';
-	    if (data.tests && window.hljs) {
-	      delete testsEl.dataset.highlighted;
-	      testsEl.className = 'language-python';
-	      hljs.highlightElement(testsEl);
-	    }
+			const codeEl = $('#sc-code-display');
+			if (codeEl) {
+			codeEl.textContent = data.code || '';
+			if (data.code && window.hljs) {
+				delete codeEl.dataset.highlighted;
+				codeEl.className = 'language-python';
+				try { hljs.highlightElement(codeEl); } catch {}
+			}
+			}
 
-		const outEl = $('#sc-output-display');
-    	if (outEl) outEl.textContent = data.output || '';
+			const testsEl = $('#sc-tests-display');
+			if (testsEl) {
+			testsEl.textContent = data.tests || '';
+			if (data.tests && window.hljs) {
+				delete testsEl.dataset.highlighted;
+				testsEl.className = 'language-python';
+				try { hljs.highlightElement(testsEl); } catch {}
+			}
+			}
 
-    // Show escalation bar if escalated
-    const escBar = $('#sc-escalation-bar');
-    if (escBar) escBar.hidden = state !== 'escalated';
-  }
+			const outEl = $('#sc-output-display');
+			if (outEl) outEl.textContent = data.output || '';
+
+			const escBar = $('#sc-escalation-bar');
+			if (escBar) escBar.hidden = state !== 'escalated';
+		}
 
   function _scUpdateProgress() {
     const states = CodeSmith.stageC.getModuleStates();
@@ -8113,10 +8154,50 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			editBtn.addEventListener('click', _scEditAndRerun);
 			const regenBtn = el('button', { class: 'btn', id: 'btn-sc-regen', style: 'font-size:11px;' }, 'Regenerate');
 			regenBtn.addEventListener('click', () => _scRebuildSingleModule(_scActiveModuleId));
-			const bypassBtn = el('button', { class: 'btn', id: 'btn-sc-bypass', style: 'font-size:11px;color:#f59e0b;' }, 'Bypass & continue');
-			bypassBtn.addEventListener('click', () => $('#btn-sc-bypass').click());
-			const skipBtn = el('button', { class: 'btn', id: 'btn-sc-skip-mod', style: 'font-size:11px;color:#ff6b6b;' }, 'Skip module');
-			skipBtn.addEventListener('click', () => $('#btn-sc-skip-mod').click());
+			const bypassBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#f59e0b;' }, 'Bypass & continue');
+				bypassBtn.addEventListener('click', async () => {
+				const modId = _scActiveModuleId;
+				if (!modId) return;
+				const data = _scModuleData[modId] || {};
+				const skeleton = CodeSmith.stageB.getSkeleton();
+				const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+				_scLog('⚠ ' + modId + ' bypassed (marked passed without verification)', 'log-warn');
+				const artifact = {
+					id: modId + '_' + Date.now(),
+					sessionId: CodeSmith.state.currentId,
+					moduleName: modId,
+					code: data.code || '',
+					tests: data.tests || '',
+					spec: mod,
+					createdAt: Date.now(),
+					status: 'bypassed',
+				};
+				try { await CodeSmith.db.putArtifact(artifact); } catch {}
+				SymbolTable.markImplemented(modId);
+				const states = CodeSmith.stageC.getModuleStates();
+				states[modId] = 'passed';
+				$('#sc-escalation-bar').hidden = true;
+				_scEnsureDisplayElements();
+				_scRenderModuleList();
+				_scUpdateProgress();
+				_scSelectModule(modId);
+				$('#btn-sc-resume').hidden = false;
+				CodeSmith.stageC.resume();
+				});
+				const skipBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#ff6b6b;' }, 'Skip module');
+				skipBtn.addEventListener('click', () => {
+				const modId = _scActiveModuleId;
+				if (!modId) return;
+				_scLog('Skipped ' + modId + ' — package may be incomplete', 'log-warn');
+				const states = CodeSmith.stageC.getModuleStates();
+				states[modId] = 'failed';
+				$('#sc-escalation-bar').hidden = true;
+				_scEnsureDisplayElements();
+				_scRenderModuleList();
+				_scUpdateProgress();
+				$('#btn-sc-resume').hidden = false;
+				CodeSmith.stageC.resume();
+				});
 			const backBtn = el('button', { class: 'btn', id: 'btn-sc-back-b', style: 'font-size:11px;' }, 'Back to skeleton');
 			backBtn.addEventListener('click', () => _showStep('b'));
 			escBar.appendChild(editBtn);
