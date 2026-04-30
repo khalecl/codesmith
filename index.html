@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0b0d10" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%234f8cff'/><text x='16' y='22' font-size='16' font-weight='700' font-family='system-ui' text-anchor='middle' fill='%230b0d10'>CS</text></svg>" />
 <title>CodeSmith</title>
 <!--
@@ -1395,6 +1399,7 @@
   <div class="flex flex-1 min-h-0">
 
     <!-- Sidebar -->
+	<div id="sidebar-backdrop" style="display:none;position:fixed;inset:48px 0 24px;background:rgba(0,0,0,0.5);z-index:39;" aria-hidden="true"></div>
     <aside id="sidebar" class="sidebar hairline-r flex flex-col" aria-label="Sessions">
 		<div class="p-3 hairline-b" style="display:flex;flex-direction:column;gap:6px;">
 		        <button id="btn-new-session" class="btn btn-primary w-full" aria-label="Create a new session">
@@ -5126,8 +5131,8 @@ CodeSmith.explorer = Explorer;
 		      cursorSmoothCaretAnimation: 'on',
 		      renderLineHighlight: 'all',
 		      contextmenu: true,
-		      mouseWheelZoom: true,
-		      padding: { top: 8 },
+				mouseWheelZoom: !('ontouchstart' in window),
+					padding: { top: 8 },
 		    });
 		 
 		    // Track cursor position
@@ -5148,8 +5153,12 @@ CodeSmith.explorer = Explorer;
 		      }
 		    });
 		 
-		    _initialized = true;
-		  }
+				window.addEventListener('resize', () => {
+					if (_editor) _editor.layout();
+					if (_diffEditor) _diffEditor.layout();
+					});
+				_initialized = true;
+			}
 		 
 		  function openFile(filename, content, language) {
 		    if (!_editor) return;
@@ -6341,9 +6350,33 @@ function wireComposer() {
     $('#btn-save-settings').addEventListener('click', saveSettingsFromModal);
     $('#btn-test-conn').addEventListener('click', runTestConnection);
     $('#btn-fetch-models').addEventListener('click', runFetchModels);
-    $('#btn-toggle-sidebar').addEventListener('click', () => {
-      $('#sidebar').classList.toggle('collapsed');
-    });
+	$('#btn-toggle-sidebar').addEventListener('click', () => {
+		const sb = $('#sidebar');
+		sb.classList.toggle('collapsed');
+		const backdrop = $('#sidebar-backdrop');
+		if (backdrop && window.innerWidth <= 768) {
+			backdrop.style.display = sb.classList.contains('collapsed') ? 'none' : 'block';
+		}
+		});
+		const sidebarBackdrop = $('#sidebar-backdrop');
+		if (sidebarBackdrop) {
+		sidebarBackdrop.addEventListener('click', () => {
+			$('#sidebar').classList.add('collapsed');
+			sidebarBackdrop.style.display = 'none';
+		});
+		}
+		// Auto-collapse sidebar on mobile after session select
+		if (window.innerWidth <= 768) {
+		$('#sidebar').classList.add('collapsed');
+		}
+		// Close sidebar when picking a session on mobile
+		document.addEventListener('click', (ev) => {
+		if (window.innerWidth <= 768 && ev.target.closest('.sess-item')) {
+			$('#sidebar').classList.add('collapsed');
+			const bd = $('#sidebar-backdrop');
+			if (bd) bd.style.display = 'none';
+		}
+		});
     wireComposer();
 	const clearSessBtn = $('#btn-clear-sessions');
 	    if (clearSessBtn) clearSessBtn.addEventListener('click', async () => {
