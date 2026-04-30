@@ -664,6 +664,7 @@
   }
   .sc-dot.pending   { background: #5b6474; }
   .sc-dot.building  { background: #f59e0b; animation: pulse-dot 1.2s infinite; }
+  .sc-dot.built     { background: #4f8cff; }
   .sc-dot.testing   { background: #f59e0b; }
   .sc-dot.passed    { background: #4ade80; }
   .sc-dot.failed    { background: #ff6b6b; }
@@ -4043,211 +4044,230 @@ const StageC = (() => {
     let completedModules = 0;
 
     // ---- Build each module ----
-    for (const modId of _skeleton.build_order) {
-      if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
-      if (_paused) {
-        _state = 'paused';
-        yield { type: 'build_paused', moduleId: modId };
-        // Wait for resume
-        while (_paused && !_aborted) await _sleep(200);
-        if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
-        _state = 'running';
-      }
+    // ---- PHASE 1: Build all modules (no testing) ----
+		for (const modId of _skeleton.build_order) {
+		if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+		if (_paused) {
+			_state = 'paused';
+			yield { type: 'build_paused', moduleId: modId };
+			while (_paused && !_aborted) await _sleep(200);
+			if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+			_state = 'running';
+		}
 
-      const mod = _skeleton.modules.find(m => m.id === modId);
-      if (!mod) continue;
+		const mod = _skeleton.modules.find(m => m.id === modId);
+		if (!mod) continue;
+		_currentModuleId = modId;
+		_moduleStates[modId] = 'building';
+		yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules, phase: 'build' };
 
-      _currentModuleId = modId;
-      _moduleStates[modId] = 'building';
-      yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules };
+		const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
+		const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
+		const workOrder = {
+			module_spec: mod,
+			symbol_table: SymbolTable.get(),
+			dependency_code: depCode,
+			dummy_inputs: dummyInputs,
+		};
 
-      // Build work order
-      const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
-      const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
-      const workOrder = {
-        module_spec: mod,
-        symbol_table: SymbolTable.get(),
-        dependency_code: depCode,
-        dummy_inputs: dummyInputs,
-      };
+		let workerResult = null;
+		let workerError = null;
+		let workerText = '';
+		try {
+			for await (const ev of CodeSmith.llm.chat({
+			messages: [
+				{ role: 'system', content: STAGE_C_WORKER_SYSTEM },
+				{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+			],
+			tier: 'worker', temperature: 0.2, maxTokens: 20000,
+			})) {
+			if (ev.type === 'token') {
+				workerText += ev.delta;
+				yield { type: 'worker_stream', moduleId: modId, delta: ev.delta };
+			} else if (ev.type === 'done') { workerText = ev.text || workerText; }
+			else if (ev.type === 'error' && !ev.recoverable) workerError = ev.error;
+			}
+		} catch (err) { workerError = err; }
 
-      let workerResult = null;
-      let passed = false;
+		if (workerError) {
+			yield { type: 'error', stage: 'worker', moduleId: modId, error: workerError };
+			_moduleStates[modId] = 'failed';
+			continue;
+		}
 
-      for (let attempt = 1; attempt <= REPAIR_MAX + 1; attempt++) {
-        if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+		try {
+			workerResult = _parseJSON(workerText);
+			if (!workerResult || !workerResult.code) throw new Error('Missing code');
+		} catch (err) {
+			yield { type: 'error', stage: 'worker_parse', moduleId: modId, error: err };
+			_moduleStates[modId] = 'failed';
+			continue;
+		}
 
-        const isRepair = attempt > 1;
-        if (isRepair) {
-          _moduleStates[modId] = 'building';
-          yield { type: 'repair_start', moduleId: modId, attempt };
-        }
+		yield { type: 'worker_done', moduleId: modId, result: workerResult, attempt: 1 };
 
-        // ---- Call worker ----
-        let workerMessages;
-        if (isRepair && workerResult) {
-          const repairMsg = STAGE_C_REPAIR_ADDENDUM.replace('{PYTEST_OUTPUT}', workerResult._lastPytestOutput || '');
-          workerMessages = [
-            { role: 'system', content: STAGE_C_WORKER_SYSTEM },
-            { role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
-            { role: 'assistant', content: JSON.stringify({ code: workerResult.code, tests: workerResult.tests }) },
-            { role: 'user', content: repairMsg },
-          ];
-        } else {
-          workerMessages = [
-            { role: 'system', content: STAGE_C_WORKER_SYSTEM },
-            { role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
-          ];
-        }
+		if (workerResult.requested_symbols && workerResult.requested_symbols.length > 0) {
+			yield { type: 'symbols_requested', moduleId: modId, symbols: workerResult.requested_symbols };
+			const decisions = await _negotiateSymbols(workerResult.requested_symbols);
+			yield { type: 'symbols_decision', moduleId: modId, decisions };
+			for (const dec of (decisions || [])) {
+			if (dec.action === 'approve') {
+				SymbolTable.apply({
+				op: 'add', section: dec.kind === 'function' ? 'functions' : dec.kind === 'type' ? 'types' : 'constants',
+				name: dec.name,
+				value: { definition: dec.definition || '', module: modId, status: 'declared', description: dec.reason || '' },
+				});
+			}
+			}
+		}
 
-        let workerText = '';
-        let workerError = null;
-        try {
-          for await (const ev of CodeSmith.llm.chat({
-            messages: workerMessages,
-            tier: 'worker',
-            temperature: 0.2,
-            maxTokens: 20000,
-          })) {
-            if (ev.type === 'token') {
-              workerText += ev.delta;
-              yield { type: 'worker_stream', moduleId: modId, delta: ev.delta };
-            } else if (ev.type === 'done') {
-              workerText = ev.text || workerText;
-            } else if (ev.type === 'error' && !ev.recoverable) {
-              workerError = ev.error;
-            }
-          }
-        } catch (err) { workerError = err; }
+		const safeName = _sanitizeModuleName(mod.name || mod.id);
+		mod.name = safeName;
+		try {
+			await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', workerResult.code);
+			if (workerResult.tests) await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', workerResult.tests);
+		} catch (err) {
+			yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
+			continue;
+		}
+		for (const pkg of (workerResult.imports_needed || [])) {
+			try { await CodeSmith.sandbox.installPackage(pkg); } catch (err) {
+			yield { type: 'error', stage: 'install', moduleId: modId, error: err };
+			}
+		}
 
-        if (workerError) {
-          yield { type: 'error', stage: 'worker', moduleId: modId, error: workerError };
-          _moduleStates[modId] = 'failed';
-          break;
-        }
+		_moduleStates[modId] = 'built';
+		const artifact = {
+			id: modId + '_' + Date.now(),
+			sessionId: CodeSmith.state.currentId,
+			moduleName: modId,
+			code: workerResult.code,
+			tests: workerResult.tests || '',
+			spec: mod,
+			createdAt: Date.now(),
+			status: 'built',
+			_imports: workerResult.imports_needed || [],
+		};
+		_moduleArtifacts.push(artifact);
+		SymbolTable.markImplemented(modId);
+		yield { type: 'module_built', moduleId: modId, table: SymbolTable.get() };
+		}
 
-        try {
-          workerResult = _parseJSON(workerText);
-          if (!workerResult || !workerResult.code) throw new Error('Missing code in worker response');
-        } catch (err) {
-          yield { type: 'error', stage: 'worker_parse', moduleId: modId, error: err };
-          _moduleStates[modId] = 'failed';
-          break;
-        }
+		yield { type: 'all_built', count: _moduleArtifacts.length };
 
-        yield { type: 'worker_done', moduleId: modId, result: workerResult, attempt };
+		// ---- PHASE 2: Test each module with patch-based repair ----
+		for (const artifact of _moduleArtifacts) {
+		if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+		if (_paused) {
+			_state = 'paused';
+			yield { type: 'build_paused', moduleId: artifact.moduleName };
+			while (_paused && !_aborted) await _sleep(200);
+			if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+			_state = 'running';
+		}
 
-        // ---- Symbol negotiation ----
-        if (workerResult.requested_symbols && workerResult.requested_symbols.length > 0) {
-          yield { type: 'symbols_requested', moduleId: modId, symbols: workerResult.requested_symbols };
+		const modId = artifact.moduleName;
+		const mod = _skeleton.modules.find(m => m.id === modId);
+		if (!mod) continue;
+		_currentModuleId = modId;
+		_moduleStates[modId] = 'testing';
+		yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules, phase: 'test' };
 
-          const decisions = await _negotiateSymbols(workerResult.requested_symbols);
-          yield { type: 'symbols_decision', moduleId: modId, decisions };
+		let passed = false;
+		let lastOutput = '';
 
-          for (const dec of (decisions || [])) {
-            if (dec.action === 'approve') {
-              SymbolTable.apply({
-                op: 'add', section: dec.kind === 'function' ? 'functions' : dec.kind === 'type' ? 'types' : 'constants',
-                name: dec.name,
-                value: { definition: dec.definition || '', module: modId, status: 'declared', description: dec.reason || '' },
-              });
-            }
-            // reject / modify_skeleton: worker proceeds without the symbol
-          }
-        }
+		for (let attempt = 1; attempt <= REPAIR_MAX + 1; attempt++) {
+			if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+			yield { type: 'tests_start', moduleId: modId, attempt };
 
-		// ---- Write files ----
-		        const safeName = _sanitizeModuleName(mod.name || mod.id);
-		        mod.name = safeName;
-		        try {
-		          await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', workerResult.code);
-		          if (workerResult.tests) {
-		            await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', workerResult.tests);
-		          }
-		        } catch (err) {
-		          yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
-		          break;
-		        }
-
-        // ---- Install packages ----
-        for (const pkg of (workerResult.imports_needed || [])) {
-          try { await CodeSmith.sandbox.installPackage(pkg); } catch (err) {
-            yield { type: 'error', stage: 'install', moduleId: modId, error: err };
-          }
-        }
-
-        // ---- Run pytest ----
-        _moduleStates[modId] = 'testing';
-        yield { type: 'tests_start', moduleId: modId, attempt };
-
-		const pytestCode = `
+			const safeName = mod.name;
+			const pytestCode = `
 				import sys, os
 				sys.path.insert(0, '/workdir')
 				os.chdir('/workdir')
-				for mod_name in list(sys.modules):
-				    if mod_name == '${safeName}' or mod_name.startswith('${safeName}.'):
-				        del sys.modules[mod_name]
+				for mn in list(sys.modules):
+					if mn == '${safeName}' or mn.startswith('${safeName}.'):
+						del sys.modules[mn]
 				import pytest
 				exit_code = pytest.main(['-v', '/workdir/test_${safeName}.py', '--tb=short', '--no-header'])
 				`;
-        let testResult;
-        try {
-          testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
-        } catch (err) {
-          yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
-          _moduleStates[modId] = 'failed';
-          break;
-        }
+			let testResult;
+			try {
+			testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+			} catch (err) {
+			yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
+			break;
+			}
+			const pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
+			const parsedTest = _parsePytest(pytestOutput);
+			lastOutput = pytestOutput;
 
-        const pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
-        const parsedTest = _parsePytest(pytestOutput);
-        workerResult._lastPytestOutput = pytestOutput.slice(-3000);
+			yield {
+			type: 'tests_result', moduleId: modId, attempt,
+			passed: parsedTest.allPassed, passCount: parsedTest.passCount,
+			failCount: parsedTest.failCount, output: pytestOutput,
+			};
 
-        yield {
-          type: 'tests_result', moduleId: modId, attempt,
-          passed: parsedTest.allPassed, passCount: parsedTest.passCount,
-          failCount: parsedTest.failCount, output: pytestOutput,
-        };
+			if (parsedTest.allPassed && parsedTest.passCount > 0) {
+			passed = true;
+			artifact.status = 'passed';
+			try { await CodeSmith.db.putArtifact(artifact); } catch {}
+			break;
+			}
+			if (attempt > REPAIR_MAX) break;
 
-        if (parsedTest.allPassed && parsedTest.passCount > 0) {
-          passed = true;
-          break;
-        }
+			// ---- PATCH-BASED REPAIR ----
+			yield { type: 'repair_start', moduleId: modId, attempt: attempt + 1 };
+			const currentCode = await CodeSmith.sandbox.readFile('/workdir/' + safeName + '.py').catch(() => artifact.code);
+			const currentTests = await CodeSmith.sandbox.readFile('/workdir/test_' + safeName + '.py').catch(() => artifact.tests);
 
-        if (attempt > REPAIR_MAX) break;
-      }
+			const patch = await _diagnoseAndPatch(modId, mod, currentCode, currentTests, pytestOutput);
+			yield { type: 'repair_diagnosis', moduleId: modId, attempt: attempt + 1, patch };
 
-      if (passed) {
-        _moduleStates[modId] = 'passed';
-        SymbolTable.markImplemented(modId);
-        const artifact = {
-          id: modId + '_' + Date.now(),
-          sessionId: CodeSmith.state.currentId,
-          moduleName: modId,
-          code: workerResult.code,
-          tests: workerResult.tests || '',
-          spec: mod,
-          createdAt: Date.now(),
-          status: 'passed',
-        };
-        _moduleArtifacts.push(artifact);
-        try { await CodeSmith.db.putArtifact(artifact); } catch {}
-        completedModules++;
-        yield { type: 'module_passed', moduleId: modId, progress: completedModules + '/' + totalModules, table: SymbolTable.get() };
-      } else {
-        _moduleStates[modId] = 'escalated';
-        yield {
-          type: 'module_escalated', moduleId: modId,
-          code: workerResult ? workerResult.code : '',
-          tests: workerResult ? workerResult.tests : '',
-          output: workerResult ? workerResult._lastPytestOutput : '',
-          table: SymbolTable.get(),
-        };
-        // Pause build on escalation
-        _state = 'paused';
-        return; // Caller must handle resume
-      }
-    }
+			if (!patch || !patch.edits || patch.edits.length === 0) {
+			yield { type: 'repair_failed', moduleId: modId, reason: 'No patches generated' };
+			continue;
+			}
+
+			let newCode = currentCode;
+			let newTests = currentTests;
+			for (const edit of patch.edits) {
+			const target = edit.target === 'tests' ? newTests : newCode;
+			const result = _applyPatchEdit(target, edit);
+			if (!result.ok) {
+				yield { type: 'repair_failed', moduleId: modId, reason: 'Patch apply failed: ' + result.error };
+				continue;
+			}
+			if (edit.target === 'tests') newTests = result.newContent;
+			else newCode = result.newContent;
+			}
+
+			try {
+			await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', newCode);
+			await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', newTests);
+			artifact.code = newCode;
+			artifact.tests = newTests;
+			} catch (err) {
+			yield { type: 'error', stage: 'patch_write', moduleId: modId, error: err };
+			break;
+			}
+		}
+
+		if (passed) {
+			completedModules++;
+			yield { type: 'module_passed', moduleId: modId, progress: completedModules + '/' + totalModules, table: SymbolTable.get() };
+		} else {
+			_moduleStates[modId] = 'escalated';
+			yield {
+			type: 'module_escalated', moduleId: modId,
+			code: artifact.code, tests: artifact.tests, output: lastOutput,
+			table: SymbolTable.get(),
+			};
+			_state = 'paused';
+			return;
+		}
+		}
+
 
     // ---- Integration test ----
     yield { type: 'integration_start' };
@@ -4338,7 +4358,98 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
       return code;
     } catch { return null; }
   }
+//------------------
 
+		async function _diagnoseAndPatch(moduleId, mod, code, tests, pytestOutput) {
+			const numberedCode = code.split('\n').map((l, i) => (i + 1) + '\t' + l).join('\n');
+			const numberedTests = tests.split('\n').map((l, i) => (i + 1) + '\t' + l).join('\n');
+			const trimmedOutput = pytestOutput.slice(-2500);
+
+			const prompt = `Module ${moduleId} failed pytest. Diagnose the failure and produce MINIMAL line-level patches.
+
+		CURRENT CODE (${moduleId}.py, line-numbered):
+		${numberedCode}
+
+		CURRENT TESTS (test_${moduleId}.py, line-numbered):
+		${numberedTests}
+
+		PYTEST OUTPUT:
+		${trimmedOutput}
+
+		ANALYSIS STEPS:
+		1. Identify root cause: syntax error, logic bug, wrong return type, off-by-one, exception not handled, signature mismatch, missing import, etc.
+		2. Decide if the fix is in CODE or TESTS (tests can be wrong too).
+		3. Produce the SMALLEST set of edits. NEVER rewrite whole functions if a 1-line fix works.
+
+		Output ONLY valid JSON (no markdown):
+		{
+		"diagnosis": "one-line root cause",
+		"category": "syntax|logic|signature|import|exception|test_wrong|other",
+		"edits": [
+			{
+			"target": "code|tests",
+			"type": "replace|add|delete",
+			"startLine": 5,
+			"endLine": 5,
+			"afterLine": null,
+			"oldCode": "exact text being replaced (must match line ${'startLine'} to ${'endLine'} verbatim)",
+			"newCode": "replacement text (omit for delete)",
+			"reason": "why this edit"
+			}
+		]
+		}
+
+		Rules:
+		- For "replace": oldCode must match the joined source of lines startLine..endLine EXACTLY (including indentation).
+		- For "add": use afterLine; newCode is inserted after that line.
+		- For "delete": startLine..endLine; no newCode.
+		- Public function signatures CANNOT change. If the test wants a different signature, fix the test instead.
+		- If the bug requires >5 line changes, return {"edits":[],"diagnosis":"too complex for patch"}.`;
+
+			try {
+			const result = await CodeSmith.llm.chatComplete({
+				messages: [
+				{ role: 'system', content: 'You are a Python debugger producing line-level patches. Output only valid JSON.' },
+				{ role: 'user', content: prompt },
+				],
+				tier: 'orchestrator',
+				temperature: 0.1,
+				maxTokens: 8000,
+			});
+			return _parseJSON(result.text);
+			} catch (err) {
+			return { diagnosis: 'Patch generation failed: ' + (err.message || err), edits: [] };
+			}
+		}
+
+		function _applyPatchEdit(content, edit) {
+			const lines = content.split('\n');
+			if (edit.type === 'replace') {
+			const start = Math.max(0, (edit.startLine || 1) - 1);
+			const end = Math.min(lines.length, edit.endLine || edit.startLine);
+			if (edit.oldCode) {
+				const actualOld = lines.slice(start, end).join('\n');
+				if (actualOld.trim() !== edit.oldCode.trim()) {
+				return { ok: false, error: 'oldCode mismatch at line ' + edit.startLine };
+				}
+			}
+			const newLines = (edit.newCode || '').split('\n');
+			lines.splice(start, end - start, ...newLines);
+			} else if (edit.type === 'add') {
+			const insertAt = Math.min(lines.length, edit.afterLine || lines.length);
+			const newLines = (edit.newCode || '').split('\n');
+			lines.splice(insertAt, 0, ...newLines);
+			} else if (edit.type === 'delete') {
+			const start = Math.max(0, (edit.startLine || 1) - 1);
+			const end = Math.min(lines.length, edit.endLine || edit.startLine);
+			lines.splice(start, end - start);
+			} else {
+			return { ok: false, error: 'Unknown edit type: ' + edit.type };
+			}
+			return { ok: true, newContent: lines.join('\n') };
+		}
+
+//-------------------
   async function _negotiateSymbols(requested) {
     const prompt = STAGE_C_SYMBOL_PROMPT
       .replace('{SYMBOL_TABLE}', JSON.stringify(SymbolTable.get(), null, 2))
@@ -7546,9 +7657,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		await CodeSmith.db.putSession(sess);
 	  }
 	  // ---- Day 6: Stage C multi-module UI wiring ------------------------------
-  let _scBuildGenerator = null;
-  let _scActiveModuleId = null;
-  let _scModuleData = {};  // { moduleId: { code, tests, output } }
+		let _scBuildGenerator = null;
+		let _scActiveModuleId = null;
+		let _scModuleData = {};
+		let _scEditModeActive = false;
+		let _scEditModeOriginal = null;
 
   function wireStageC() {
     // Tab switching
@@ -7664,6 +7777,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       list.appendChild(item);
     }
   }
+			function _scExitEditMode() {
+				_scEditModeActive = false;
+				_scEditModeOriginal = null;
+				_scEnsureDisplayElements();
+				const escBar = $('#sc-escalation-bar');
+				if (escBar) escBar.hidden = true;
+			}
 		function _scEnsureDisplayElements() {
 			const codePane = $('#sc-code');
 			const testsPane = $('#sc-tests');
@@ -7694,6 +7814,10 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			}
 		}
 			function _scSelectModule(modId) {
+				if (_scEditModeActive && _scActiveModuleId !== modId) {
+					if (!confirm('You have unsaved edits. Discard and switch?')) return;
+					_scExitEditMode();
+					}
 				_scActiveModuleId = modId;
 				_scEnsureDisplayElements();
 				_scRenderModuleList();
@@ -7843,6 +7967,24 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
           case 'repair_start':
             _scLog('Repair ' + ev.moduleId + ' attempt ' + ev.attempt, 'log-warn');
             break;
+			
+			case 'module_built':
+				_scRenderModuleList();
+				_scLog('🔨 ' + ev.moduleId + ' built (untested)', 'log-info');
+				break;
+			case 'all_built':
+				_scLog('━━━ Phase 1 complete: ' + ev.count + ' modules built ━━━', 'log-info');
+				_scLog('━━━ Phase 2: testing each module ━━━', 'log-info');
+				break;
+			case 'repair_diagnosis':
+				if (ev.patch && ev.patch.diagnosis) {
+				_scLog('Diagnosis: ' + ev.patch.diagnosis + ' [' + (ev.patch.category || '?') + ']', 'log-warn');
+				_scLog('  → ' + (ev.patch.edits || []).length + ' patch(es) to apply', 'log-info');
+				}
+				break;
+			case 'repair_failed':
+				_scLog('Patch failed: ' + ev.reason, 'log-fail');
+				break;
           case 'module_passed':
             _scRenderModuleList();
             _scUpdateProgress();
@@ -8023,129 +8165,119 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 	  }
 	  
 
-		function _scEditAndRerun() {
-			const modId = _scActiveModuleId;
-			if (!modId) return;
-			const data = _scModuleData[modId] || {};
-			const originalCode = data.code || '';
-			const originalTests = data.tests || '';
+			function _scEditAndRerun() {
+					const modId = _scActiveModuleId;
+					if (!modId) return;
+					const data = _scModuleData[modId] || {};
 
-			const codePane = $('#sc-code');
-			const testsPane = $('#sc-tests');
+					_scEditModeActive = true;
+					_scEditModeOriginal = { code: data.code || '', tests: data.tests || '' };
 
-			codePane.replaceChildren();
-			const codeTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-code' });
-			codeTA.value = originalCode;
-			codePane.appendChild(codeTA);
+					const codePane = $('#sc-code');
+					const testsPane = $('#sc-tests');
+					codePane.replaceChildren();
+					const codeTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-code' });
+					codeTA.value = _scEditModeOriginal.code;
+					codePane.appendChild(codeTA);
 
-			testsPane.replaceChildren();
-			const testsTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-tests' });
-			testsTA.value = originalTests;
-			testsPane.appendChild(testsTA);
+					testsPane.replaceChildren();
+					const testsTA = el('textarea', { class: 'escalated-editor', id: 'sc-edit-tests' });
+					testsTA.value = _scEditModeOriginal.tests;
+					testsPane.appendChild(testsTA);
 
-			const escBar = $('#sc-escalation-bar');
-			escBar.replaceChildren();
+					const escBar = $('#sc-escalation-bar');
+					escBar.replaceChildren();
 
-			const exitEditor = (restore) => {
-			const codeEl = $('#sc-code-display');
-			if (codeEl) {
-				codePane.replaceChildren();
-				const pre = el('pre');
-				const codeBlock = el('code', { class: 'language-python', id: 'sc-code-display' });
-				pre.appendChild(codeBlock);
-				codePane.appendChild(pre);
-			}
-			const testsEl = $('#sc-tests-display');
-			if (testsEl) {
-				testsPane.replaceChildren();
-				const pre = el('pre');
-				const tBlock = el('code', { class: 'language-python', id: 'sc-tests-display' });
-				pre.appendChild(tBlock);
-				testsPane.appendChild(pre);
-			}
-			if (restore) {
-				if (_scModuleData[modId]) {
-				_scModuleData[modId].code = originalCode;
-				_scModuleData[modId].tests = originalTests;
+					const cancelBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Cancel');
+					cancelBtn.addEventListener('click', () => {
+					_scExitEditMode();
+					_restoreEscalationBar();
+					$('#sc-escalation-bar').hidden = false;
+					_scSelectModule(modId);
+					});
+
+					const discardBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#f59e0b;' }, 'Discard changes');
+					discardBtn.addEventListener('click', () => {
+					if (!confirm('Discard your edits?')) return;
+					if (_scModuleData[modId]) {
+						_scModuleData[modId].code = _scEditModeOriginal.code;
+						_scModuleData[modId].tests = _scEditModeOriginal.tests;
+					}
+					_scExitEditMode();
+					_restoreEscalationBar();
+					$('#sc-escalation-bar').hidden = false;
+					_scSelectModule(modId);
+					});
+
+					const rebuildBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Rebuild this module');
+					rebuildBtn.addEventListener('click', async () => {
+					if (!confirm('Regenerate this module from scratch? Your edits will be lost.')) return;
+					_scExitEditMode();
+					await _scRebuildSingleModule(modId);
+					});
+
+					const rerunBtn = el('button', { class: 'btn btn-primary', style: 'font-size:11px;' }, 'Save & rerun tests');
+					rerunBtn.addEventListener('click', async () => {
+					const code = $('#sc-edit-code').value;
+					const tests = $('#sc-edit-tests').value;
+					const skeleton = CodeSmith.stageB.getSkeleton();
+					const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+					if (!mod) return;
+
+					_scLog('Re-running ' + modId + ' with edits…');
+					await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', code);
+					await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', tests);
+
+					const pytestCode = `
+				import sys, os
+				sys.path.insert(0, '/workdir')
+				os.chdir('/workdir')
+				for mn in list(sys.modules):
+					if mn == '${mod.name}' or mn.startswith('${mod.name}.'):
+						del sys.modules[mn]
+				import pytest
+				pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
+				`;
+					const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+					const output = (result.stdout || '') + (result.stderr || '');
+					const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
+					_scModuleData[modId] = { code, tests, output };
+
+					if (passed) {
+						_scLog('✓ ' + modId + ' passed after manual edit', 'log-pass');
+						SymbolTable.markImplemented(modId);
+						const artifact = {
+						id: modId + '_' + Date.now(),
+						sessionId: CodeSmith.state.currentId,
+						moduleName: modId,
+						code, tests, spec: mod,
+						createdAt: Date.now(), status: 'passed',
+						};
+						try { await CodeSmith.db.putArtifact(artifact); } catch {}
+						_scExitEditMode();
+						_scSelectModule(modId);
+						$('#btn-sc-resume').hidden = false;
+						CodeSmith.stageC.resume();
+					} else {
+						_scLog('✗ Still failing after edit', 'log-fail');
+						// Stay in edit mode but show output
+						const existingOut = $('#sc-edit-output');
+						if (existingOut) existingOut.remove();
+						const outDiv = el('pre', {
+						id: 'sc-edit-output',
+						style: 'background:#0b0d10;color:#ff9999;padding:8px;font-size:11px;max-height:200px;overflow:auto;margin-top:8px;border-radius:4px;white-space:pre-wrap;'
+						});
+						outDiv.textContent = output;
+						codePane.appendChild(outDiv);
+					}
+					});
+
+					escBar.appendChild(cancelBtn);
+					escBar.appendChild(discardBtn);
+					escBar.appendChild(rebuildBtn);
+					escBar.appendChild(rerunBtn);
+					escBar.hidden = false;
 				}
-			}
-			_restoreEscalationBar();
-			_scSelectModule(modId);
-			};
-
-			const cancelBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Cancel');
-			cancelBtn.addEventListener('click', () => exitEditor(true));
-
-			const discardBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#f59e0b;' }, 'Discard changes');
-			discardBtn.addEventListener('click', () => {
-			if (confirm('Discard your edits?')) exitEditor(true);
-			});
-
-			const rebuildBtn = el('button', { class: 'btn', style: 'font-size:11px;' }, 'Rebuild this module');
-			rebuildBtn.addEventListener('click', async () => {
-			if (!confirm('Regenerate this module from scratch? Your edits will be lost.')) return;
-			exitEditor(true);
-			await _scRebuildSingleModule(modId);
-			});
-
-			const rerunBtn = el('button', { class: 'btn btn-primary', style: 'font-size:11px;' }, 'Save & rerun tests');
-			rerunBtn.addEventListener('click', async () => {
-			const code = $('#sc-edit-code').value;
-			const tests = $('#sc-edit-tests').value;
-			const skeleton = CodeSmith.stageB.getSkeleton();
-			const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
-			if (!mod) return;
-
-			_scLog('Re-running ' + modId + ' with edits…');
-			await CodeSmith.sandbox.writeFile('/workdir/' + mod.name + '.py', code);
-			await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', tests);
-
-			const pytestCode = `
-		import sys, os
-		sys.path.insert(0, '/workdir')
-		os.chdir('/workdir')
-		for mn in list(sys.modules):
-			if mn == '${mod.name}' or mn.startswith('${mod.name}.'):
-				del sys.modules[mn]
-		import pytest
-		exit_code = pytest.main(['-v', '/workdir/test_${mod.name}.py', '--tb=short', '--no-header'])
-		`;
-			const result = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
-			const output = (result.stdout || '') + (result.stderr || '');
-			const passed = /(\d+)\s+passed/.test(output) && !/failed/.test(output);
-			_scModuleData[modId] = { code, tests, output };
-
-			if (passed) {
-				_scLog('✓ ' + modId + ' passed after manual edit', 'log-pass');
-				SymbolTable.markImplemented(modId);
-				const artifact = {
-				id: modId + '_' + Date.now(),
-				sessionId: CodeSmith.state.currentId,
-				moduleName: modId,
-				code, tests,
-				spec: mod,
-				createdAt: Date.now(),
-				status: 'passed',
-				};
-				try { await CodeSmith.db.putArtifact(artifact); } catch {}
-				exitEditor(false);
-				$('#btn-sc-resume').hidden = false;
-				CodeSmith.stageC.resume();
-			} else {
-				_scLog('✗ Still failing after edit', 'log-fail');
-				_scSelectModule(modId);
-				// Keep editor open with new output visible, restore action bar
-				const outEl = $('#sc-output-display');
-				if (outEl) outEl.textContent = output;
-			}
-			});
-
-			escBar.appendChild(cancelBtn);
-			escBar.appendChild(discardBtn);
-			escBar.appendChild(rebuildBtn);
-			escBar.appendChild(rerunBtn);
-			escBar.hidden = false;
-		}
 
 		function _restoreEscalationBar() {
 			const escBar = $('#sc-escalation-bar');
@@ -8154,50 +8286,55 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			editBtn.addEventListener('click', _scEditAndRerun);
 			const regenBtn = el('button', { class: 'btn', id: 'btn-sc-regen', style: 'font-size:11px;' }, 'Regenerate');
 			regenBtn.addEventListener('click', () => _scRebuildSingleModule(_scActiveModuleId));
-			const bypassBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#f59e0b;' }, 'Bypass & continue');
+			const bypassBtn = el('button', {
+				class: 'btn',
+				style: 'font-size:11px;color:#0b0d10;background:#f59e0b;border-color:#f59e0b;font-weight:600;'
+				}, 'Bypass & continue');
 				bypassBtn.addEventListener('click', async () => {
-				const modId = _scActiveModuleId;
-				if (!modId) return;
-				const data = _scModuleData[modId] || {};
-				const skeleton = CodeSmith.stageB.getSkeleton();
-				const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
-				_scLog('⚠ ' + modId + ' bypassed (marked passed without verification)', 'log-warn');
-				const artifact = {
-					id: modId + '_' + Date.now(),
-					sessionId: CodeSmith.state.currentId,
-					moduleName: modId,
-					code: data.code || '',
-					tests: data.tests || '',
-					spec: mod,
-					createdAt: Date.now(),
-					status: 'bypassed',
-				};
-				try { await CodeSmith.db.putArtifact(artifact); } catch {}
-				SymbolTable.markImplemented(modId);
-				const states = CodeSmith.stageC.getModuleStates();
-				states[modId] = 'passed';
-				$('#sc-escalation-bar').hidden = true;
-				_scEnsureDisplayElements();
-				_scRenderModuleList();
-				_scUpdateProgress();
-				_scSelectModule(modId);
-				$('#btn-sc-resume').hidden = false;
-				CodeSmith.stageC.resume();
-				});
-				const skipBtn = el('button', { class: 'btn', style: 'font-size:11px;color:#ff6b6b;' }, 'Skip module');
+					const modId = _scActiveModuleId;
+					if (!modId) return;
+					const data = _scModuleData[modId] || {};
+					const skeleton = CodeSmith.stageB.getSkeleton();
+					const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+					_scLog('⚠ ' + modId + ' bypassed (marked passed without verification)', 'log-warn');
+					const artifact = {
+						id: modId + '_' + Date.now(),
+						sessionId: CodeSmith.state.currentId,
+						moduleName: modId,
+						code: data.code || '',
+						tests: data.tests || '',
+						spec: mod,
+						createdAt: Date.now(),
+						status: 'bypassed',
+					};
+					try { await CodeSmith.db.putArtifact(artifact); } catch {}
+					SymbolTable.markImplemented(modId);
+					const states = CodeSmith.stageC.getModuleStates();
+					states[modId] = 'passed';
+					_scExitEditMode();
+					_scRenderModuleList();
+					_scUpdateProgress();
+					_scSelectModule(modId);
+					$('#btn-sc-resume').hidden = false;
+					CodeSmith.stageC.resume();
+					});
+
+				const skipBtn = el('button', {
+				class: 'btn',
+				style: 'font-size:11px;color:#0b0d10;background:#ff6b6b;border-color:#ff6b6b;font-weight:600;'
+				}, 'Skip module');
 				skipBtn.addEventListener('click', () => {
-				const modId = _scActiveModuleId;
-				if (!modId) return;
-				_scLog('Skipped ' + modId + ' — package may be incomplete', 'log-warn');
-				const states = CodeSmith.stageC.getModuleStates();
-				states[modId] = 'failed';
-				$('#sc-escalation-bar').hidden = true;
-				_scEnsureDisplayElements();
-				_scRenderModuleList();
-				_scUpdateProgress();
-				$('#btn-sc-resume').hidden = false;
-				CodeSmith.stageC.resume();
-				});
+					const modId = _scActiveModuleId;
+					if (!modId) return;
+					_scLog('Skipped ' + modId + ' — package may be incomplete', 'log-warn');
+					const states = CodeSmith.stageC.getModuleStates();
+					states[modId] = 'failed';
+					_scExitEditMode();
+					_scRenderModuleList();
+					_scUpdateProgress();
+					$('#btn-sc-resume').hidden = false;
+					CodeSmith.stageC.resume();
+					}	);
 			const backBtn = el('button', { class: 'btn', id: 'btn-sc-back-b', style: 'font-size:11px;' }, 'Back to skeleton');
 			backBtn.addEventListener('click', () => _showStep('b'));
 			escBar.appendChild(editBtn);
