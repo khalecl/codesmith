@@ -3996,14 +3996,15 @@ Requirements:
 Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). Runnable with: pytest test_integration.py -v`;
 
 const StageC = (() => {
-  let _state = 'idle'; // idle|running|paused|stopped|complete
-  let _skeleton = null;
-  let _spec = null;
-  let _moduleStates = {};  // { moduleId: 'pending'|'building'|'testing'|'passed'|'failed'|'escalated' }
-  let _moduleArtifacts = []; // accumulated artifacts
-  let _currentModuleId = null;
-  let _aborted = false;
-  let _paused = false;
+	let _state = 'idle';
+	let _skeleton = null;
+	let _spec = null;
+	let _moduleStates = {};
+	let _moduleDecisions = {};  // { moduleId: 'pending'|'building'|'testing'|'passed'|'failed'|'escalated' }
+	let _moduleArtifacts = []; // accumulated artifacts
+	let _currentModuleId = null;
+	let _aborted = false;
+	let _paused = false;
 
   const REPAIR_MAX = 3;
   const INTEGRATION_REPAIR_MAX = 2;
@@ -4155,7 +4156,15 @@ const StageC = (() => {
 
 		yield { type: 'all_built', count: _moduleArtifacts.length };
 
-		// ---- PHASE 2: Test each module with patch-based repair ----
+			// Pause for download checkpoint
+			_state = 'paused';
+			_paused = true;
+			yield { type: 'phase_checkpoint', message: 'All modules built. Download untested package or continue to testing.' };
+			while (_paused && !_aborted) await _sleep(200);
+			if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+			_state = 'running';
+
+			// ---- PHASE 2: Test each module with patch-based repair ----
 		for (const artifact of _moduleArtifacts) {
 		if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
 		if (_paused) {
@@ -4209,12 +4218,24 @@ const StageC = (() => {
 			};
 
 			if (parsedTest.allPassed && parsedTest.passCount > 0) {
-			passed = true;
-			artifact.status = 'passed';
-			try { await CodeSmith.db.putArtifact(artifact); } catch {}
-			break;
-			}
-			if (attempt > REPAIR_MAX) break;
+					passed = true;
+					artifact.status = 'passed';
+					try { await CodeSmith.db.putArtifact(artifact); } catch {}
+					break;
+					}
+					if (_moduleDecisions[modId] === 'bypass') {
+					passed = true;
+					artifact.status = 'bypassed';
+					try { await CodeSmith.db.putArtifact(artifact); } catch {}
+					delete _moduleDecisions[modId];
+					break;
+					}
+					if (_moduleDecisions[modId] === 'skip') {
+					artifact.status = 'skipped';
+					delete _moduleDecisions[modId];
+					break;
+					}
+					if (attempt > REPAIR_MAX) break;
 
 			// ---- PATCH-BASED REPAIR ----
 			yield { type: 'repair_start', moduleId: modId, attempt: attempt + 1 };
@@ -4256,16 +4277,38 @@ const StageC = (() => {
 		if (passed) {
 			completedModules++;
 			yield { type: 'module_passed', moduleId: modId, progress: completedModules + '/' + totalModules, table: SymbolTable.get() };
-		} else {
-			_moduleStates[modId] = 'escalated';
-			yield {
-			type: 'module_escalated', moduleId: modId,
-			code: artifact.code, tests: artifact.tests, output: lastOutput,
-			table: SymbolTable.get(),
-			};
-			_state = 'paused';
-			return;
-		}
+			} else if (artifact.status === 'skipped') {
+					_moduleStates[modId] = 'failed';
+					yield { type: 'module_skipped', moduleId: modId };
+				} else {
+					_moduleStates[modId] = 'escalated';
+					yield {
+					type: 'module_escalated', moduleId: modId,
+					code: artifact.code, tests: artifact.tests, output: lastOutput,
+					table: SymbolTable.get(),
+					};
+					_state = 'paused';
+					_paused = true;
+					while (_paused && !_aborted) await _sleep(200);
+					if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+					_state = 'running';
+					// Re-check decision after resume
+					if (_moduleDecisions[modId] === 'bypass') {
+					artifact.status = 'bypassed';
+					_moduleStates[modId] = 'passed';
+					try { await CodeSmith.db.putArtifact(artifact); } catch {}
+					completedModules++;
+					delete _moduleDecisions[modId];
+					yield { type: 'module_passed', moduleId: modId, progress: completedModules + '/' + totalModules, table: SymbolTable.get() };
+					} else if (_moduleDecisions[modId] === 'skip') {
+					artifact.status = 'skipped';
+					_moduleStates[modId] = 'failed';
+					delete _moduleDecisions[modId];
+					yield { type: 'module_skipped', moduleId: modId };
+					} else {
+					return; // user did not decide; halt
+					}
+				}
 		}
 
 
@@ -4470,9 +4513,10 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     } catch { return []; }
   }
 
-  function pause() { _paused = true; }
-  function resume() { _paused = false; }
-  function stop() { _aborted = true; _paused = false; }
+	function pause() { _paused = true; }
+	function resume() { _paused = false; }
+	function stop() { _aborted = true; _paused = false; }
+	function setModuleDecision(modId, decision) { _moduleDecisions[modId] = decision; }
 
   function resumeAfterEscalation(moduleId, editedCode, editedTests) {
     // Returns data needed to re-attempt the escalated module
@@ -4518,7 +4562,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  return { run, getState, getModuleStates, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation };
+  return { run, getState, getModuleStates, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision };
 })();
 CodeSmith.stageC = StageC;
 
@@ -7920,9 +7964,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
             }
             break;
 			case 'worker_done':
-				if (_scModuleData[ev.moduleId]) {
-				_scModuleData[ev.moduleId].code = ev.result.code || '';
-				_scModuleData[ev.moduleId].tests = ev.result.tests || '';
+						if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
+						_scModuleData[ev.moduleId].code = ev.result.code || '';
+						_scModuleData[ev.moduleId].tests = ev.result.tests || '';
 				}
 				_scSelectModule(ev.moduleId);
 				_scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
@@ -7973,9 +8017,25 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				_scLog('🔨 ' + ev.moduleId + ' built (untested)', 'log-info');
 				break;
 			case 'all_built':
-				_scLog('━━━ Phase 1 complete: ' + ev.count + ' modules built ━━━', 'log-info');
-				_scLog('━━━ Phase 2: testing each module ━━━', 'log-info');
-				break;
+						_scLog('━━━ Phase 1 complete: ' + ev.count + ' modules built ━━━', 'log-info');
+						$('#btn-sc-download-all').hidden = false;
+						break;
+					case 'phase_checkpoint':
+						_scLog(ev.message, 'log-warn');
+						$('#btn-sc-pause').hidden = true;
+						const continueBtn = $('#btn-sc-continue-tests');
+						if (!continueBtn) {
+						const controls = document.querySelector('.stage-c-controls');
+						const btn = el('button', { class: 'btn btn-primary', id: 'btn-sc-continue-tests', style: 'font-size:12px;' }, '▶ Run tests on all modules');
+						btn.addEventListener('click', () => {
+							btn.remove();
+							CodeSmith.stageC.resume();
+							$('#btn-sc-pause').hidden = false;
+							_scLog('━━━ Phase 2: testing each module ━━━', 'log-info');
+						});
+						controls.insertBefore(btn, $('#btn-sc-pause'));
+						}
+						break;
 			case 'repair_diagnosis':
 				if (ev.patch && ev.patch.diagnosis) {
 				_scLog('Diagnosis: ' + ev.patch.diagnosis + ' [' + (ev.patch.category || '?') + ']', 'log-warn');
@@ -7985,7 +8045,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			case 'repair_failed':
 				_scLog('Patch failed: ' + ev.reason, 'log-fail');
 				break;
-          case 'module_passed':
+          case 'module_skipped':
+            _scRenderModuleList();
+            _scLog('⊘ ' + ev.moduleId + ' skipped', 'log-warn');
+            break;
+		  case 'module_passed':
             _scRenderModuleList();
             _scUpdateProgress();
             _scLog('✓ ' + ev.moduleId + ' implemented', 'log-pass');
@@ -8290,32 +8354,12 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				class: 'btn',
 				style: 'font-size:11px;color:#0b0d10;background:#f59e0b;border-color:#f59e0b;font-weight:600;'
 				}, 'Bypass & continue');
-				bypassBtn.addEventListener('click', async () => {
+				bypassBtn.addEventListener('click', () => {
 					const modId = _scActiveModuleId;
 					if (!modId) return;
-					const data = _scModuleData[modId] || {};
-					const skeleton = CodeSmith.stageB.getSkeleton();
-					const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
-					_scLog('⚠ ' + modId + ' bypassed (marked passed without verification)', 'log-warn');
-					const artifact = {
-						id: modId + '_' + Date.now(),
-						sessionId: CodeSmith.state.currentId,
-						moduleName: modId,
-						code: data.code || '',
-						tests: data.tests || '',
-						spec: mod,
-						createdAt: Date.now(),
-						status: 'bypassed',
-					};
-					try { await CodeSmith.db.putArtifact(artifact); } catch {}
-					SymbolTable.markImplemented(modId);
-					const states = CodeSmith.stageC.getModuleStates();
-					states[modId] = 'passed';
+					_scLog('⚠ ' + modId + ' bypassed', 'log-warn');
+					CodeSmith.stageC.setModuleDecision(modId, 'bypass');
 					_scExitEditMode();
-					_scRenderModuleList();
-					_scUpdateProgress();
-					_scSelectModule(modId);
-					$('#btn-sc-resume').hidden = false;
 					CodeSmith.stageC.resume();
 					});
 
@@ -8323,18 +8367,15 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				class: 'btn',
 				style: 'font-size:11px;color:#0b0d10;background:#ff6b6b;border-color:#ff6b6b;font-weight:600;'
 				}, 'Skip module');
+
 				skipBtn.addEventListener('click', () => {
 					const modId = _scActiveModuleId;
 					if (!modId) return;
-					_scLog('Skipped ' + modId + ' — package may be incomplete', 'log-warn');
-					const states = CodeSmith.stageC.getModuleStates();
-					states[modId] = 'failed';
+					_scLog('Skipped ' + modId, 'log-warn');
+					CodeSmith.stageC.setModuleDecision(modId, 'skip');
 					_scExitEditMode();
-					_scRenderModuleList();
-					_scUpdateProgress();
-					$('#btn-sc-resume').hidden = false;
 					CodeSmith.stageC.resume();
-					}	);
+					});
 			const backBtn = el('button', { class: 'btn', id: 'btn-sc-back-b', style: 'font-size:11px;' }, 'Back to skeleton');
 			backBtn.addEventListener('click', () => _showStep('b'));
 			escBar.appendChild(editBtn);
