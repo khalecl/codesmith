@@ -7967,7 +7967,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 						if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
 						_scModuleData[ev.moduleId].code = ev.result.code || '';
 						_scModuleData[ev.moduleId].tests = ev.result.tests || '';
-				}
+				
 				_scSelectModule(ev.moduleId);
 				_scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
 				if ($('#sc-review-tests')?.checked && ev.result.tests) {
