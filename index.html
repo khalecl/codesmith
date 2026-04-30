@@ -1938,11 +1938,36 @@
       <input id="s-model-worker" type="text" autocomplete="off" spellcheck="false" class="font-mono"
              list="models-datalist" />
     </div>
-    <div class="field">
-      <label for="s-model-fast">Fast model</label>
-      <input id="s-model-fast" type="text" autocomplete="off" spellcheck="false" class="font-mono"
-             list="models-datalist" />
-    </div>
+	<div class="field">
+	      <label for="s-model-fast">Fast model</label>
+	      <input id="s-model-fast" type="text" autocomplete="off" spellcheck="false" class="font-mono"
+	             list="models-datalist" />
+	    </div>
+	
+	    <div class="hairline-t pt-3 mt-1">
+	      <div class="text-[12px] text-muted mb-2 font-semibold">Max tokens per response</div>
+	      <div class="text-[11px] text-muted mb-2">Caps how long each model can respond. Lower = cheaper + faster, but may truncate complex answers. Typical: 4k–32k.</div>
+	      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+	        <div class="field">
+	          <label for="s-max-orch">Orchestrator</label>
+	          <input id="s-max-orch" type="number" min="256" max="200000" step="256" class="font-mono" />
+	        </div>
+	        <div class="field">
+	          <label for="s-max-worker">Worker</label>
+	          <input id="s-max-worker" type="number" min="256" max="200000" step="256" class="font-mono" />
+	        </div>
+	        <div class="field">
+	          <label for="s-max-fast">Fast</label>
+	          <input id="s-max-fast" type="number" min="256" max="200000" step="256" class="font-mono" />
+	        </div>
+	      </div>
+	    </div>
+	
+	    <div class="field">
+	      <label for="s-budget-cap">Total token budget cap</label>
+	      <input id="s-budget-cap" type="number" min="1000" step="1000" class="font-mono" />
+	      <div class="text-[11px] text-muted mt-1">Display-only counter shown in the status bar. Does not block requests.</div>
+	    </div>
 
 	   <div class="hairline-t pt-3 mt-2">
 	      <div class="text-[12px] text-muted mb-2 font-semibold">Per-tier endpoints (optional)</div>
@@ -2082,17 +2107,20 @@
 	  DB_NAME: 'codesmith_v1',
 	  DB_VERSION: 2,
 	  STORES: { SETTINGS: 'settings', SESSIONS: 'sessions', ARTIFACTS: 'artifacts' },
-	  DEFAULTS: {
-		id: 'app',
-		apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
-		apiKey: '',
-		modelOrchestrator: 'moonshotai/kimi-k2-thinking',
-		modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
-		modelFast:         'meta/llama-3.1-8b-instruct',
-		tokenBudgetCap: 100000,
-		rateLimitRpm: 40,
-		endpoints: [],  // [{name, apiUrl, apiKey, forTier: 'orchestrator'|'worker'|'fast'}]
-	  },
+		DEFAULTS: {
+				id: 'app',
+				apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
+				apiKey: '',
+				modelOrchestrator: 'moonshotai/kimi-k2-thinking',
+				modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
+				modelFast:         'meta/llama-3.1-8b-instruct',
+				tokenBudgetCap: 100000,
+				rateLimitRpm: 40,
+				endpoints: [],  // [{name, apiUrl, apiKey, forTier: 'orchestrator'|'worker'|'fast'}]
+				maxTokensOrchestrator: 20000,
+				maxTokensWorker:       20000,
+				maxTokensFast:         8000,
+			  },
 	};
 // expose for devtools only — not for app code
 	CodeSmith.PRESETS = {
@@ -2728,7 +2756,13 @@ const LLM = (() => {
   function _getSettings() {
     return CodeSmith.state.settings || CodeSmith.DEFAULTS;
   }
-
+	function getMaxTokensForTier(tier) {
+      const s = _getSettings();
+      if (tier === 'orchestrator') return s.maxTokensOrchestrator || CodeSmith.DEFAULTS.maxTokensOrchestrator;
+      if (tier === 'worker')       return s.maxTokensWorker || CodeSmith.DEFAULTS.maxTokensWorker;
+      if (tier === 'fast')         return s.maxTokensFast || CodeSmith.DEFAULTS.maxTokensFast;
+      return s.maxTokensOrchestrator || CodeSmith.DEFAULTS.maxTokensOrchestrator;
+    }
 	function getModelForTier(tier) {
 	    const s = _getSettings();
 	    // Check per-endpoint overrides
@@ -2804,14 +2838,17 @@ const LLM = (() => {
 		    }
 		    const url = apiUrl + '/chat/completions';
 		    const isThinking = _isThinkingModel(model);
-    const body = {
-      model,
-      messages,
-      stream: true,
-    };
-    if (temperature != null) body.temperature = temperature;
-    if (maxTokens != null) body.max_tokens = maxTokens;
-    if (responseFormat) body.response_format = responseFormat;
+			const tierCap = getMaxTokensForTier(tier || 'orchestrator');
+			    const effectiveMaxTokens = maxTokens != null ? Math.min(maxTokens, tierCap) : tierCap;
+			
+			    const body = {
+			      model,
+			      messages,
+			      stream: true,
+			    };
+			    if (temperature != null) body.temperature = temperature;
+			    if (effectiveMaxTokens != null) body.max_tokens = effectiveMaxTokens;
+			    if (responseFormat) body.response_format = responseFormat;
 
     // Rate limit
     try {
@@ -3082,10 +3119,10 @@ const LLM = (() => {
 
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  return {
-    chat, chatComplete, tokenEstimate, getModelForTier,
-    resetBudget, getBudget, getRecentCalls,
-  };
+	return {
+	    chat, chatComplete, tokenEstimate, getModelForTier, getMaxTokensForTier,
+	    resetBudget, getBudget, getRecentCalls,
+	  };
 })();
 CodeSmith.llm = LLM;
  
@@ -6108,8 +6145,12 @@ function wireComposer() {
     $('#s-api-key').value     = s.apiKey || '';
     $('#s-model-orch').value  = s.modelOrchestrator || '';
     $('#s-model-worker').value= s.modelWorker || '';
-    $('#s-model-fast').value  = s.modelFast || '';
-    $('#test-result').textContent = '';
+	$('#s-model-fast').value  = s.modelFast || '';
+	    $('#s-max-orch').value    = s.maxTokensOrchestrator || CodeSmith.DEFAULTS.maxTokensOrchestrator;
+	    $('#s-max-worker').value  = s.maxTokensWorker || CodeSmith.DEFAULTS.maxTokensWorker;
+	    $('#s-max-fast').value    = s.maxTokensFast || CodeSmith.DEFAULTS.maxTokensFast;
+	    $('#s-budget-cap').value  = s.tokenBudgetCap || CodeSmith.DEFAULTS.tokenBudgetCap;
+	    $('#test-result').textContent = '';
     populateDatalist(s.modelsCache || []);
     renderModelsCacheInfo();
 	  // Render endpoint list
@@ -6152,16 +6193,25 @@ function wireComposer() {
 
   async function saveSettingsFromModal() {
     const prev = CodeSmith.state.settings || {};
-    const next = {
-      apiUrl:            $('#s-api-url').value.trim() || CodeSmith.DEFAULTS.apiUrl,
-      apiKey:            $('#s-api-key').value,                     // raw — never logged
-      modelOrchestrator: $('#s-model-orch').value.trim() || CodeSmith.DEFAULTS.modelOrchestrator,
-      modelWorker:       $('#s-model-worker').value.trim() || CodeSmith.DEFAULTS.modelWorker,
-      modelFast:         $('#s-model-fast').value.trim() || CodeSmith.DEFAULTS.modelFast,
-      modelsCache:       prev.modelsCache || [],
-      modelsCacheAt:     prev.modelsCacheAt || 0,
-		endpoints:         _collectEndpoints(),
-    };
+	const _clampTokens = (v, def) => {
+	      const n = parseInt(v, 10);
+	      if (isNaN(n) || n < 256) return def;
+	      return Math.min(n, 200000);
+	    };
+	    const next = {
+	      apiUrl:            $('#s-api-url').value.trim() || CodeSmith.DEFAULTS.apiUrl,
+	      apiKey:            $('#s-api-key').value,                     // raw — never logged
+	      modelOrchestrator: $('#s-model-orch').value.trim() || CodeSmith.DEFAULTS.modelOrchestrator,
+	      modelWorker:       $('#s-model-worker').value.trim() || CodeSmith.DEFAULTS.modelWorker,
+	      modelFast:         $('#s-model-fast').value.trim() || CodeSmith.DEFAULTS.modelFast,
+	      modelsCache:       prev.modelsCache || [],
+	      modelsCacheAt:     prev.modelsCacheAt || 0,
+	      endpoints:         _collectEndpoints(),
+	      maxTokensOrchestrator: _clampTokens($('#s-max-orch').value, CodeSmith.DEFAULTS.maxTokensOrchestrator),
+	      maxTokensWorker:       _clampTokens($('#s-max-worker').value, CodeSmith.DEFAULTS.maxTokensWorker),
+	      maxTokensFast:         _clampTokens($('#s-max-fast').value, CodeSmith.DEFAULTS.maxTokensFast),
+	      tokenBudgetCap:        Math.max(1000, parseInt($('#s-budget-cap').value, 10) || CodeSmith.DEFAULTS.tokenBudgetCap),
+	    };
     await CodeSmith.db.saveSettings(next);
     CodeSmith.state.settings = { ...next, id: 'app' };
     renderStatusStrip();
