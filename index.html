@@ -9601,7 +9601,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 					const edit = edits[i];
 					const card = _createEditCard(edit, i, name);
 					aiCol.appendChild(card);
-				}
+						}
 				if (edits.length > 1) {
 					const applyAllBtn = document.createElement('button');
 					applyAllBtn.className = 'edit-apply-btn';
@@ -9643,16 +9643,15 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 									aiCol.appendChild(warn);
 								}
 								});
-					const file2 = CodeSmith.explorer.getFile(name);
-					if (file2 && CodeSmith.monaco.isInitialized()) {
-						CodeSmith.monaco.updateContent(name, file2.content);
-					}
-					_explorerRenderTree();
-					_renderEditHistory();
-					applyAllBtn.textContent = '✓ Applied ' + applied + ' / ' + edits.length;
-					applyAllBtn.disabled = true;
-					aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
-					});
+					//const file2 = CodeSmith.explorer.getFile(name);
+					//if (file2 && CodeSmith.monaco.isInitialized()) {
+					//	CodeSmith.monaco.updateContent(name, file2.content);
+					//}
+					//_explorerRenderTree();
+					//_renderEditHistory();
+					//applyAllBtn.disabled = true;
+					//aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
+					//});
 					aiCol.insertBefore(applyAllBtn, aiCol.children[1]);
 				}
 				chat.scrollTop = chat.scrollHeight;
