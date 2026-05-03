@@ -9771,7 +9771,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const applyBtn = document.createElement('button');
 		  applyBtn.className = 'edit-apply-btn';
 		  applyBtn.textContent = '✓ Apply';
-			aapplyBtn.addEventListener('click', () => {
+			applyBtn.addEventListener('click', () => {
 		    if (edit.suspicious && !confirm('This edit has warnings (' + (edit.warnings || []).join('; ') + '). Apply anyway?')) return;
 				const result = CodeSmith.explorer.applyEdit(filename, edit);
 				if (result.ok) {
