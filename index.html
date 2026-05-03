@@ -4738,42 +4738,56 @@ CodeSmith.explorer = Explorer;
 		// === PAIR PROGRAMMER MODULE =================================================
 		const PairProgrammer = (() => {
 
-		  const PAIR_SYSTEM = `You are an expert pair programmer inside CodeSmith. The user shows you code and asks for changes.
+		 const PAIR_SYSTEM = `You are an expert pair programmer inside CodeSmith. The user shows you code and asks for changes.
 
-		YOUR RESPONSE FORMAT:
-		1. Brief explanation (1-2 sentences max)
-		2. One or more EDIT BLOCKS using this exact format:
+				YOUR RESPONSE FORMAT:
+				1. Brief explanation (1-2 sentences max)
+				2. One or more EDIT BLOCKS using this exact format:
 
-		<edit type="replace" file="{filename}" start="{line}" end="{line}">
-		<old>
-		exact old code
-		</old>
-		<new>
-		replacement code
-		</new>
-		<reason>Why this change</reason>
-		</edit>
+				<edit type="replace" file="{filename}" start="{line}" end="{line}">
+				<old>
+				exact old code
+				</old>
+				<new>
+				replacement code
+				</new>
+				<reason>Why this change</reason>
+				</edit>
 
-		<edit type="add" file="{filename}" after="{line}">
-		<new>
-		code to insert
-		</new>
-		<reason>Why adding this</reason>
-		</edit>
+				<edit type="add" file="{filename}" after="{line}">
+				<new>
+				code to insert
+				</new>
+				<reason>Why adding this</reason>
+				</edit>
 
-		<edit type="delete" file="{filename}" start="{line}" end="{line}">
-		<reason>Why deleting</reason>
-		</edit>
+				<edit type="delete" file="{filename}" start="{line}" end="{line}">
+				<reason>Why deleting</reason>
+				</edit>
 
-		RULES:
-		- ALWAYS use exact line numbers from the provided code
-		- The <old> block must match the EXACT content at those lines (whitespace matters)
-		- Keep edits minimal — change only what's needed
-		- Number edits so they can be applied in order
-		- If multiple edits, list them top-to-bottom by line number
-		- Test your logic mentally before suggesting
-		- For Python: maintain PEP 8, type hints on public functions
-		- For JS: use modern ES6+, const/let, arrow functions where appropriate`;
+				CRITICAL RULES:
+				- Use type="add" for INSERTING new code without removing anything. Never use "replace" with the original content embedded in newCode — that's a bug.
+				- For type="replace", <old> must be the EXACT verbatim text at lines start..end (including indentation). Do NOT include surrounding context lines that aren't being changed.
+				- For type="add" with after="N", code is inserted on a new line AFTER line N. Existing line N stays untouched.
+				- When making multiple edits, check for variable redeclaration. If edit 1 declares "var x", edit 2 must not also declare "var x" in the same scope — use existing names or rename.
+				- When inserting code into an IIFE/function/scope, ensure the insertion point is INSIDE that scope's braces. Verify by checking that surrounding lines (in the numbered code) are within the same function.
+				- Multiple edits to the same file: list them top-to-bottom by line number. They will be applied bottom-up so line numbers stay valid.
+				- Keep edits minimal — change only what's needed.
+				- For Python: maintain PEP 8, type hints on public functions
+				- For JS: use modern ES6+, const/let, arrow functions where appropriate
+
+				WRONG EXAMPLE (do not do this):
+				<edit type="replace" start="100" end="100">
+				<old>console.log('hi');</old>
+				<new>console.log('before');
+				console.log('hi');
+				console.log('after');</new>
+				</edit>
+				This is wrong because it should be TWO add edits (before line 100 and after line 100), not a replace that embeds the original.
+
+				CORRECT EXAMPLE:
+				<edit type="add" after="99"><new>console.log('before');</new></edit>
+				<edit type="add" after="100"><new>console.log('after');</new></edit>`;
 
 		  const ANALYSIS_SYSTEM = `You are a code analyst. Analyze the provided code and output ONLY valid JSON:
 		{
@@ -4877,33 +4891,62 @@ CodeSmith.explorer = Explorer;
 			}
 		  }
 
-		  function parseEdits(responseText) {
-			const edits = [];
-			const editRegex = /<edit\s+type="(\w+)"\s+file="([^"]+)"(?:\s+start="(\d+)")?(?:\s+end="(\d+)")?(?:\s+after="(\d+)")?\s*>([\s\S]*?)<\/edit>/g;
-			let match;
-			while ((match = editRegex.exec(responseText)) !== null) {
-			  const edit = {
-				type: match[1],
-				file: match[2],
-				startLine: match[3] ? parseInt(match[3]) : null,
-				endLine: match[4] ? parseInt(match[4]) : null,
-				afterLine: match[5] ? parseInt(match[5]) : null,
-			  };
-			  const inner = match[6];
+			function parseEdits(responseText) {
+				const edits = [];
+				const editRegex = /<edit\s+type="(\w+)"\s+file="([^"]+)"(?:\s+start="(\d+)")?(?:\s+end="(\d+)")?(?:\s+after="(\d+)")?\s*>([\s\S]*?)<\/edit>/g;
+				let match;
+				while ((match = editRegex.exec(responseText)) !== null) {
+				const edit = {
+					type: match[1],
+					file: match[2],
+					startLine: match[3] ? parseInt(match[3]) : null,
+					endLine: match[4] ? parseInt(match[4]) : null,
+					afterLine: match[5] ? parseInt(match[5]) : null,
+				};
+				const inner = match[6];
 
-			  const oldMatch = inner.match(/<old>\n?([\s\S]*?)\n?<\/old>/);
-			  const newMatch = inner.match(/<new>\n?([\s\S]*?)\n?<\/new>/);
-			  const reasonMatch = inner.match(/<reason>([\s\S]*?)<\/reason>/);
+				const oldMatch = inner.match(/<old>\n?([\s\S]*?)\n?<\/old>/);
+				const newMatch = inner.match(/<new>\n?([\s\S]*?)\n?<\/new>/);
+				const reasonMatch = inner.match(/<reason>([\s\S]*?)<\/reason>/);
 
-			  if (oldMatch) edit.oldCode = oldMatch[1];
-			  if (newMatch) edit.newCode = newMatch[1];
-			  if (reasonMatch) edit.reason = reasonMatch[1].trim();
+				if (oldMatch) edit.oldCode = oldMatch[1];
+				if (newMatch) edit.newCode = newMatch[1];
+				if (reasonMatch) edit.reason = reasonMatch[1].trim();
 
-			  edits.push(edit);
+				// Pre-flight validation
+				edit.warnings = [];
+				if (edit.type === 'replace' && edit.oldCode && edit.newCode) {
+					if (edit.newCode.includes(edit.oldCode.trim()) && edit.newCode.length > edit.oldCode.length * 1.5) {
+					edit.warnings.push('newCode embeds oldCode — likely should be type="add" instead of "replace"');
+					edit.suspicious = true;
+					}
+				}
+				if (edit.type === 'add' && !edit.afterLine) {
+					edit.warnings.push('add edit missing after= attribute');
+					edit.suspicious = true;
+				}
+
+				edits.push(edit);
+				}
+
+				// Cross-edit validation: detect var redeclaration
+				const varDecls = {};
+				edits.forEach((e, i) => {
+				if (!e.newCode) return;
+				const decls = [...e.newCode.matchAll(/^\s*var\s+(\w+)/gm)].map(m => m[1]);
+				for (const v of decls) {
+					if (varDecls[v] != null) {
+					e.warnings = e.warnings || [];
+					e.warnings.push('var "' + v + '" already declared in edit ' + (varDecls[v] + 1));
+					e.suspicious = true;
+					} else {
+					varDecls[v] = i;
+					}
+				}
+				});
+
+				return edits;
 			}
-			return edits;
-		  }
-
 		  async function generateFlowchart(code, filename, language) {
 			const result = await CodeSmith.llm.chatComplete({
 			  messages: [
@@ -9565,12 +9608,41 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 					applyAllBtn.style.cssText = 'margin:4px 0;width:100%;padding:6px;font-size:11px;';
 					applyAllBtn.textContent = '✓ Apply all ' + edits.length + ' edits';
 					applyAllBtn.addEventListener('click', () => {
-					const sorted = [...edits].sort((a, b) => (b.startLine || b.afterLine || 0) - (a.startLine || a.afterLine || 0));
-					let applied = 0;
-					for (const e of sorted) {
-						const r = CodeSmith.explorer.applyEdit(name, e);
-						if (r.ok) applied++;
-					}
+								const sorted = [...edits].sort((a, b) => (b.startLine || b.afterLine || 0) - (a.startLine || a.afterLine || 0));
+								let applied = 0, failed = 0;
+								const failures = [];
+								for (const e of sorted) {
+									// Validate oldCode against current file content
+									const file2 = CodeSmith.explorer.getFile(name);
+									if (e.type === 'replace' && e.oldCode && e.startLine && e.endLine) {
+									const lines = file2.content.split('\n');
+									const actualOld = lines.slice(e.startLine - 1, e.endLine).join('\n');
+									if (actualOld.trim() !== e.oldCode.trim()) {
+										failed++;
+										failures.push('Edit ' + (sorted.indexOf(e) + 1) + ': line content mismatch');
+										continue;
+									}
+									}
+									const r = CodeSmith.explorer.applyEdit(name, e);
+									if (r.ok) applied++;
+									else { failed++; failures.push(r.error); }
+								}
+								const file3 = CodeSmith.explorer.getFile(name);
+								if (file3 && CodeSmith.monaco.isInitialized()) {
+									CodeSmith.monaco.updateContent(name, file3.content);
+								}
+								_explorerRenderTree();
+								_renderEditHistory();
+								applyAllBtn.textContent = applied + ' applied' + (failed ? ', ' + failed + ' failed' : '');
+								applyAllBtn.disabled = true;
+								aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
+								if (failures.length > 0) {
+									const warn = document.createElement('div');
+									warn.style.cssText = 'margin:6px 0;padding:8px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.3);border-radius:6px;font-size:11px;color:#ff6b6b;';
+									warn.textContent = '⚠ Failed edits: ' + failures.join('; ');
+									aiCol.appendChild(warn);
+								}
+								});
 					const file2 = CodeSmith.explorer.getFile(name);
 					if (file2 && CodeSmith.monaco.isInitialized()) {
 						CodeSmith.monaco.updateContent(name, file2.content);
@@ -9676,12 +9748,22 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  card.appendChild(body);
 
 		  // Reason
-		  if (edit.reason) {
-			const reason = document.createElement('div');
-			reason.className = 'edit-card-reason';
-			reason.textContent = edit.reason;
-			card.appendChild(reason);
-		  }
+			if (edit.reason) {
+						const reason = document.createElement('div');
+						reason.className = 'edit-card-reason';
+						reason.textContent = edit.reason;
+						card.appendChild(reason);
+					}
+
+					if (edit.warnings && edit.warnings.length > 0) {
+						const warn = document.createElement('div');
+						warn.style.cssText = 'padding:6px 10px;font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.06);border-top:1px solid rgba(245,158,11,0.2);';
+						warn.textContent = '⚠ ' + edit.warnings.join(' · ');
+						card.appendChild(warn);
+						if (edit.suspicious) {
+						card.style.borderColor = 'rgba(245,158,11,0.4)';
+						}
+					}
 
 		  // Actions
 		  const actions = document.createElement('div');
@@ -9690,7 +9772,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  const applyBtn = document.createElement('button');
 		  applyBtn.className = 'edit-apply-btn';
 		  applyBtn.textContent = '✓ Apply';
-			applyBtn.addEventListener('click', () => {
+			aapplyBtn.addEventListener('click', () => {
+		    if (edit.suspicious && !confirm('This edit has warnings (' + (edit.warnings || []).join('; ') + '). Apply anyway?')) return;
 				const result = CodeSmith.explorer.applyEdit(filename, edit);
 				if (result.ok) {
 				card.classList.add('edit-applied');
