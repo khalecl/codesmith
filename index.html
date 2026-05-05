@@ -8495,9 +8495,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
 		const zip = new JSZip();
 		const testsDir = zip.folder('tests');
-		const allImports = new Set();
 
-			const isWebapp = (CodeSmith.stageA.getSpec() || {}).target_type === 'webapp';
+		const isWebapp = (CodeSmith.stageA.getSpec() || {}).target_type === 'webapp';
 			const skel = CodeSmith.stageB.getSkeleton();
 			const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec() || {};
 
