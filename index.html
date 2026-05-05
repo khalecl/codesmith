@@ -1432,8 +1432,12 @@
 			<div id="split-left" class="split-left">
 			  <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
 				<div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
-				<div id="chat-empty" class="empty" hidden>
-				  <div class="text-[15px] text-text">What do you want to build?</div>
+				<div class="empty">
+					<div class="text-[15px] text-text">What do you want to build?</div>
+					<div class="mode-toggle" id="target-toggle" style="margin: 8px 0;">
+						<button class="mode-btn active" data-target="python">🐍 Python program</button>
+						<button class="mode-btn" data-target="webapp">🌐 Web app (HTML/JS)</button>
+					</div>
 				  <div class="text-[12px]" style="max-width:400px;">Describe a program in plain English, or pick a template to get started.</div>
 				  <div class="template-grid" id="template-grid">
 					<div class="template-card" data-tpl="cleaner">
@@ -2144,11 +2148,67 @@
 		modelFast: '',
 	  },
 	};
-	CodeSmith.TEMPLATES = {
-	  cleaner: 'Build a CSV data cleaner: reads a CSV file, removes duplicate rows, fills missing values with column mean (numeric) or mode (string), normalizes column names to snake_case, and exports a clean version. Should handle malformed rows gracefully.',
-	  analyzer: 'Build a text analyzer: given a text string or file, compute word count, sentence count, average sentence length, Flesch-Kincaid readability grade, top 10 most frequent words, and generate a formatted summary report.',
-	  organizer: 'Build a CLI file organizer: given a directory path, sort files into subfolders by file type (images/, documents/, code/, etc.), with options to organize by date instead. Should handle name conflicts with numbering, support dry-run mode, and produce a summary log.',
-	};
+		CodeSmith.TEMPLATES = {
+		python: {
+				cleaner: {
+				icon: '🧹', title: 'Data cleaner',
+				desc: 'CSV cleaner: dedupe, fill missing, normalize columns.',
+				prompt: 'Build a CSV data cleaner: reads a CSV file, removes duplicate rows, fills missing values with column mean (numeric) or mode (string), normalizes column names to snake_case, exports a clean version. Handle malformed rows gracefully.',
+				},
+				analyzer: {
+				icon: '📊', title: 'Text analyzer',
+				desc: 'Word/sentence stats, readability, top words, summary report.',
+				prompt: 'Build a text analyzer: given a text string or file, compute word count, sentence count, average sentence length, Flesch-Kincaid readability grade, top 10 most frequent words, and generate a formatted summary report.',
+				},
+				organizer: {
+				icon: '📁', title: 'File organizer',
+				desc: 'CLI tool that sorts files by type, date, or rules.',
+				prompt: 'Build a CLI file organizer: given a directory path, sort files into subfolders by type (images/, documents/, code/), with options for date-based organization. Handle name conflicts with numbering, support dry-run mode, produce a summary log.',
+				},
+				api: {
+				icon: '🔌', title: 'API client',
+				desc: 'CLI wrapper for a REST API with caching.',
+				prompt: 'Build a Python CLI tool that fetches data from a REST API the user specifies, caches responses to disk with TTL, supports query params, formats output as JSON or table, and handles rate limiting with retries.',
+				},
+			},
+		webapp: {
+				todo: {
+				icon: '✅', title: 'Todo list',
+				desc: 'Tasks with categories, due dates, localStorage. Glassmorphism UI.',
+				prompt: 'Build an HTML/JS todo app with: add/edit/delete tasks, categories with colored tags, due dates with overdue highlighting, filter by status/category, drag-to-reorder, localStorage persistence. STYLE: glassmorphism with frosted glass cards on a soft gradient background (deep purple → pink), Inter font from Google Fonts, smooth 200ms transitions, subtle shadows, rounded-xl corners. Mobile responsive.',
+				},
+				calc: {
+				icon: '🔢', title: 'Calculator',
+				desc: 'Scientific calculator with history. Neumorphic design.',
+				prompt: 'Build an HTML/JS scientific calculator with: basic ops, scientific functions (sin/cos/log/sqrt/etc), keyboard support, expression history panel with click-to-reuse, paren matching. STYLE: neumorphic (soft 3D buttons that depress on click) on a #e0e5ec background, JetBrains Mono for the display, Inter for buttons, gentle press animations. Mobile responsive.',
+				},
+				dashboard: {
+				icon: '📈', title: 'Stats dashboard',
+				desc: 'Live charts dashboard. Dark mode with neon accents.',
+				prompt: 'Build an HTML/JS analytics dashboard: 4 metric cards (with trend arrows), 2 line charts (Chart.js from CDN), 1 bar chart, date range picker, data refresh button (uses fake/random data on click). STYLE: dark mode (#0a0e1a base) with cyan/magenta neon accents, glow effects on hover, Space Grotesk font, animated number counters, grid layout. Mobile responsive (cards stack).',
+				},
+				notes: {
+				icon: '📝', title: 'Markdown notes',
+				desc: 'Live markdown editor with preview. Minimalist editorial.',
+				prompt: 'Build an HTML/JS markdown notes app: split-pane editor (left) and preview (right) using marked.js from CDN, sidebar with note list, search, autosave to localStorage, export as .md. STYLE: minimalist editorial — cream background (#faf8f3), serif headings (Crimson Pro), sans-serif body (Inter), generous whitespace, hairline dividers, subtle paper texture. Toggle dark mode (#1a1a1a / #e8e3d8). Mobile collapses to single pane.',
+				},
+				pomodoro: {
+				icon: '🍅', title: 'Pomodoro timer',
+				desc: 'Focus timer with task list. Bold modern UI.',
+				prompt: 'Build an HTML/JS pomodoro timer: 25/5/15 min cycles, task list (only one active at a time), session counter, browser notification on phase end, audio chime, daily stats. STYLE: bold modern — bright tomato red (#e63946) for work, deep teal (#06d6a0) for breaks, full-bleed color states, huge timer (200px+) in Bebas Neue, Inter elsewhere, smooth color transitions between states. Mobile-first.',
+				},
+				quiz: {
+				icon: '🧠', title: 'Quiz app',
+				desc: 'Interactive quiz with score tracking. Playful UI.',
+				prompt: 'Build an HTML/JS quiz app: multiple choice questions (load from a JSON object in code), one question at a time, instant feedback (green/red flash), score tracker, results page with breakdown, retry. Include 10 sample questions about general knowledge. STYLE: playful — soft pastel gradients (peach/lavender/mint), rounded-3xl cards, Fredoka or Quicksand font, bouncy hover animations (scale 1.05), confetti on perfect score. Mobile responsive.',
+				},
+				custom: {
+				icon: '✨', title: 'Custom',
+				desc: 'Describe anything and AI will build it.',
+				prompt: '',
+				},
+			},
+		};
 
 Object.defineProperty(window, 'CodeSmith', { value: CodeSmith, enumerable: false });
 
@@ -3402,7 +3462,18 @@ CodeSmith.builder = Builder;
 
 	const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
 
+			Your FIRST question (if not already in spec) MUST be: "Should this be a Python program or an HTML/JavaScript web app?"
+			Store the answer in spec.target_type as "python" or "webapp".
+
+			If target_type is "webapp", subsequent questions should ask about:
+			- Single page or multi-page
+			- Needs a backend? (we only build pure-frontend apps; if yes, suggest Python instead)
+			- LocalStorage / IndexedDB persistence?
+			- External libraries via CDN allowed?
+
 	RULES:
+	0. The first field to populate is spec.target_type — set to "python" or "webapp" based on user's choice (the UI passes this in the first message). If unclear, ask once.
+	0a. If target_type is "webapp", also capture spec.style_brief (visual style preferences: colors, fonts, mood). If user picked a styled template, the prompt already contains a STYLE: section — extract it into spec.style_brief verbatim.
 	1. Read the spec state below.
 	2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
 	3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
@@ -3657,21 +3728,46 @@ CodeSmith.stageA = StageA;
  *    topology, produces Mermaid flowchart definition.
  * ==========================================================================*/
 
-const STAGE_B_SYSTEM = `You are a senior software architect. Design a modular Python architecture for this specification.
+	const STAGE_B_PYTHON = `You are a senior software architect. Design a modular Python architecture for this specification.
+
+	OUTPUT RULES:
+	- Return ONLY a JSON object. Nothing else. No markdown fences, no explanation.
+	- The JSON must parse with JSON.parse() directly.
+	- Use double quotes for all strings. No trailing commas.
+	- Keep it simple: prefer 2-5 modules over 7+.
+
+	JSON schema:
+	{"summary":"string","modules":[{"id":"snake_case","name":"snake_case","purpose":"string","public_functions":[{"name":"string","signature":"string","description":"string","raises":["string"]}],"depends_on":["module_id"],"notes":"string"}],"shared_types":{"TypeName":"definition"},"data_flow":[{"from":"id","to":"id","data":"string"}],"build_order":["id1","id2"]}
+
+	Rules:
+	- snake_case ids, topological build_order, no cycles
+	- Complete type hints on signatures
+	- shared_types for cross-module data
+
+	Specification:
+	{spec_json}`;
+
+const STAGE_B_WEBAPP = `You are a senior frontend architect. Design a modular HTML/JavaScript web app.
 
 OUTPUT RULES:
-- Return ONLY a JSON object. Nothing else. No markdown fences, no explanation.
-- The JSON must parse with JSON.parse() directly.
-- Use double quotes for all strings. No trailing commas.
-- Keep it simple: prefer 2-5 modules over 7+.
+- Return ONLY a JSON object. No markdown, no explanation.
+- Must parse with JSON.parse() directly.
+- Double quotes only. No trailing commas.
+- Keep simple: 3-6 files typical.
 
 JSON schema:
-{"summary":"string","modules":[{"id":"snake_case","name":"snake_case","purpose":"string","public_functions":[{"name":"string","signature":"string","description":"string","raises":["string"]}],"depends_on":["module_id"],"notes":"string"}],"shared_types":{"TypeName":"definition"},"data_flow":[{"from":"id","to":"id","data":"string"}],"build_order":["id1","id2"]}
+{"summary":"string","modules":[{"id":"snake_case_id","name":"actual_filename.ext","kind":"html|js|css","purpose":"string","public_api":[{"name":"functionOrSelector","signature":"description","description":"what it does"}],"depends_on":["module_id"],"notes":"string"}],"entry_point":"index.html","cdn_libraries":[{"name":"library_name","url":"https://cdn.example/path.js"}],"shared_state":{"key":"description"},"data_flow":[{"from":"id","to":"id","data":"event/state name"}],"build_order":["id1","id2"]}
 
 Rules:
-- snake_case ids, topological build_order, no cycles
-- Complete type hints on signatures
-- shared_types for cross-module data
+- name field is the actual filename (e.g. "index.html", "app.js", "styles.css")
+- entry_point must be "index.html"
+- kind is "html", "js", or "css"
+- Prefer vanilla JS unless user explicitly asked for a framework
+- Each JS module exposes its public API on window.App.<module_id> namespace
+- No ES module syntax (no import/export) — use traditional script tags
+- CDN libraries listed once with full URL; loaded by entry HTML only
+- HTML files in modules.notes describe what scripts/styles they reference
+- build_order: CSS first, then JS dependencies, then JS that depends on others, HTML last
 
 Specification:
 {spec_json}`;
@@ -3686,7 +3782,9 @@ async function generate(spec, onStream) {
     _skeleton = null;
     _mermaidDef = '';
 
-    const systemContent = STAGE_B_SYSTEM.replace('{spec_json}', JSON.stringify(spec, null, 2));
+    const isWebapp = spec.target_type === 'webapp';
+    const promptTemplate = isWebapp ? STAGE_B_WEBAPP : STAGE_B_SYSTEM;
+    const systemContent = promptTemplate.replace('{spec_json}', JSON.stringify(spec, null, 2));
     let fullText = '';
 
     // Stream so UI can show progress
@@ -3947,17 +4045,69 @@ const SymbolTable = (() => {
  *     Walks build_order, sends work orders to worker, manages repair
  *     loops, symbol negotiation, integration tests.
  * ==========================================================================*/
-const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE module. Rules:
-1. Only define public names listed in your module spec.
-0. SANDBOX: Code runs in Pyodide (browser WASM Python). Do NOT use: real network calls (requests/urllib/socket), subprocess, threading, multiprocessing, GUI libraries (tkinter/PyQt), or C extensions. For tests, use local data/fixtures, never live HTTP.
-2. Use exact signatures from the symbol table for dependency calls.
-3. If you genuinely need a symbol not in the table, list it in requested_symbols. Do not use it until approved.
-4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises.
-5. PEP 8; type hints on public functions.
-6. Do not catch exceptions you cannot handle meaningfully.
-7. If the user provides REFERENCE DOCS, use the latest API signatures from those docs — not outdated patterns.
-Output ONLY valid JSON:
-{"code":"full source","tests":"full pytest source","imports_needed":["pkg"],"requested_symbols":[{"kind":"function|type|constant","name":"symbol_name","why":"reason"}],"notes":"optional"}`;
+	const STAGE_C_WEBAPP_WORKER_SYSTEM = `You implement ONE file in an HTML/JavaScript web app.
+
+		The skeleton has already been agreed. Your module spec tells you exactly what to build.
+
+		If module.kind === "html":
+		- Output a complete valid HTML5 document with <!DOCTYPE html>
+		- Reference all CSS via <link> in <head>
+		- Reference all JS via <script src="..."> at end of <body> in dependency order
+		- Include any CDN libraries listed in cdn_libraries
+		- Set <meta name="viewport" content="width=device-width,initial-scale=1">
+
+		If module.kind === "js":
+		- Output a single .js file
+		- Initialize namespace at top: window.App = window.App || {};
+		- Expose all public functions on window.App.<module_id> = { ... }
+		- No ES module syntax (no import/export)
+		- Use addEventListener for DOM events, not inline handlers
+		- Wrap initialization in DOMContentLoaded if it touches the DOM at load
+		- Reference other modules as window.App.<other_module_id>.functionName
+
+		If module.kind === "css":
+		- Output a single .css file
+		- Use CSS custom properties (--var-name) for theme colors
+		- Mobile-first media queries
+		- Apply the STYLE BRIEF below verbatim
+
+		STYLE BRIEF (from spec.style_brief): {style_brief}
+			Apply this style consistently across all files. For HTML files, include Google Fonts <link> in <head>. For CSS, use the colors/fonts/effects specified. For JS-driven UI updates, preserve transitions and animations.
+
+		CRITICAL — Browser sandbox rules:
+		- No Node.js APIs (no require, no fs, no process, no __dirname)
+		- No build steps (no JSX, no TypeScript, no SCSS, no PostCSS)
+		- LocalStorage / IndexedDB / sessionStorage OK
+		- fetch() to public APIs OK; no auth headers expected
+		- All paths relative (no leading /)
+
+		For tests: write JS test functions that get loaded into a sandboxed iframe with the module code. Format:
+		function test_<scenario>() {
+		// Setup: create DOM elements as needed via createTestDOM()
+		// Exercise: call the public API
+		// Assert: return { passed: bool, message: 'description' }
+		}
+		window.tests = window.tests || [];
+		window.tests.push(test_basic_render);
+		window.tests.push(test_user_interaction);
+		// ... register every test function
+
+		createTestDOM() is a helper provided by the harness; it returns a fresh container div appended to document.body and clears it between tests.
+
+		Output ONLY valid JSON:
+		{"code":"full file content","tests":"test JS code (empty string for HTML/CSS modules)","imports_needed":[],"requested_symbols":[],"notes":"optional"}`;
+
+	const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE module. Rules:
+	1. Only define public names listed in your module spec.
+	0. SANDBOX: Code runs in Pyodide (browser WASM Python). Do NOT use: real network calls (requests/urllib/socket), subprocess, threading, multiprocessing, GUI libraries (tkinter/PyQt), or C extensions. For tests, use local data/fixtures, never live HTTP.
+	2. Use exact signatures from the symbol table for dependency calls.
+	3. If you genuinely need a symbol not in the table, list it in requested_symbols. Do not use it until approved.
+	4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises.
+	5. PEP 8; type hints on public functions.
+	6. Do not catch exceptions you cannot handle meaningfully.
+	7. If the user provides REFERENCE DOCS, use the latest API signatures from those docs — not outdated patterns.
+	Output ONLY valid JSON:
+	{"code":"full source","tests":"full pytest source","imports_needed":["pkg"],"requested_symbols":[{"kind":"function|type|constant","name":"symbol_name","why":"reason"}],"notes":"optional"}`;
 
 const STAGE_C_REPAIR_ADDENDUM = `The previous attempt failed. Pytest output:
 <pytest_output>
@@ -4062,26 +4212,33 @@ const StageC = (() => {
 		_moduleStates[modId] = 'building';
 		yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules, phase: 'build' };
 
-		const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
-		const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
-		const workOrder = {
-			module_spec: mod,
-			symbol_table: SymbolTable.get(),
-			dependency_code: depCode,
-			dummy_inputs: dummyInputs,
-		};
+			const isWebapp = _spec.target_type === 'webapp';
+			const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
+			const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
+			const workOrder = {
+				module_spec: mod,
+				symbol_table: SymbolTable.get(),
+				dependency_code: depCode,
+				dummy_inputs: dummyInputs,
+				cdn_libraries: _skeleton.cdn_libraries || [],
+				shared_state: _skeleton.shared_state || {},
+			};
+			const workerSystem = isWebapp
+				? STAGE_C_WEBAPP_WORKER_SYSTEM.replace('{style_brief}', _spec.style_brief || 'No specific style — use clean, modern defaults.')
+				: STAGE_C_WORKER_SYSTEM;
 
-		let workerResult = null;
-		let workerError = null;
-		let workerText = '';
-		try {
-			for await (const ev of CodeSmith.llm.chat({
-			messages: [
-				{ role: 'system', content: STAGE_C_WORKER_SYSTEM },
-				{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
-			],
-			tier: 'worker', temperature: 0.2, maxTokens: 20000,
-			})) {
+			let workerResult = null;
+			let workerError = null;
+			let workerText = '';
+			try {
+				for await (const ev of CodeSmith.llm.chat({
+				messages: [
+					{ role: 'system', content: workerSystem },
+					{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+				],
+				tier: 'worker', temperature: 0.2, maxTokens: 20000,
+				})) {
+				
 			if (ev.type === 'token') {
 				workerText += ev.delta;
 				yield { type: 'worker_stream', moduleId: modId, delta: ev.delta };
@@ -4122,20 +4279,30 @@ const StageC = (() => {
 			}
 		}
 
-		const safeName = _sanitizeModuleName(mod.name || mod.id);
-		mod.name = safeName;
-		try {
-			await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', workerResult.code);
-			if (workerResult.tests) await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', workerResult.tests);
-		} catch (err) {
-			yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
-			continue;
-		}
+		let outputFilename;
+			if (isWebapp) {
+				// For webapp, use the actual filename from the skeleton
+				outputFilename = mod.name || (mod.id + (mod.kind === 'html' ? '.html' : mod.kind === 'css' ? '.css' : '.js'));
+			} else {
+				const safeName = _sanitizeModuleName(mod.name || mod.id);
+				mod.name = safeName;
+				outputFilename = safeName + '.py';
+			}
+			try {
+				await CodeSmith.sandbox.writeFile('/workdir/' + outputFilename, workerResult.code);
+				if (workerResult.tests && !isWebapp) {
+				await CodeSmith.sandbox.writeFile('/workdir/test_' + (mod.name) + '.py', workerResult.tests);
+				}
+				// For webapp, store tests in artifact instead of FS (run via iframe later)
+			} catch (err) {
+				yield { type: 'error', stage: 'write_fs', moduleId: modId, error: err };
+				continue;
+			}
 		for (const pkg of (workerResult.imports_needed || [])) {
 			try { await CodeSmith.sandbox.installPackage(pkg); } catch (err) {
 			yield { type: 'error', stage: 'install', moduleId: modId, error: err };
 			}
-		}
+			}
 
 		_moduleStates[modId] = 'built';
 		const artifact = {
@@ -4185,30 +4352,56 @@ const StageC = (() => {
 		let passed = false;
 		let lastOutput = '';
 
-		for (let attempt = 1; attempt <= REPAIR_MAX + 1; attempt++) {
-			if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
-			yield { type: 'tests_start', moduleId: modId, attempt };
+		const isWebapp = _spec.target_type === 'webapp';
 
-			const safeName = mod.name;
-			const pytestCode = `
-				import sys, os
-				sys.path.insert(0, '/workdir')
-				os.chdir('/workdir')
-				for mn in list(sys.modules):
-					if mn == '${safeName}' or mn.startswith('${safeName}.'):
-						del sys.modules[mn]
-				import pytest
-				exit_code = pytest.main(['-v', '/workdir/test_${safeName}.py', '--tb=short', '--no-header'])
-				`;
-			let testResult;
-			try {
-			testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
-			} catch (err) {
-			yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
-			break;
+			// Skip tests for HTML and CSS modules in webapp builds — they have no executable logic
+			if (isWebapp && (mod.kind === 'html' || mod.kind === 'css' || !artifact.tests)) {
+				artifact.status = 'passed';
+				try { await CodeSmith.db.putArtifact(artifact); } catch {}
+				completedModules++;
+				yield { type: 'module_passed', moduleId: modId, progress: completedModules + '/' + totalModules, table: SymbolTable.get() };
+				continue;
 			}
-			const pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
-			const parsedTest = _parsePytest(pytestOutput);
+
+			for (let attempt = 1; attempt <= REPAIR_MAX + 1; attempt++) {
+				if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+				yield { type: 'tests_start', moduleId: modId, attempt };
+
+				let testResult;
+				let pytestOutput;
+				let parsedTest;
+
+				if (isWebapp) {
+				// Run JS tests in sandboxed iframe
+				try {
+					const result = await _runWebappTests(artifact.code, artifact.tests, _moduleArtifacts.filter(a => a.moduleName !== modId && a.moduleName.endsWith('.js')));
+					pytestOutput = result.output;
+					parsedTest = { passCount: result.passCount, failCount: result.failCount, allPassed: result.allPassed };
+				} catch (err) {
+					yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
+					break;
+				}
+				} else {
+				const safeName = mod.name;
+				const pytestCode = `
+					import sys, os
+					sys.path.insert(0, '/workdir')
+					os.chdir('/workdir')
+					for mn in list(sys.modules):
+						if mn == '${safeName}' or mn.startswith('${safeName}.'):
+							del sys.modules[mn]
+					import pytest
+					exit_code = pytest.main(['-v', '/workdir/test_${safeName}.py', '--tb=short', '--no-header'])
+					`;
+							try {
+								testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
+							} catch (err) {
+								yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
+								break;
+							}
+							pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
+							parsedTest = _parsePytest(pytestOutput);
+							}
 			lastOutput = pytestOutput;
 
 			yield {
@@ -4311,7 +4504,8 @@ const StageC = (() => {
 				}
 		}
 
-		// ---- Smoke test: can the package even be imported together? ----
+// ---- Smoke test (Python only) ----
+			if (_spec.target_type !== 'webapp') {
 			yield { type: 'smoke_start' };
 			const importNames = _moduleArtifacts.map(a => a.moduleName).join(', ');
 			const smokeCode = `
@@ -4339,8 +4533,9 @@ const StageC = (() => {
 						yield { type: 'error', stage: 'smoke_test', error: new Error('Modules built but cannot import together. ' + out.slice(-500)) };
 					}
 					} catch (err) {
-					yield { type: 'error', stage: 'smoke_test', error: err };
-					}
+						yield { type: 'error', stage: 'smoke_test', error: err };
+						}
+						} // end Python-only smoke test
 
     // ---- Integration test ----
     yield { type: 'integration_start' };
@@ -4589,7 +4784,63 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     if (em) failCount += parseInt(em[1], 10);
     return { passCount, failCount, allPassed: failCount === 0 && passCount > 0 };
   }
+	async function _runWebappTests(moduleCode, testCode, dependencyArtifacts) {
+		return new Promise((resolve) => {
+		const iframe = document.createElement('iframe');
+		iframe.sandbox = 'allow-scripts';
+		iframe.style.cssText = 'position:absolute;left:-10000px;width:800px;height:600px;';
 
+		const deps = (dependencyArtifacts || []).map(a => '// === ' + a.moduleName + ' ===\n' + (a.code || '')).join('\n\n');
+
+		const html = '<!DOCTYPE html><html><body><div id="harness"></div><script>\n' +
+			'window.App = window.App || {};\n' +
+			'window.tests = [];\n' +
+			'function createTestDOM() {\n' +
+			'  const c = document.getElementById("harness");\n' +
+			'  c.innerHTML = "";\n' +
+			'  return c;\n' +
+			'}\n' +
+			'try {\n' +
+			deps + '\n' +
+			moduleCode + '\n' +
+			testCode + '\n' +
+			'} catch(e) {\n' +
+			'  parent.postMessage({type:"webapp_test_results",results:[{name:"_load",passed:false,message:"Load error: "+e.message}]},"*");\n' +
+			'}\n' +
+			'const results = [];\n' +
+			'for (const t of (window.tests || [])) {\n' +
+			'  try { results.push({name: t.name || "anon", ...t()}); }\n' +
+			'  catch(e) { results.push({name: t.name || "anon", passed: false, message: e.message}); }\n' +
+			'}\n' +
+			'parent.postMessage({type:"webapp_test_results",results},"*");\n' +
+			'<' + '/script></body></html>';
+
+		iframe.srcdoc = html;
+		document.body.appendChild(iframe);
+
+		let resolved = false;
+		const handler = (ev) => {
+			if (resolved || ev.data?.type !== 'webapp_test_results') return;
+			resolved = true;
+			window.removeEventListener('message', handler);
+			iframe.remove();
+			const results = ev.data.results || [];
+			const passed = results.length > 0 && results.every(r => r.passed);
+			const passCount = results.filter(r => r.passed).length;
+			const failCount = results.filter(r => !r.passed).length;
+			const output = results.map(r => (r.passed ? '✓' : '✗') + ' ' + r.name + (r.message ? ' — ' + r.message : '')).join('\n');
+			resolve({ allPassed: passed, passCount, failCount, output });
+		};
+		window.addEventListener('message', handler);
+		setTimeout(() => {
+			if (resolved) return;
+			resolved = true;
+			window.removeEventListener('message', handler);
+			iframe.remove();
+			resolve({ allPassed: false, passCount: 0, failCount: 1, output: 'Test timeout (10s)' });
+		}, 10000);
+		});
+	}
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   return { run, getState, getModuleStates, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision };
@@ -7450,9 +7701,10 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		_buildMode = 'build';
 		$('#split-right').hidden = false;
 		$('#split-left').style.maxWidth = '50%';
-
+			const target = window._getTargetType ? window._getTargetType() : 'python';
+			const taggedPrompt = `[target_type=${target}] ${userPrompt}`;
 		// Start Stage A
-		CodeSmith.stageA.start(userPrompt);
+		CodeSmith.stageA.start(taggedPrompt);
 		_showStep('a');
 		_renderSpecCard(CodeSmith.stageA.getSpec(), CodeSmith.stageA.getAssumptions());
 
@@ -7464,7 +7716,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		$('#stage-a-messages').replaceChildren(initMsg);
 
 		// Send the initial prompt as the first user turn
-		_stageAHandleUserInput(userPrompt);
+		_stageAHandleUserInput(taggedPrompt);
 	  }
 
 		async function _stageASend() {
@@ -8245,21 +8497,151 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		const testsDir = zip.folder('tests');
 		const allImports = new Set();
 
-		for (const a of arts) {
-		  const name = a.moduleName || a.id;
-		  zip.file(name + '.py', a.code || '');
-		  if (a.tests) testsDir.file('test_' + name + '.py', a.tests);
-		  // Collect imports
-		  const matches = (a.code || '').matchAll(/^(?:import|from)\s+(\w+)/gm);
-		  for (const m of matches) {
-			const pkg = m[1];
-			if (!['sys','os','json','re','math','datetime','collections','itertools','functools',
-				  'pathlib','typing','dataclasses','enum','abc','io','csv','string','textwrap',
-				  'unittest','pytest','copy','operator','contextlib','warnings'].includes(pkg)) {
-			  allImports.add(pkg);
+			const isWebapp = (CodeSmith.stageA.getSpec() || {}).target_type === 'webapp';
+			const skel = CodeSmith.stageB.getSkeleton();
+			const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec() || {};
+
+			// ===== WEBAPP BRANCH =====
+			if (isWebapp) {
+			for (const art of arts) {
+				const skelMod = skel ? (skel.modules || []).find(m => m.id === art.moduleName) : null;
+				const filename = (skelMod && skelMod.name) || art.moduleName;
+				zip.file(filename, art.code || '');
 			}
-		  }
-		}
+
+			// Generate index.html if not present
+			const hasIndex = arts.some(art => {
+				const sm = skel ? (skel.modules || []).find(m => m.id === art.moduleName) : null;
+				return (sm && sm.name === 'index.html') || art.moduleName === 'index.html';
+			});
+			if (!hasIndex && skel) {
+				const cdnTags = (skel.cdn_libraries || []).map(c => '  <script src="' + c.url + '"><\/script>').join('\n');
+				const cssLinks = (skel.modules || []).filter(m => m.kind === 'css').map(m => '  <link rel="stylesheet" href="' + m.name + '">').join('\n');
+				const jsTags = (skel.modules || []).filter(m => m.kind === 'js').map(m => '  <script src="' + m.name + '"><\/script>').join('\n');
+				const pageTitle = spec.goal || 'Web App';
+				const indexHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>' + pageTitle + '</title>\n' + cssLinks + '\n' + cdnTags + '\n</head>\n<body>\n  <div id="app"></div>\n' + jsTags + '\n</body>\n</html>\n';
+				zip.file('index.html', indexHtml);
+			}
+
+			// Webapp README
+			const webappReadme = '# ' + (spec.goal || 'Web App') + '\n\n' +
+				'## Run\n\nOpen `index.html` directly in a browser, OR serve the folder:\n\n' +
+				'```bash\npython3 -m http.server 8000\n# then visit http://localhost:8000\n```\n\n' +
+				'## Files\n\n' +
+				arts.map(art => {
+				const sm = skel ? (skel.modules || []).find(m => m.id === art.moduleName) : null;
+				return '- `' + ((sm && sm.name) || art.moduleName) + '` — ' + ((sm && sm.purpose) || '');
+				}).join('\n') + '\n';
+			zip.file('README.md', webappReadme);
+
+			if (skel) zip.file('skeleton.json', JSON.stringify(skel, null, 2));
+			if (spec) zip.file('spec.json', JSON.stringify(spec, null, 2));
+
+			const webappBlob = await zip.generateAsync({ type: 'blob' });
+			const webappUrl = URL.createObjectURL(webappBlob);
+			const webappLink = document.createElement('a');
+			webappLink.href = webappUrl;
+			webappLink.download = (spec.goal || 'webapp').replace(/\W+/g, '_').slice(0, 30) + '.zip';
+			webappLink.click();
+			URL.revokeObjectURL(webappUrl);
+			return;
+			}
+
+			// ===== PYTHON BRANCH =====
+			const allImports = new Set();
+			for (const a of arts) {
+			const name = a.moduleName || a.id;
+			zip.file(name + '.py', a.code || '');
+			if (a.tests) testsDir.file('test_' + name + '.py', a.tests);
+			const matches = (a.code || '').matchAll(/^(?:import|from)\s+(\w+)/gm);
+			for (const m of matches) {
+				const pkg = m[1];
+				if (!['sys','os','json','re','math','datetime','collections','itertools','functools',
+					'pathlib','typing','dataclasses','enum','abc','io','csv','string','textwrap',
+					'unittest','pytest','copy','operator','contextlib','warnings'].includes(pkg)) {
+				allImports.add(pkg);
+				}
+			}
+			}
+
+			try {
+			const integCode = await CodeSmith.sandbox.readFile('/workdir/test_integration.py');
+			if (integCode) testsDir.file('test_integration.py', integCode);
+			} catch {}
+
+			if (spec) zip.file('spec.json', JSON.stringify(spec, null, 2));
+			if (skel) zip.file('skeleton.json', JSON.stringify(skel, null, 2));
+			zip.file('symbol_table.json', JSON.stringify(SymbolTable.get(), null, 2));
+
+			const reqs = Array.from(allImports).sort().join('\n');
+			zip.file('requirements.txt', reqs || '# no external dependencies\n');
+			zip.file('.gitignore', `__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n*.egg-info/\ndist/\nbuild/\n.env\nvenv/\n`);
+
+			// Generate run.py + README via orchestrator
+			const fullCode = arts.map(a => '# === ' + a.moduleName + '.py ===\n' + (a.code || '')).join('\n\n');
+			const runPyPrompt = `You have access to the full source of a Python package. Write a single run.py file at the top level that:
+				1. Imports the package's entry function (look at the modules below — find the main orchestrator function)
+				2. Defines 1-3 SAMPLES dicts with realistic input matching the actual function signature and the spec's example data
+				3. Has a main() that takes optional sys.argv[1] to pick a sample, defaults to running all
+				4. Prints results as JSON
+				5. Uses ONLY stdlib imports
+
+				Spec example data:
+				${JSON.stringify((spec && spec.inputs && spec.inputs.example) || {}, null, 2).slice(0, 2000)}
+
+			Source:
+			${fullCode.slice(0, 12000)}
+
+			Output ONLY the Python code for run.py. No markdown fences, no explanation.`;
+
+					let runPy = '';
+					try {
+					const r = await CodeSmith.llm.chatComplete({
+						messages: [
+						{ role: 'system', content: 'You write runnable Python entry-point scripts.' },
+						{ role: 'user', content: runPyPrompt },
+						],
+						tier: 'orchestrator', temperature: 0.2, maxTokens: 6000,
+					});
+					runPy = (r.text || '').trim();
+					if (runPy.startsWith('```')) runPy = runPy.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+					} catch {}
+					if (runPy) zip.file('run.py', runPy);
+
+			const readmePrompt = `Write a README.md for this Python project. The user is non-technical. Required sections in this exact order:
+				1. # Title (one line)
+				2. ## How to run (exact bash commands starting with "cd path/to/folder", then "python run.py")
+				3. ## How to use in your code (one short Python snippet importing from the actual modules)
+				4. ## Files (bullet list of every .py with one-line purpose)
+				5. ## Limitations (real ones from the code, not generic)
+
+				Do NOT include git clone, pip install steps unless requirements.txt has real packages. Output ONLY markdown.
+
+			Modules: ${arts.map(a => a.moduleName).join(', ')}
+			Has run.py: ${!!runPy}
+			Spec goal: ${spec.goal || ''}`;
+
+					let readme = '# ' + (spec.goal || 'CodeSmith Project') + '\n\nRun: `python run.py`\n';
+					try {
+					const r2 = await CodeSmith.llm.chatComplete({
+						messages: [
+						{ role: 'system', content: 'You write clear READMEs for non-technical users.' },
+						{ role: 'user', content: readmePrompt },
+						],
+						tier: 'fast', temperature: 0.3, maxTokens: 3000,
+					});
+					if (r2.text) readme = r2.text;
+					} catch {}
+					zip.file('README.md', readme);
+
+					const blob = await zip.generateAsync({ type: 'blob' });
+					const url = URL.createObjectURL(blob);
+					const link = document.createElement('a');
+					link.href = url;
+					link.download = (spec.goal || 'codesmith_build').replace(/\W+/g, '_').slice(0, 30) + '.zip';
+					link.click();
+					URL.revokeObjectURL(url);
+				}
 
 		// Integration test
 		try {
@@ -8282,7 +8664,12 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		// .gitignore
 		zip.file('.gitignore', `__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n*.egg-info/\ndist/\nbuild/\n.env\nvenv/\n`);
+		// ... existing code that loops through arts and adds files ...
 
+		
+
+		// Python README/run.py generation continues here unchanged
+			
 		// Generate run.py + README via orchestrator (sees full code, not just spec)
 		const fullCode = arts.map(a => '# === ' + a.moduleName + '.py ===\n' + (a.code || '')).join('\n\n');
 		const runPyPrompt = `You have access to the full source of a Python package. Write a single run.py file at the top level that:
@@ -8327,6 +8714,43 @@ Output ONLY the Python code for run.py. No markdown fences, no explanation.`;
 		Has run.py: ${!!runPy}
 		Spec goal: ${(spec && spec.goal) || ''}`;
 
+		if (isWebapp) {
+				// Generate index.html if not present
+				const hasIndex = arts.some(a => {
+					const sm = skel ? (skel.modules || []).find(m => m.id === a.moduleName) : null;
+					return (sm && sm.name === 'index.html') || a.moduleName === 'index.html';
+				});
+				if (!hasIndex && skel) {
+					const cdnTags = (skel.cdn_libraries || []).map(c => '  <script src="' + c.url + '"></script>').join('\n');
+					const cssLinks = (skel.modules || []).filter(m => m.kind === 'css').map(m => '  <link rel="stylesheet" href="' + m.name + '">').join('\n');
+					const jsTags = (skel.modules || []).filter(m => m.kind === 'js').map(m => '  <script src="' + m.name + '"></script>').join('\n');
+					const title = (CodeSmith.stageA.getSpec() || {}).goal || 'Web App';
+					const indexHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>' + title + '</title>\n' + cssLinks + '\n' + cdnTags + '\n</head>\n<body>\n  <div id="app"></div>\n' + jsTags + '\n</body>\n</html>\n';
+					zip.file('index.html', indexHtml);
+				}
+
+				// Webapp README
+				const readme = '# ' + ((CodeSmith.stageA.getSpec() || {}).goal || 'Web App') + '\n\n' +
+					'## Run\n\n' +
+					'Open `index.html` directly in a browser, OR serve the folder:\n\n' +
+					'```bash\npython3 -m http.server 8000\n# then visit http://localhost:8000\n```\n\n' +
+					'## Files\n\n' +
+					arts.map(a => {
+					const sm = skel ? (skel.modules || []).find(m => m.id === a.moduleName) : null;
+					return '- `' + ((sm && sm.name) || a.moduleName) + '` — ' + ((sm && sm.purpose) || '');
+					}).join('\n') + '\n';
+				zip.file('README.md', readme);
+
+				// Skip Python-specific files for webapp
+				const blob = await zip.generateAsync({ type: 'blob' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				const safeName = ((CodeSmith.stageA.getSpec() || {}).goal || 'webapp').replace(/\W+/g, '_').slice(0, 30);
+				a.href = url; a.download = safeName + '.zip';
+				a.click();
+				URL.revokeObjectURL(url);
+				return;
+				}
 				let readme = '# ' + ((spec && spec.goal) || 'CodeSmith Project') + '\n\nRun: `python run.py`\n';
 				try {
 				const r2 = await CodeSmith.llm.chatComplete({
@@ -8634,26 +9058,38 @@ Output ONLY the Python code for run.py. No markdown fences, no explanation.`;
 	  }
 
 	  // ---- Day 7: Templates --------------------------------------------------
-	  function wireTemplates() {
+	  function _renderTemplateGrid() {
+			const grid = $('#template-grid');
+			if (!grid) return;
+			const target = window._getTargetType ? window._getTargetType() : 'python';
+			const templates = CodeSmith.TEMPLATES[target] || {};
+			grid.replaceChildren();
+			for (const [key, tpl] of Object.entries(templates)) {
+				const card = el('div', { class: 'template-card', dataset: { tpl: key } });
+				card.innerHTML = `<div class="tc-icon">${tpl.icon}</div><div class="tc-title">${tpl.title}</div><div class="tc-desc">${tpl.desc}</div>`;
+				grid.appendChild(card);
+			}
+		}
+		function wireTemplates() {
 		const grid = $('#template-grid');
 		if (!grid) return;
+		_renderTemplateGrid();
 		grid.addEventListener('click', (ev) => {
-		  const card = ev.target.closest('.template-card');
-		  if (!card) return;
-		  const tpl = card.dataset.tpl;
-		  const composer = $('#composer');
-		  if (tpl === 'custom') {
-			composer.focus();
+			const card = ev.target.closest('.template-card');
+			if (!card) return;
+			const target = window._getTargetType ? window._getTargetType() : 'python';
+			const tpl = CodeSmith.TEMPLATES[target][card.dataset.tpl];
+			if (!tpl) return;
+			if (card.dataset.tpl === 'custom') {
+			$('#composer').focus();
 			return;
-		  }
-		  const prompt = CodeSmith.TEMPLATES[tpl];
-		  if (prompt) {
-			composer.value = prompt;
+			}
+			const composer = $('#composer');
+			composer.value = tpl.prompt;
 			composer.focus();
 			composer.dispatchEvent(new Event('input'));
-		  }
 		});
-	  }
+		}
 
 	  // ---- Day 7: Command palette --------------------------------------------
 	  let _cmdOpen = false;
