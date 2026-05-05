@@ -1338,6 +1338,10 @@
 				}
 				.fn-action-item:hover { background: rgba(79,140,255,0.10); color: #e8ecf1; }
 				.fn-action-icon { font-size: 12px; width: 16px; text-align: center; }
+				#target-toggle { margin: 12px auto; }
+				#target-toggle .mode-btn { padding: 6px 16px; font-size: 13px; }
+				.template-card { transition: all 200ms; }
+				.template-card:hover { transform: translateY(-2px); }
 	</style>
 </head>
 <body class="bg-bg text-text">
@@ -1432,6 +1436,15 @@
 			<div id="split-left" class="split-left">
 			  <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
 				<div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
+				<div id="chat-empty" class="empty" hidden>
+					<div class="text-[15px] text-text">What do you want to build?</div>
+					<div class="text-[12px]" style="max-width:400px;">Describe a program in plain English, or pick a template to get started.</div>
+					<div class="mode-toggle" id="target-toggle" style="margin: 8px 0;">
+						<button class="mode-btn active" data-target="python">🐍 Python program</button>
+						<button class="mode-btn" data-target="webapp">🌐 Web app (HTML/JS)</button>
+					</div>
+					<div class="template-grid" id="template-grid"></div>
+					</div>
 				<div class="empty">
 					<div class="text-[15px] text-text">What do you want to build?</div>
 					<div class="mode-toggle" id="target-toggle" style="margin: 8px 0;">
@@ -1518,7 +1531,7 @@
 				  <div class="text-muted text-[13px]">Generating skeleton…</div>
 				</div>
 				<div id="stage-b-module-list" class="module-list"></div>
-<div class="stage-b-actions">
+					<div class="stage-b-actions">
 				  <button id="btn-b-export" class="btn" style="font-size:12px;">📥 Export</button>
 				  <button id="btn-b-changes" class="btn" style="font-size:12px;">Request changes</button>
 				  <button id="btn-b-regenerate" class="btn" style="font-size:12px;">Regenerate</button>
@@ -6085,11 +6098,12 @@ const UI = (() => {
 function renderChat() {
     const list = $('#chat-list');
     const empty = $('#chat-empty');
+    if (!list) return;
     list.replaceChildren();
     const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
     if (!sess) {
       list.style.display = 'none';
-      empty.hidden = false;
+      if (empty) empty.hidden = false;
       // Only disable if NOT in build mode (build mode uses Stage A input)
       if (_buildMode !== 'build') {
         $('#composer').disabled = false;
@@ -6100,7 +6114,7 @@ function renderChat() {
       return;
     }
     list.style.display = '';
-    empty.hidden = true;
+    if (empty) empty.hidden = true;
     $('#composer').disabled = false;
     $('#btn-send').disabled = false;
     $('#st-session-id').textContent = 'session #' + sess.id;
@@ -8941,11 +8955,22 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				grid.appendChild(card);
 			}
 		}
+			let _targetType = 'python';
+			window._getTargetType = () => _targetType;
+
 		function wireTemplates() {
-		const grid = $('#template-grid');
-		if (!grid) return;
-		_renderTemplateGrid();
-		grid.addEventListener('click', (ev) => {
+				const grid = $('#template-grid');
+				if (!grid) return;
+				for (const btn of document.querySelectorAll('#target-toggle .mode-btn')) {
+				btn.addEventListener('click', () => {
+					document.querySelectorAll('#target-toggle .mode-btn').forEach(b => b.classList.remove('active'));
+					btn.classList.add('active');
+					_targetType = btn.dataset.target;
+					if (typeof _renderTemplateGrid === 'function') _renderTemplateGrid();
+				});
+						}
+				_renderTemplateGrid();
+				grid.addEventListener('click', (ev) => {
 			const card = ev.target.closest('.template-card');
 			if (!card) return;
 			const target = window._getTargetType ? window._getTargetType() : 'python';
@@ -10702,14 +10727,14 @@ CodeSmith.ui = UI;
 			);
 		}
 		}
-    CodeSmith.ui.wire();
-    CodeSmith.ui.renderStatusStrip();
-    CodeSmith.ui.renderComposerHelp();
-    CodeSmith.ui.renderChat();
-	CodeSmith.ui.renderArtifactList();
-	CodeSmith.ui.checkOnboarding();
-    CodeSmith.ui.checkIncompleteBuilds();
-    CodeSmith.ui.updatePageTitle();
+try { CodeSmith.ui.wire(); } catch(e) { console.error('wire FAILED:', e); }
+    try { CodeSmith.ui.renderStatusStrip(); } catch(e) { console.error('renderStatusStrip FAILED:', e); }
+    try { CodeSmith.ui.renderComposerHelp(); } catch(e) { console.error('renderComposerHelp FAILED:', e); }
+    try { CodeSmith.ui.renderChat(); } catch(e) { console.error('renderChat FAILED:', e); }
+    try { CodeSmith.ui.renderArtifactList(); } catch(e) { console.error('renderArtifactList FAILED:', e); }
+    try { CodeSmith.ui.checkOnboarding(); } catch(e) { console.error('checkOnboarding FAILED:', e); }
+    try { CodeSmith.ui.checkIncompleteBuilds(); } catch(e) { console.error('checkIncompleteBuilds FAILED:', e); }
+    try { CodeSmith.ui.updatePageTitle(); } catch(e) { console.error('updatePageTitle FAILED:', e); }
   } catch (err) {
     // Don't leak anything sensitive; just surface a minimal error.
     console.error('[CodeSmith] boot failed:', err && err.message ? err.message : err);
