@@ -37,14 +37,14 @@ CodeSmith uses a powerful **multi-agent** architecture with a strong reasoning o
 
 ```mermaid
 flowchart TD
-    A[User: Casual Chat<br>"Build me a CSV data cleaner"] --> B[Orchestrator<br>Kimi-K2 Thinking]
-    B --> C[Generate Spec & Plan]
-    C --> D[Worker Model<br>Devstral / Qwen Coder]
+    A[User describes project] --> B[Orchestrator: Kimi-K2]
+    B --> C[Create Spec & Plan]
+    C --> D[Worker: Devstral / Qwen]
     D --> E[Generate Code]
-    E --> F[Auto Test & Execute]
+    E --> F[Test & Execute]
     F --> G{Works?}
-    G -->|Yes| H[Package & Download]
-    G -->|No| I[Debug & Fix Loop]
+    G -->|Yes| H[Download Package]
+    G -->|No| I[Debug & Fix]
     I --> D
 ```
 
