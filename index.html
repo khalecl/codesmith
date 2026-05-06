@@ -1439,9 +1439,12 @@
 				<div id="chat-empty" class="empty" hidden>
 					<div class="text-[15px] text-text">What do you want to build?</div>
 					<div class="text-[12px]" style="max-width:400px;">Describe a program in plain English, or pick a template to get started.</div>
-					<div class="mode-toggle" id="target-toggle" style="margin: 8px 0;">
-						<button class="mode-btn active" data-target="python">🐍 Python program</button>
-						<button class="mode-btn" data-target="webapp">🌐 Web app (HTML/JS)</button>
+					<div class="mode-toggle" id="target-toggle" style="margin: 8px 0; flex-wrap: wrap;">
+						<button class="mode-btn active" data-target="python" title="Python script or package">🐍 Python</button>
+						<button class="mode-btn" data-target="webapp" title="Single-page HTML/JS web app">🌐 Web app</button>
+						<button class="mode-btn" data-target="cli" title="Command-line tool">⌨️ CLI tool</button>
+						<button class="mode-btn" data-target="api" title="REST API server (FastAPI)">🔌 API server</button>
+						<button class="mode-btn" data-target="notebook" title="Jupyter notebook">📓 Notebook</button>
 					</div>
 					<div class="template-grid" id="template-grid"></div>
 					</div>
@@ -3486,8 +3489,13 @@ CodeSmith.builder = Builder;
 			- External libraries via CDN allowed?
 
 	RULES:
-	0. The first field to populate is spec.target_type — set to "python" or "webapp" based on user's choice (the UI passes this in the first message). If unclear, ask once.
-	0a. If target_type is "webapp", also capture spec.style_brief (visual style preferences: colors, fonts, mood). If user picked a styled template, the prompt already contains a STYLE: section — extract it into spec.style_brief verbatim.
+			0. The first field to populate is spec.target_type. The UI tag in the first message tells you exactly which one — use that value verbatim. Valid values: "python", "webapp", "cli", "api", "notebook". Do NOT invent variants. If unclear, default to "python".
+			0b. Treat each target_type differently:
+			- "python": library/package with public functions
+			- "webapp": single-page HTML/JS app, no backend, browser-only
+			- "cli": Python with argparse entry point, runnable as [python tool.py [args]]
+			- "api": FastAPI app with routes, runnable with [uvicorn main:app]
+			- "notebook": Jupyter .ipynb with cells (markdown + code) — output as JSON notebook structure	0a. If target_type is "webapp", also capture spec.style_brief (visual style preferences: colors, fonts, mood). If user picked a styled template, the prompt already contains a STYLE: section — extract it into spec.style_brief verbatim.
 	1. Read the spec state below.
 	2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
 	3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
@@ -4178,6 +4186,14 @@ Requirements:
 Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). Runnable with: pytest test_integration.py -v`;
 
 const StageC = (() => {
+	function _isWebapp(spec) {
+		const t = spec && spec.target_type;
+		return t === 'webapp' || t === 'single_page_webapp';
+		}
+	function _isPython(spec) {
+		const t = spec && spec.target_type;
+		return !t || t === 'python' || t === 'cli' || t === 'api';
+		}
 	let _state = 'idle';
 	let _skeleton = null;
 	let _spec = null;
@@ -7737,8 +7753,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		_buildMode = 'build';
 		$('#split-right').hidden = false;
 		$('#split-left').style.maxWidth = '50%';
-			const target = window._getTargetType ? window._getTargetType() : 'python';
-			const taggedPrompt = `[target_type=${target}] ${userPrompt}`;
+		const target = window._getTargetType ? window._getTargetType() : 'python';
+		const targetLabel = window._getTargetLabel ? window._getTargetLabel() : 'Python program';
+		const taggedPrompt = `[target_type=${target}] [output_format=${targetLabel}] ${userPrompt}`;
 		// Start Stage A
 		CodeSmith.stageA.start(taggedPrompt);
 		_showStep('a');
@@ -8983,31 +9000,37 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		function wireTemplates() {
 				const grid = $('#template-grid');
 				if (!grid) return;
+				let _targetType = 'python';
+				window._getTargetType = () => _targetType;
+				window._getTargetLabel = () => {
+					const map = { python: 'Python program', webapp: 'HTML/JS web app', cli: 'Python CLI tool with argparse', api: 'FastAPI REST server', notebook: 'Jupyter notebook (.ipynb)' };
+					return map[_targetType] || 'Python program';
+				};
 				for (const btn of document.querySelectorAll('#target-toggle .mode-btn')) {
-				btn.addEventListener('click', () => {
-					document.querySelectorAll('#target-toggle .mode-btn').forEach(b => b.classList.remove('active'));
-					btn.classList.add('active');
-					_targetType = btn.dataset.target;
-					if (typeof _renderTemplateGrid === 'function') _renderTemplateGrid();
-				});
-						}
-				_renderTemplateGrid();
+					btn.addEventListener('click', () => {
+						document.querySelectorAll('#target-toggle .mode-btn').forEach(b => b.classList.remove('active'));
+						btn.classList.add('active');
+						_targetType = btn.dataset.target;
+						if (typeof _renderTemplateGrid === 'function') _renderTemplateGrid();
+					});
+				}
+				if (typeof _renderTemplateGrid === 'function') _renderTemplateGrid();
 				grid.addEventListener('click', (ev) => {
-			const card = ev.target.closest('.template-card');
-			if (!card) return;
-			const target = window._getTargetType ? window._getTargetType() : 'python';
-			const tpl = CodeSmith.TEMPLATES[target][card.dataset.tpl];
-			if (!tpl) return;
-			if (card.dataset.tpl === 'custom') {
-			$('#composer').focus();
-			return;
+					const card = ev.target.closest('.template-card');
+					if (!card) return;
+					const target = window._getTargetType ? window._getTargetType() : 'python';
+					const tpl = (CodeSmith.TEMPLATES[target] || {})[card.dataset.tpl];
+					if (!tpl) return;
+					if (card.dataset.tpl === 'custom') {
+						$('#composer').focus();
+						return;
+					}
+					const composer = $('#composer');
+					composer.value = tpl.prompt;
+					composer.focus();
+					composer.dispatchEvent(new Event('input'));
+				});
 			}
-			const composer = $('#composer');
-			composer.value = tpl.prompt;
-			composer.focus();
-			composer.dispatchEvent(new Event('input'));
-		});
-		}
 
 	  // ---- Day 7: Command palette --------------------------------------------
 	  let _cmdOpen = false;
