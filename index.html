@@ -1648,6 +1648,7 @@
 							  Paste
 							</button>
 							<button id="btn-explorer-folder" class="btn btn-ghost" style="font-size:10px;flex:1;">📁 Folder</button>
+							<button id="btn-explorer-url" class="btn btn-ghost" style="font-size:10px;flex:1;">🌐 URL</button>
 							<button id="btn-explorer-clear" class="btn btn-ghost" style="font-size:10px;color:#5b6474;">✕</button>
 						  </div>
 						</div>
@@ -6267,7 +6268,10 @@ function renderChat() {
 function renderStatusStrip() {
     const orchDot  = $('#st-orch-dot');
     const orchText = $('#st-orch-text');
-    const hasKey = !!(CodeSmith.state.settings && CodeSmith.state.settings.apiKey);
+	const orchModel = CodeSmith.llm.getModelForTier('orchestrator');
+	const orchDisplay = typeof orchModel === 'object' ? orchModel.model + ' (custom)' : orchModel;
+	$('#st-orch-text').title = orchDisplay;
+	const hasKey = !!(CodeSmith.state.settings && CodeSmith.state.settings.apiKey);
     orchDot.classList.remove('red','green','gray','amber');
     if (hasKey) { orchDot.classList.add('green'); orchText.textContent = 'ready'; }
     else        { orchDot.classList.add('red');   orchText.textContent = 'no key'; }
@@ -9234,6 +9238,20 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		function wireExplorer() {
 		  const $ = (sel) => document.querySelector(sel);
+		  const urlBtn = $('#btn-explorer-url');
+			if (urlBtn) urlBtn.addEventListener('click', async () => {
+			const url = prompt('Paste URL — supports:\n• GitHub file: https://github.com/user/repo/blob/main/file.py\n• GitHub repo: https://github.com/user/repo\n• Raw URL: https://example.com/script.js\n• HTML page: https://example.com/page.html');
+			if (!url) return;
+			try {
+				await _explorerImportFromURL(url);
+				_explorerRenderTree();
+				_explorerRenderTabs();
+				const first = CodeSmith.explorer.getFileList()[0];
+				if (first) { CodeSmith.explorer.openTab(first.name); _explorerShowFile(first.name); }
+			} catch (err) {
+				alert('Import failed: ' + err.message);
+			}
+			});
 		  function el(tag, props = {}, children = []) {
 			const n = document.createElement(tag);
 			for (const [k, v] of Object.entries(props)) {
@@ -9506,7 +9524,60 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			});
 		  });
 		}
+		async function _explorerImportFromURL(url) {
+		// GitHub blob URL → raw URL
+		let m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+		if (m) {
+			const rawUrl = `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}`;
+			const text = await fetch(rawUrl).then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)));
+			CodeSmith.explorer.addFile(m[4].split('/').pop(), text);
+			return;
+		}
 
+		// GitHub repo URL → fetch tree via API
+		m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\/|$)/);
+		if (m) {
+			const [, owner, repo] = m;
+			const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`;
+			const tree = await fetch(apiUrl).then(r => r.ok ? r.json() : Promise.reject(new Error('GitHub API: ' + r.status)));
+			if (!tree.tree) throw new Error('Empty tree');
+			const textExts = ['py','js','ts','jsx','tsx','vue','html','css','json','md','txt','yaml','yml','toml','sh','sql','xml'];
+			const files = tree.tree.filter(n => n.type === 'blob' && textExts.includes(n.path.split('.').pop()));
+			if (files.length > 50 && !confirm(`Repo has ${files.length} text files. Import all?`)) return;
+			let imported = 0;
+			for (const f of files.slice(0, 100)) {
+			try {
+				const raw = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${f.path}`;
+				const text = await fetch(raw).then(r => r.ok ? r.text() : null);
+				if (text != null) { CodeSmith.explorer.addFile(f.path, text); imported++; }
+			} catch {}
+			}
+			alert(`Imported ${imported} files from ${owner}/${repo}`);
+			return;
+		}
+
+		// Raw URL — fetch as text
+		const resp = await fetch(url);
+		if (!resp.ok) throw new Error('HTTP ' + resp.status + ' (CORS may be blocking)');
+		const text = await resp.text();
+		const filename = url.split('/').pop().split('?')[0] || 'fetched.txt';
+
+		if (filename.endsWith('.html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(text, 'text/html');
+			CodeSmith.explorer.addFile(filename, text);
+			let i = 0;
+			for (const s of doc.querySelectorAll('script:not([src])')) {
+			if (s.textContent.trim()) CodeSmith.explorer.addFile(`inline_${++i}.js`, s.textContent);
+			}
+			let j = 0;
+			for (const s of doc.querySelectorAll('style')) {
+			if (s.textContent.trim()) CodeSmith.explorer.addFile(`inline_${++j}.css`, s.textContent);
+			}
+		} else {
+			CodeSmith.explorer.addFile(filename, text);
+		}
+		}
 		function _explorerRenderTree() {
 		  const $ = (sel) => document.querySelector(sel);
 		  const files = CodeSmith.explorer.getFileList();
@@ -10690,14 +10761,33 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		          <option value="fast" ${ep.forTier === 'fast' ? 'selected' : ''}>Fast</option>
 		        </select>
 		        <input class="ep-url" type="url" placeholder="API URL" value="${ep.apiUrl || ''}" style="flex:1;font-size:11px;padding:3px 6px;" />
-		        <button class="btn btn-ghost ep-remove" style="font-size:10px;color:#ff6b6b;padding:2px 6px;">✕</button>
-		      </div>
+				<button class="btn btn-ghost ep-test" style="font-size:10px;color:#4ade80;padding:2px 6px;">Test</button>
+				<button class="btn btn-ghost ep-remove" style="font-size:10px;color:#ff6b6b;padding:2px 6px;">✕</button>		      </div>
 		      <div style="display:flex;gap:6px;">
 		        <input class="ep-key" type="password" placeholder="API key" value="${ep.apiKey || ''}" style="flex:1;font-size:11px;padding:3px 6px;" />
 		        <input class="ep-model" type="text" placeholder="Model ID" value="${ep.model || ''}" style="flex:1;font-size:11px;padding:3px 6px;font-family:monospace;" />
 		      </div>
 		    `;
-		    row.querySelector('.ep-remove').addEventListener('click', () => row.remove());
+			row.querySelector('.ep-test').addEventListener('click', async () => {
+				const btn = row.querySelector('.ep-test');
+				btn.textContent = '...';
+				btn.disabled = true;
+				try {
+					const res = await CodeSmith.api.testConnection({
+					apiUrl: row.querySelector('.ep-url').value.trim(),
+					apiKey: row.querySelector('.ep-key').value,
+					model: row.querySelector('.ep-model').value.trim(),
+					});
+					btn.textContent = '✓ ' + (res.model || 'OK').slice(0, 20);
+					btn.style.color = '#4ade80';
+				} catch (err) {
+					btn.textContent = '✗ ' + (err.message || '').slice(0, 30);
+					btn.style.color = '#ff6b6b';
+				} finally {
+					setTimeout(() => { btn.disabled = false; btn.textContent = 'Test'; btn.style.color = '#4ade80'; }, 4000);
+				}
+				});
+
 		    return row;
 		  }
 		
