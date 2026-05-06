@@ -3759,31 +3759,49 @@ CodeSmith.stageA = StageA;
 
 	Specification:
 	{spec_json}`;
+		const STAGE_B_SYSTEM = `You are a senior software architect. Design a modular Python architecture for this specification.
 
-const STAGE_B_WEBAPP = `You are a senior frontend architect. Design a modular HTML/JavaScript web app.
+		OUTPUT RULES:
+		- Return ONLY a JSON object. Nothing else. No markdown fences, no explanation.
+		- The JSON must parse with JSON.parse() directly.
+		- Use double quotes for all strings. No trailing commas.
+		- Keep it simple: prefer 2-5 modules over 7+.
 
-OUTPUT RULES:
-- Return ONLY a JSON object. No markdown, no explanation.
-- Must parse with JSON.parse() directly.
-- Double quotes only. No trailing commas.
-- Keep simple: 3-6 files typical.
+		JSON schema:
+		{"summary":"string","modules":[{"id":"snake_case","name":"snake_case","purpose":"string","public_functions":[{"name":"string","signature":"string","description":"string","raises":["string"]}],"depends_on":["module_id"],"notes":"string"}],"shared_types":{"TypeName":"definition"},"data_flow":[{"from":"id","to":"id","data":"string"}],"build_order":["id1","id2"]}
 
-JSON schema:
-{"summary":"string","modules":[{"id":"snake_case_id","name":"actual_filename.ext","kind":"html|js|css","purpose":"string","public_api":[{"name":"functionOrSelector","signature":"description","description":"what it does"}],"depends_on":["module_id"],"notes":"string"}],"entry_point":"index.html","cdn_libraries":[{"name":"library_name","url":"https://cdn.example/path.js"}],"shared_state":{"key":"description"},"data_flow":[{"from":"id","to":"id","data":"event/state name"}],"build_order":["id1","id2"]}
+		Rules:
+		- snake_case ids, topological build_order, no cycles
+		- Complete type hints on signatures
+		- shared_types for cross-module data
 
-Rules:
-- name field is the actual filename (e.g. "index.html", "app.js", "styles.css")
-- entry_point must be "index.html"
-- kind is "html", "js", or "css"
-- Prefer vanilla JS unless user explicitly asked for a framework
-- Each JS module exposes its public API on window.App.<module_id> namespace
-- No ES module syntax (no import/export) — use traditional script tags
-- CDN libraries listed once with full URL; loaded by entry HTML only
-- HTML files in modules.notes describe what scripts/styles they reference
-- build_order: CSS first, then JS dependencies, then JS that depends on others, HTML last
+		Specification:
+		{spec_json}`;
 
-Specification:
-{spec_json}`;
+		const STAGE_B_WEBAPP = `You are a senior frontend architect. Design a modular HTML/JavaScript web app.
+
+		OUTPUT RULES:
+		- Return ONLY a JSON object. No markdown, no explanation.
+		- Must parse with JSON.parse() directly.
+		- Double quotes only. No trailing commas.
+		- Keep simple: 3-6 files typical.
+
+		JSON schema:
+		{"summary":"string","modules":[{"id":"snake_case_id","name":"actual_filename.ext","kind":"html|js|css","purpose":"string","public_api":[{"name":"functionOrSelector","signature":"description","description":"what it does"}],"depends_on":["module_id"],"notes":"string"}],"entry_point":"index.html","cdn_libraries":[{"name":"library_name","url":"https://cdn.example/path.js"}],"shared_state":{"key":"description"},"data_flow":[{"from":"id","to":"id","data":"event/state name"}],"build_order":["id1","id2"]}
+
+		Rules:
+		- name field is the actual filename (e.g. "index.html", "app.js", "styles.css")
+		- entry_point must be "index.html"
+		- kind is "html", "js", or "css"
+		- Prefer vanilla JS unless user explicitly asked for a framework
+		- Each JS module exposes its public API on window.App.<module_id> namespace
+		- No ES module syntax (no import/export) — use traditional script tags
+		- CDN libraries listed once with full URL; loaded by entry HTML only
+		- HTML files in modules.notes describe what scripts/styles they reference
+		- build_order: CSS first, then JS dependencies, then JS that depends on others, HTML last
+
+		Specification:
+		{spec_json}`;
 
 const StageB = (() => {
   let _skeleton = null;
