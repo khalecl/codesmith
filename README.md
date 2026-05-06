@@ -142,3 +142,11 @@ flowchart LR
 
 **Made with ❤️ by khalecl**  
 **MIT License** — Free for personal and commercial use
+
+## 📜 License & Intellectual Property
+
+**Copyright © 2026 Khaled Diab. All Rights Reserved.**
+
+This project is **not fully open source**. While the code is publicly viewable for personal and educational use, commercial redistribution, cloning for profit, or removing copyright notices is strictly prohibited without explicit permission.
+
+See [LICENSE](LICENSE) for details.
