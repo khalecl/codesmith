@@ -1448,36 +1448,6 @@
 					</div>
 					<div class="template-grid" id="template-grid"></div>
 					</div>
-				<div class="empty">
-					<div class="text-[15px] text-text">What do you want to build?</div>
-					<div class="mode-toggle" id="target-toggle" style="margin: 8px 0;">
-						<button class="mode-btn active" data-target="python">🐍 Python program</button>
-						<button class="mode-btn" data-target="webapp">🌐 Web app (HTML/JS)</button>
-					</div>
-				  <div class="text-[12px]" style="max-width:400px;">Describe a program in plain English, or pick a template to get started.</div>
-				  <div class="template-grid" id="template-grid">
-					<div class="template-card" data-tpl="cleaner">
-					  <div class="tc-icon">🧹</div>
-					  <div class="tc-title">Data cleaner</div>
-					  <div class="tc-desc">Read a CSV, remove duplicates, fill missing values, normalize columns, export clean version.</div>
-					</div>
-					<div class="template-card" data-tpl="analyzer">
-					  <div class="tc-icon">📊</div>
-					  <div class="tc-title">Text analyzer</div>
-					  <div class="tc-desc">Word count, sentence stats, readability score, most frequent terms, and a summary report.</div>
-					</div>
-					<div class="template-card" data-tpl="organizer">
-					  <div class="tc-icon">📁</div>
-					  <div class="tc-title">File organizer</div>
-					  <div class="tc-desc">CLI tool that sorts files in a directory into subfolders by type, date, or custom rules.</div>
-					</div>
-					<div class="template-card" data-tpl="custom">
-					  <div class="tc-icon">✨</div>
-					  <div class="tc-title">Custom</div>
-					  <div class="tc-desc">Describe anything you want and CodeSmith will spec, build, and test it.</div>
-					</div>
-				  </div>
-				</div>
 				
 			  </div>
 			</div>
@@ -1535,7 +1505,11 @@
 				</div>
 				<div id="stage-b-module-list" class="module-list"></div>
 					<div class="stage-b-actions">
-				  <button id="btn-b-export" class="btn" style="font-size:12px;">📥 Export</button>
+					<button id="btn-b-export" class="btn" style="font-size:12px;">📥 Export image</button>
+				  <button id="btn-b-export-json" class="btn" style="font-size:12px;">💾 Save JSON</button>
+				  <button id="btn-b-import-json" class="btn" style="font-size:12px;">📂 Load JSON</button>
+				  <button id="btn-b-edit-json" class="btn" style="font-size:12px;">✎ Edit JSON</button>
+				  <input type="file" id="b-import-file" hidden accept=".json" />
 				  <button id="btn-b-changes" class="btn" style="font-size:12px;">Request changes</button>
 				  <button id="btn-b-regenerate" class="btn" style="font-size:12px;">Regenerate</button>
 				  <button id="btn-b-approve" class="btn btn-primary" style="font-size:12px;margin-left:auto;">Approve &amp; build</button>
@@ -2162,27 +2136,27 @@
 				collabMode: 'solo',
 			  },
 	};
-// expose for devtools only — not for app code
-	CodeSmith.PRESETS = {
-	  nvidia: {
-		apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
-		modelOrchestrator: 'moonshotai/kimi-k2-thinking',
-		modelWorker: 'mistralai/devstral-2-123b-instruct-2512',
-		modelFast: 'meta/llama-3.1-8b-instruct',
-	  },
-	  groq: {
-		apiUrl: 'https://api.groq.com/openai/v1',
-		modelOrchestrator: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-		modelWorker: 'qwen/qwen3-32b',
-		modelFast: 'meta-llama/llama-4-scout-17b-16e-instruct',
-	  },
-	  custom: {
-		apiUrl: '',
-		modelOrchestrator: '',
-		modelWorker: '',
-		modelFast: '',
-	  },
-	};
+		// expose for devtools only — not for app code
+			CodeSmith.PRESETS = {
+			nvidia: {
+				apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
+				modelOrchestrator: 'moonshotai/kimi-k2-thinking',
+				modelWorker: 'mistralai/devstral-2-123b-instruct-2512',
+				modelFast: 'meta/llama-3.1-8b-instruct',
+			},
+			groq: {
+				apiUrl: 'https://api.groq.com/openai/v1',
+				modelOrchestrator: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+				modelWorker: 'qwen/qwen3-32b',
+				modelFast: 'meta-llama/llama-4-scout-17b-16e-instruct',
+			},
+			custom: {
+				apiUrl: '',
+				modelOrchestrator: '',
+				modelWorker: '',
+				modelFast: '',
+			},
+			};
 		CodeSmith.TEMPLATES = {
 		python: {
 				cleaner: {
@@ -2242,8 +2216,62 @@
 				desc: 'Describe anything and AI will build it.',
 				prompt: '',
 				},
-			},
-		};
+				},
+				cli: {
+					fileorg: {
+					icon: '📁', title: 'File organizer',
+					desc: 'Sort files by type/date with dry-run mode.',
+					prompt: 'Build a Python CLI tool with argparse: organizes files in a target directory into subfolders by extension or date. Flags: --dry-run, --by-date, --target DIR. Print summary of moved files. Handle name conflicts with numeric suffix. Single .py file runnable as: python organize.py /path/to/folder',
+					},
+					csvtool: {
+					icon: '📊', title: 'CSV toolkit',
+					desc: 'Multi-command CSV utility (head, stats, filter).',
+					prompt: 'Build a Python CLI with argparse subcommands: head FILE [-n N], stats FILE (count rows, numeric column means/min/max), filter FILE --col NAME --op eq|gt|lt --value V. Use stdlib csv module. Single .py file.',
+					},
+					backup: {
+					icon: '💾', title: 'Backup tool',
+					desc: 'Incremental directory backup with manifest.',
+					prompt: 'Build a Python CLI: incremental backup of a source directory to a destination, computing SHA256 for each file, skipping unchanged files (compare against manifest.json). Flags: --source, --dest, --restore, --verify. Use stdlib only.',
+					},
+					custom: { icon: '✨', title: 'Custom', desc: 'Describe a CLI tool.', prompt: '' },
+				},
+				api: {
+					todo: {
+					icon: '✅', title: 'Todo API',
+					desc: 'CRUD REST API with FastAPI + SQLite.',
+					prompt: 'Build a FastAPI REST server: CRUD for todos (id, title, done, created_at) backed by SQLite. Routes: GET /todos, POST /todos, PUT /todos/{id}, DELETE /todos/{id}, GET /todos/{id}. Use sqlite3 stdlib (no SQLAlchemy). Pydantic models for request/response. Include uvicorn run instructions.',
+					},
+					auth: {
+					icon: '🔐', title: 'Auth API',
+					desc: 'JWT auth with register/login/me routes.',
+					prompt: 'Build a FastAPI server with JWT auth: POST /register, POST /login (returns JWT), GET /me (requires JWT). User passwords hashed with hashlib pbkdf2. SQLite storage. JWT via PyJWT. Include OpenAPI tags and example responses.',
+					},
+					proxy: {
+					icon: '🔌', title: 'API proxy',
+					desc: 'Caching proxy for external APIs.',
+					prompt: 'Build a FastAPI proxy server that forwards GET requests to a configurable upstream URL, caches responses in-memory with TTL (default 60s), exposes /stats endpoint showing cache hit rate. Use httpx for upstream calls. Configurable via env vars.',
+					},
+					custom: { icon: '✨', title: 'Custom', desc: 'Describe a REST API.', prompt: '' },
+				},
+				notebook: {
+					eda: {
+					icon: '📈', title: 'EDA notebook',
+					desc: 'Exploratory data analysis template.',
+					prompt: 'Build a Jupyter notebook (.ipynb JSON): exploratory data analysis on a CSV. Cells: load with pandas, .info() and .describe(), null counts, distribution plots for numeric columns (matplotlib), correlation heatmap, top-5 categories per object column, summary markdown. Include 2-3 markdown cells explaining findings.',
+					},
+					ml: {
+					icon: '🤖', title: 'ML training',
+					desc: 'Train/eval a classifier end-to-end.',
+					prompt: 'Build a Jupyter notebook: load Iris from sklearn, train/test split, fit LogisticRegression and RandomForest, compare accuracy with classification_report and confusion_matrix, plot feature importances. Markdown cells explain each step.',
+					},
+					timeseries: {
+					icon: '📅', title: 'Time series',
+					desc: 'Time series exploration + forecast.',
+					prompt: 'Build a Jupyter notebook: synthetic monthly time series (3 years), decompose with seasonal_decompose, plot trend/seasonal/residual, fit simple ARIMA(1,1,1), forecast next 12 months with confidence interval. Markdown explaining stationarity and ACF/PACF.',
+					},
+					custom: { icon: '✨', title: 'Custom', desc: 'Describe a notebook.', prompt: '' },
+				},
+			};
 
 Object.defineProperty(window, 'CodeSmith', { value: CodeSmith, enumerable: false });
 
@@ -3982,10 +4010,10 @@ async function generate(spec, onStream) {
     return lines.join('\n');
   }
 		function setSkeleton(skel, spec, mermaidDef) {
-		_skeleton = skel ? JSON.parse(JSON.stringify(skel)) : null;
-		_approvedSpec = spec ? JSON.parse(JSON.stringify(spec)) : null;
-		_mermaidDef = mermaidDef || (skel ? _buildMermaid(skel) : '');
-		}
+			_skeleton = skel ? JSON.parse(JSON.stringify(skel)) : null;
+			_approvedSpec = spec ? JSON.parse(JSON.stringify(spec)) : null;
+			_mermaidDef = (mermaidDef && mermaidDef.length > 0) ? mermaidDef : (skel ? _buildMermaid(skel) : '');
+			}
 
 		return { generate, getSkeleton, getApprovedSpec, getMermaidDef, approve, setSkeleton };
 })();
@@ -4020,15 +4048,16 @@ const SymbolTable = (() => {
 
     // modules → functions + exceptions
     for (const mod of (skeleton.modules || [])) {
-      for (const fn of (mod.public_functions || [])) {
+      const apiList = mod.public_functions || mod.public_api || [];
+      for (const fn of apiList) {
         _table.functions[mod.id + '.' + fn.name] = {
           signature: fn.signature || fn.name,
           module: mod.id,
           status: 'declared',
           description: fn.description || '',
+          kind: mod.kind || 'python',
         };
         _emit({ op: 'add', section: 'functions', name: mod.id + '.' + fn.name });
-        // raises → exceptions
         for (const exc of (fn.raises || [])) {
           if (!_table.exceptions[exc]) {
             _table.exceptions[exc] = { module: mod.id, description: 'from ' + fn.name };
@@ -4122,12 +4151,13 @@ const SymbolTable = (() => {
 
 		If module.kind === "js":
 		- Output a single .js file
-		- Initialize namespace at top: window.App = window.App || {};
-		- Expose all public functions on window.App.<module_id> = { ... }
-		- No ES module syntax (no import/export)
-		- Use addEventListener for DOM events, not inline handlers
-		- Wrap initialization in DOMContentLoaded if it touches the DOM at load
-		- Reference other modules as window.App.<other_module_id>.functionName
+		- ALWAYS start with this exact bootstrap line: window.App = window.App || { _modules: {}, _ready: [], registerModule(n,m){this._modules[n]=m;}, getModule(n){return this._modules[n];}, onReady(fn){this._ready.push(fn);} };
+		- Wrap your entire module in an IIFE: (function() { ... })();
+		- Inside the IIFE, define your functions then call: window.App.registerModule('<module_id>', { publicFn1, publicFn2 });
+		- DO NOT auto-execute setup code at module load. Instead: window.App.onReady(() => { /* setup */ });
+		- Reference other modules SAFELY: const other = window.App.getModule('other_id'); if (other) other.fn(); — never assume order
+		- Do NOT touch the DOM at module load. Always defer to onReady.
+		- No ES module syntax (no import/export, no require)
 
 		If module.kind === "css":
 		- Output a single .css file
@@ -4400,6 +4430,24 @@ const StageC = (() => {
 		try {
 			workerResult = _parseJSON(workerText);
 			if (!workerResult || !workerResult.code) throw new Error('Missing code');
+			if (workerResult.code.trim().length < 20) {
+					throw new Error('Module code too short (length=' + workerResult.code.length + ')');
+					}
+					// Webapp: validate HTML structure
+					if ((_spec.target_type === 'webapp' || _spec.target_type === 'single_page_webapp') && mod.kind === 'html') {
+					const c = workerResult.code;
+					const issues = [];
+					if (!/<!DOCTYPE html>/i.test(c)) issues.push('missing <!DOCTYPE html>');
+					if (!/<html[\s>]/i.test(c) || !/<\/html>/i.test(c)) issues.push('missing <html> tags');
+					if (!/<body[\s>]/i.test(c) || !/<\/body>/i.test(c)) issues.push('missing <body> tags');
+					if (!/<script\s+src=/i.test(c)) issues.push('no <script src> tags — modules will not load');
+					if (issues.length > 0) throw new Error('Generated HTML is malformed: ' + issues.join('; '));
+					}
+					if ((_spec.target_type === 'webapp' || _spec.target_type === 'single_page_webapp') && mod.kind === 'js') {
+					if (!/window\.App/i.test(workerResult.code)) {
+						throw new Error('JS module does not reference window.App — will break collaboration');
+					}
+					}
 		} catch (err) {
 			yield { type: 'error', stage: 'worker_parse', moduleId: modId, error: err };
 			_moduleStates[modId] = 'failed';
@@ -4723,7 +4771,8 @@ const StageC = (() => {
 		}
 
 // ---- Smoke test (Python only) ----
-			if (_spec.target_type !== 'webapp') {
+  		  	if (_spec.target_type !== 'webapp' && _spec.target_type !== 'single_page_webapp') {
+
 			yield { type: 'smoke_start' };
 			const importNames = _moduleArtifacts.map(a => a.moduleName).join(', ');
 			const smokeCode = `
@@ -4753,8 +4802,50 @@ const StageC = (() => {
 					} catch (err) {
 						yield { type: 'error', stage: 'smoke_test', error: err };
 						}
-						} // end Python-only smoke test
+				} else {
+				// Webapp smoke test: load the bundle in an iframe and check for runtime errors
+				yield { type: 'smoke_start' };
+				const skel = _skeleton;
+				const cdnTags = (skel.cdn_libraries || []).map(c => '<script src="' + c.url + '"><\/script>').join('\n');
+				const cssLinks = (skel.modules || []).filter(m => m.kind === 'css').map(m => {
+					const art = _moduleArtifacts.find(a => a.moduleName === m.id);
+					return art ? '<style>' + (art.code || '') + '</style>' : '';
+				}).join('\n');
+				const jsScripts = (skel.modules || []).filter(m => m.kind === 'js').map(m => {
+					const art = _moduleArtifacts.find(a => a.moduleName === m.id);
+					return art ? '<script>\n' + (art.code || '') + '\n<\/script>' : '';
+				}).join('\n');
+				const bootstrap = '<script>window.App = window.App || { _modules: {}, _ready: [], registerModule(n,m){this._modules[n]=m;}, getModule(n){return this._modules[n];}, onReady(fn){this._ready.push(fn);} };<\/script>';
+				const errCatcher = '<script>window._smokeErrors = []; window.addEventListener("error", e => window._smokeErrors.push(e.message)); window.addEventListener("unhandledrejection", e => window._smokeErrors.push(String(e.reason)));<\/script>';
+				const finalCheck = '<script>setTimeout(() => { parent.postMessage({type:"smoke_check",errors:window._smokeErrors,modules:Object.keys(window.App._modules||{}),booted:!!window.App._booted}, "*"); }, 1500);<\/script>';
+				const html = '<!DOCTYPE html><html><head>' + errCatcher + bootstrap + cssLinks + cdnTags + '</head><body><div id="app"></div>' + jsScripts + '<script>document.dispatchEvent(new Event("DOMContentLoaded"));for(const fn of (window.App._ready||[])){try{fn();}catch(e){window._smokeErrors.push(e.message);}}window.App._booted=true;<\/script>' + finalCheck + '</body></html>';
 
+				const smokeResult = await new Promise((resolve) => {
+					const iframe = document.createElement('iframe');
+					iframe.sandbox = 'allow-scripts';
+					iframe.style.cssText = 'position:absolute;left:-10000px;width:800px;height:600px;';
+					iframe.srcdoc = html;
+					document.body.appendChild(iframe);
+					let resolved = false;
+					const handler = (ev) => {
+					if (resolved || ev.data?.type !== 'smoke_check') return;
+					resolved = true;
+					window.removeEventListener('message', handler);
+					iframe.remove();
+					resolve(ev.data);
+					};
+					window.addEventListener('message', handler);
+					setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); iframe.remove(); resolve({ errors: ['Smoke timeout'], modules: [], booted: false }); } }, 8000);
+				});
+
+				const expectedJs = (skel.modules || []).filter(m => m.kind === 'js').map(m => m.id);
+				const missing = expectedJs.filter(id => !smokeResult.modules.includes(id));
+				const passed = smokeResult.errors.length === 0 && missing.length === 0 && smokeResult.booted;
+				yield { type: 'smoke_result', passed, output: 'Errors: ' + JSON.stringify(smokeResult.errors) + '\nRegistered: ' + smokeResult.modules.join(', ') + '\nMissing: ' + missing.join(', ') + '\nBooted: ' + smokeResult.booted };
+				if (!passed) {
+					yield { type: 'error', stage: 'smoke_test', error: new Error('Webapp smoke test failed. Errors: ' + smokeResult.errors.slice(0, 3).join('; ') + (missing.length ? '. Missing modules: ' + missing.join(', ') : '')) };
+				}
+				}
     // ---- Integration test ----
     yield { type: 'integration_start' };
 
@@ -7828,7 +7919,50 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     a.href = url; a.download = name + '.zip'; a.click();
     URL.revokeObjectURL(url);
   }
-
+	function _openSkeletonEditor(skel) {
+		const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+		const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:720px;width:90vw;' });
+		modal.appendChild(el('div', { class: 'text-[14px] font-semibold mb-2' }, 'Edit Skeleton JSON'));
+		modal.appendChild(el('div', { class: 'text-[11px] text-muted mb-2' }, 'Modify the skeleton structure. Saving regenerates the diagram.'));
+		const ta = el('textarea', { class: 'json-editor', style: 'min-height:400px;' });
+		ta.value = JSON.stringify(skel, null, 2);
+		modal.appendChild(ta);
+		const errDiv = el('div', { class: 'json-error' });
+		modal.appendChild(errDiv);
+		const actions = el('div', { class: 'flex items-center justify-end gap-2 mt-3' });
+		const cancelBtn = el('button', { class: 'btn' }, 'Cancel');
+		const saveBtn = el('button', { class: 'btn btn-primary' }, 'Save');
+		actions.appendChild(cancelBtn);
+		actions.appendChild(saveBtn);
+		modal.appendChild(actions);
+		const close = () => { backdrop.remove(); modal.remove(); };
+		cancelBtn.addEventListener('click', close);
+		backdrop.addEventListener('click', close);
+		saveBtn.addEventListener('click', async () => {
+		try {
+			const parsed = JSON.parse(ta.value);
+			if (!parsed.modules || !Array.isArray(parsed.modules)) throw new Error('modules array required');
+			if (!parsed.build_order || !Array.isArray(parsed.build_order)) throw new Error('build_order array required');
+			CodeSmith.stageB.setSkeleton(parsed, CodeSmith.stageB.getApprovedSpec(), '');
+			// Re-render
+			const container = $('#mermaid-container');
+			container.innerHTML = '';
+			const def = CodeSmith.stageB.getMermaidDef();
+			const div = document.createElement('div');
+			div.className = 'mermaid';
+			div.textContent = def;
+			container.appendChild(div);
+			try { await mermaid.run({ nodes: [div] }); } catch {}
+			_renderModuleList(parsed);
+			await _persistStageState();
+			close();
+		} catch (err) {
+			errDiv.textContent = 'Invalid: ' + err.message;
+		}
+		});
+		document.body.appendChild(backdrop);
+		document.body.appendChild(modal);
+	}
   function openSpecEditor(spec) {
     const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
     const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:640px;' });
@@ -7951,6 +8085,55 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 		$('#btn-b-regenerate').addEventListener('click', () => {
 		  _generateSkeleton();
+		});
+		$('#btn-b-export-json').addEventListener('click', () => {
+		const skel = CodeSmith.stageB.getSkeleton();
+		const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
+		if (!skel) return;
+		const bundle = { version: 1, spec, skeleton: skel, mermaidDef: CodeSmith.stageB.getMermaidDef(), exportedAt: Date.now() };
+		const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(blob);
+		a.download = (skel.summary || 'skeleton').slice(0, 30).replace(/\W+/g, '_') + '.skeleton.json';
+		a.click();
+		URL.revokeObjectURL(a.href);
+		});
+
+		$('#btn-b-import-json').addEventListener('click', () => $('#b-import-file').click());
+		$('#b-import-file').addEventListener('change', async (ev) => {
+		const file = ev.target.files[0];
+		if (!file) return;
+		try {
+			const text = await file.text();
+			const bundle = JSON.parse(text);
+			if (!bundle.skeleton || !bundle.skeleton.modules) throw new Error('Invalid skeleton bundle');
+			if (bundle.spec) {
+			CodeSmith.stageA.setSpec(bundle.spec);
+			_renderSpecCard(bundle.spec, {});
+			}
+			CodeSmith.stageB.setSkeleton(bundle.skeleton, bundle.spec, bundle.mermaidDef);
+			_showStep('b');
+			// Re-render the mermaid + module list
+			const container = $('#mermaid-container');
+			container.innerHTML = '';
+			const def = bundle.mermaidDef || CodeSmith.stageB.getMermaidDef();
+			const div = document.createElement('div');
+			div.className = 'mermaid';
+			div.textContent = def;
+			container.appendChild(div);
+			try { await mermaid.run({ nodes: [div] }); } catch {}
+			_renderModuleList(bundle.skeleton);
+			await _persistStageState();
+		} catch (err) {
+			alert('Import failed: ' + err.message);
+		}
+		ev.target.value = '';
+		});
+
+		$('#btn-b-edit-json').addEventListener('click', () => {
+		const skel = CodeSmith.stageB.getSkeleton();
+		if (!skel) return;
+		_openSkeletonEditor(skel);
 		});
 		$('#btn-b-export').addEventListener('click', (ev) => {
 			const svg = $('#mermaid-container').querySelector('svg');
@@ -8835,9 +9018,25 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			if (!hasIndex && skel) {
 				const cdnTags = (skel.cdn_libraries || []).map(c => '  <script src="' + c.url + '"><\/script>').join('\n');
 				const cssLinks = (skel.modules || []).filter(m => m.kind === 'css').map(m => '  <link rel="stylesheet" href="' + m.name + '">').join('\n');
-				const jsTags = (skel.modules || []).filter(m => m.kind === 'js').map(m => '  <script src="' + m.name + '"><\/script>').join('\n');
+				const jsModules = (skel.modules || []).filter(m => m.kind === 'js');
+				// Sort by build_order so dependencies load first
+				const orderMap = new Map((skel.build_order || []).map((id, i) => [id, i]));
+				jsModules.sort((a, b) => (orderMap.get(a.id) ?? 999) - (orderMap.get(b.id) ?? 999));
+				const jsTags = jsModules.map(m => '  <script src="' + m.name + '"><\/script>').join('\n');
 				const pageTitle = spec.goal || 'Web App';
-				const indexHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>' + pageTitle + '</title>\n' + cssLinks + '\n' + cdnTags + '\n</head>\n<body>\n  <div id="app"></div>\n' + jsTags + '\n</body>\n</html>\n';
+				const bootstrap = `<script>
+				window.App = window.App || { _modules: {}, _ready: [], registerModule(n,m){this._modules[n]=m;console.debug('[App] registered',n);}, getModule(n){return this._modules[n];}, onReady(fn){this._ready.push(fn);} };
+				<\/script>`;
+				const initBoot = `<script>
+				document.addEventListener('DOMContentLoaded', function() {
+					console.log('[App] DOM ready, modules:', Object.keys(window.App._modules));
+					for (const fn of (window.App._ready || [])) {
+					try { fn(); } catch(e) { console.error('[App] onReady error:', e); }
+					}
+					window.App._booted = true;
+				});
+				<\/script>`;
+				const indexHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>' + pageTitle + '</title>\n' + cssLinks + '\n' + cdnTags + '\n  ' + bootstrap + '\n</head>\n<body>\n  <div id="app"></div>\n' + jsTags + '\n  ' + initBoot + '\n</body>\n</html>\n';
 				zip.file('index.html', indexHtml);
 			}
 
