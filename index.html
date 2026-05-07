@@ -1984,10 +1984,26 @@
 	        </div>
 	      </div>
 	    </div>
-	
+		<div class="field">
+			<label for="s-collab-mode">Worker collaboration</label>
+			<select id="s-collab-mode" class="font-mono">
+				<option value="solo">Solo (1 worker, fastest)</option>
+				<option value="critic">Critic-Reviser (2 rounds, recommended)</option>
+				<option value="vote3">Vote of 3 (3 drafts + judge, expensive)</option>
+			</select>
+			<div class="text-[11px] text-muted mt-1">Critic mode reviews each module's first draft and revises before testing. Vote mode generates 3 drafts and picks the best.</div>
+			</div>
+		<div class="field">
+			<label for="s-parallel-workers">Parallel build workers</label>
+			<input id="s-parallel-workers" type="number" min="1" max="6" step="1" class="font-mono" />
+			<div class="text-[11px] text-muted mt-1">Build N modules at once (1 = sequential, faster but uses more tokens). Default: 1.</div>
+			</div>
 	    <div class="field">
 	      <label for="s-budget-cap">Total token budget cap</label>
-	      <input id="s-budget-cap" type="number" min="1000" step="1000" class="font-mono" />
+			<div style="display:flex;gap:6px;">
+			<input id="s-budget-cap" type="number" min="1000" step="1000" class="font-mono" style="flex:1;" />
+			<button id="btn-reset-budget" class="btn" style="font-size:11px;">Reset usage</button>
+			</div>
 	      <div class="text-[11px] text-muted mt-1">Display-only counter shown in the status bar. Does not block requests.</div>
 	    </div>
 
@@ -2142,6 +2158,8 @@
 				maxTokensOrchestrator: 20000,
 				maxTokensWorker:       20000,
 				maxTokensFast:         8000,
+				parallelWorkers: 1,
+				collabMode: 'solo',
 			  },
 	};
 // expose for devtools only — not for app code
@@ -2916,6 +2934,12 @@ const LLM = (() => {
 		    }
 		    const url = apiUrl + '/chat/completions';
 		    const isThinking = _isThinkingModel(model);
+			const totalCap = (_getSettings().tokenBudgetCap || 100000);
+			const used = _budget.tokensIn + _budget.tokensOut;
+			if (used >= totalCap) {
+			yield { type: 'error', error: new Error('Token budget exhausted (' + used + '/' + totalCap + '). Raise it in Settings or click Reset budget.'), recoverable: false };
+			return;
+			}
 			const tierCap = getMaxTokensForTier(tier || 'orchestrator');
 			    const effectiveMaxTokens = maxTokens != null ? Math.min(maxTokens, tierCap) : tierCap;
 			
@@ -4136,6 +4160,28 @@ const SymbolTable = (() => {
 
 		Output ONLY valid JSON:
 		{"code":"full file content","tests":"test JS code (empty string for HTML/CSS modules)","imports_needed":[],"requested_symbols":[],"notes":"optional"}`;
+		const STAGE_C_CRITIC_SYSTEM = `You are a senior code reviewer. You receive: (1) a module spec, (2) a draft implementation. Find real problems and propose fixes.
+
+		Focus on:
+		- Correctness vs the spec (signatures, return types, error handling)
+		- Edge cases the draft misses (empty inputs, None, boundary values)
+		- Security or sandbox issues (no real network, no subprocess, no fs writes outside /workdir)
+		- Test coverage — does the test file actually test the spec's acceptance criteria?
+
+		Do NOT nitpick style. Do NOT rewrite the whole thing. Output ONLY valid JSON:
+		{"verdict":"accept|revise","critical_issues":["specific issue 1","..."],"suggestions":["non-blocking suggestion","..."]}
+
+		If verdict="accept", critical_issues must be empty.`;
+
+		const STAGE_C_REVISER_SYSTEM = `You are the original author. The reviewer found these critical issues. Revise your code+tests to fix ALL of them. Keep what works. Output the same JSON schema as your original draft: {"code":"...","tests":"...","imports_needed":[],"requested_symbols":[],"notes":"..."}`;
+
+		const STAGE_C_JUDGE_SYSTEM = `You are an orchestrator picking the best of 3 candidate implementations of the same module spec. Score each on:
+		- Correctness (does it match the spec?)
+		- Test quality (do tests actually verify the spec's acceptance criteria?)
+		- Sandbox safety (no real network, subprocess, etc.)
+		- Robustness (handles edge cases?)
+
+		Output ONLY valid JSON: {"winner":0|1|2,"scores":[{"correctness":0-10,"tests":0-10,"safety":0-10,"robustness":0-10,"notes":"..."},...],"rationale":"why winner is best"}`;
 
 	const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE module. Rules:
 	1. Only define public names listed in your module spec.
@@ -4223,6 +4269,56 @@ const StageC = (() => {
 
     // Init module states
     _moduleStates = {};
+		const parallelN = (CodeSmith.state.settings && CodeSmith.state.settings.parallelWorkers) || 1;
+		if (parallelN > 1) {
+		// Parallel mode: build modules in waves where deps are satisfied
+		const built = new Set();
+		const remaining = new Set(_skeleton.build_order);
+		while (remaining.size > 0 && !_aborted) {
+			// Find modules whose deps are all built
+			const ready = [];
+			for (const modId of remaining) {
+			const mod = _skeleton.modules.find(m => m.id === modId);
+			if (!mod) { remaining.delete(modId); continue; }
+			const deps = mod.depends_on || [];
+			if (deps.every(d => built.has(d))) ready.push(modId);
+			if (ready.length >= parallelN) break;
+			}
+			if (ready.length === 0) {
+			yield { type: 'error', stage: 'parallel_deadlock', error: new Error('Parallel build stuck — circular deps or unbuildable modules: ' + [...remaining].join(', ')) };
+			return;
+			}
+			yield { type: 'parallel_wave', modules: ready };
+			// Build all `ready` in parallel
+			const promises = ready.map(modId => _buildOneModule(modId, _skeleton, _spec, _moduleArtifacts));
+			const results = await Promise.all(promises);
+			for (let i = 0; i < ready.length; i++) {
+			const modId = ready[i];
+			const result = results[i];
+			if (!_scModuleData) _scModuleData = {};
+			if (result.error) {
+				yield { type: 'error', stage: 'worker', moduleId: modId, error: result.error };
+				_moduleStates[modId] = 'failed';
+			} else if (result.artifact) {
+				_moduleArtifacts.push(result.artifact);
+				_moduleStates[modId] = 'built';
+				SymbolTable.markImplemented(modId);
+				built.add(modId);
+				yield { type: 'worker_done', moduleId: modId, result: { code: result.artifact.code, tests: result.artifact.tests, imports_needed: result.artifact._imports || [] }, attempt: 1 };
+				yield { type: 'module_built', moduleId: modId, table: SymbolTable.get() };
+			}
+			remaining.delete(modId);
+			}
+		}
+		yield { type: 'all_built', count: _moduleArtifacts.length };
+		// Skip the sequential loop below
+		_state = 'paused';
+		_paused = true;
+		yield { type: 'phase_checkpoint', message: 'All modules built. Download untested package or continue to testing.' };
+		while (_paused && !_aborted) await _sleep(200);
+		if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+		_state = 'running';
+		} else {
     for (const modId of _skeleton.build_order) {
       _moduleStates[modId] = 'pending';
     }
@@ -4310,6 +4406,78 @@ const StageC = (() => {
 			continue;
 		}
 
+		const collabMode = (CodeSmith.state.settings && CodeSmith.state.settings.collabMode) || 'solo';
+			if (collabMode === 'critic' && workerResult.code) {
+				yield { type: 'critic_start', moduleId: modId };
+				try {
+				const critiqueResult = await CodeSmith.llm.chatComplete({
+					messages: [
+					{ role: 'system', content: STAGE_C_CRITIC_SYSTEM },
+					{ role: 'user', content: 'Module spec:\n' + JSON.stringify(mod, null, 2) + '\n\nDraft code:\n' + workerResult.code + '\n\nDraft tests:\n' + (workerResult.tests || '(none)') },
+					],
+					tier: 'orchestrator', temperature: 0.1, maxTokens: 6000,
+				});
+				const critique = _parseJSON(critiqueResult.text);
+				yield { type: 'critic_verdict', moduleId: modId, verdict: critique.verdict, issues: critique.critical_issues || [] };
+
+				if (critique.verdict === 'revise' && (critique.critical_issues || []).length > 0) {
+					yield { type: 'reviser_start', moduleId: modId };
+					const revisionResult = await CodeSmith.llm.chatComplete({
+					messages: [
+						{ role: 'system', content: STAGE_C_REVISER_SYSTEM },
+						{ role: 'user', content: 'Original spec:\n' + JSON.stringify(mod, null, 2) },
+						{ role: 'assistant', content: JSON.stringify({ code: workerResult.code, tests: workerResult.tests }) },
+						{ role: 'user', content: 'Critical issues to fix:\n' + critique.critical_issues.map((s, i) => (i + 1) + '. ' + s).join('\n') },
+					],
+					tier: 'worker', temperature: 0.2, maxTokens: 20000,
+					});
+					const revised = _parseJSON(revisionResult.text);
+					if (revised && revised.code && revised.code.trim().length >= 20) {
+					workerResult = revised;
+					yield { type: 'reviser_done', moduleId: modId, result: revised };
+					} else {
+					yield { type: 'reviser_failed', moduleId: modId, reason: 'Revision returned empty/invalid code; keeping original draft' };
+					}
+				}
+				} catch (err) {
+				yield { type: 'reviser_failed', moduleId: modId, reason: err.message || String(err) };
+				}
+			} else if (collabMode === 'vote3' && workerResult.code) {
+				yield { type: 'vote_start', moduleId: modId };
+				const candidates = [workerResult];
+				// Generate 2 more candidates with higher temperature for diversity
+				for (let c = 0; c < 2; c++) {
+				try {
+					const altResult = await CodeSmith.llm.chatComplete({
+					messages: [
+						{ role: 'system', content: workerSystem },
+						{ role: 'user', content: 'Work order (alternative approach #' + (c + 2) + ' — be creative):\n' + JSON.stringify(workOrder, null, 2) },
+					],
+					tier: 'worker', temperature: 0.5 + c * 0.2, maxTokens: 20000,
+					});
+					const altParsed = _parseJSON(altResult.text);
+					if (altParsed && altParsed.code && altParsed.code.trim().length >= 20) candidates.push(altParsed);
+				} catch {}
+				}
+				if (candidates.length >= 2) {
+				try {
+					const judgeResult = await CodeSmith.llm.chatComplete({
+					messages: [
+						{ role: 'system', content: STAGE_C_JUDGE_SYSTEM },
+						{ role: 'user', content: 'Module spec:\n' + JSON.stringify(mod, null, 2) + '\n\nCandidates:\n' + candidates.map((c, i) => '\n=== CANDIDATE ' + i + ' ===\nCode:\n' + c.code + '\n\nTests:\n' + (c.tests || '(none)')).join('\n') },
+					],
+					tier: 'orchestrator', temperature: 0.1, maxTokens: 4000,
+					});
+					const verdict = _parseJSON(judgeResult.text);
+					const winner = (verdict && typeof verdict.winner === 'number') ? verdict.winner : 0;
+					workerResult = candidates[Math.min(winner, candidates.length - 1)];
+					yield { type: 'vote_done', moduleId: modId, winner, totalCandidates: candidates.length, rationale: verdict.rationale || '' };
+				} catch (err) {
+					yield { type: 'vote_failed', moduleId: modId, reason: err.message || String(err) };
+				}
+				}
+			}
+			
 		yield { type: 'worker_done', moduleId: modId, result: workerResult, attempt: 1 };
 
 		if (workerResult.requested_symbols && workerResult.requested_symbols.length > 0) {
@@ -4366,18 +4534,20 @@ const StageC = (() => {
 		};
 		_moduleArtifacts.push(artifact);
 		SymbolTable.markImplemented(modId);
-		yield { type: 'module_built', moduleId: modId, table: SymbolTable.get() };
-		}
+			yield { type: 'module_built', moduleId: modId, table: SymbolTable.get() };
+			}
+			} // end serial else
 
-		yield { type: 'all_built', count: _moduleArtifacts.length };
+			if (parallelN <= 1) {
+			yield { type: 'all_built', count: _moduleArtifacts.length };
 
-			// Pause for download checkpoint
 			_state = 'paused';
 			_paused = true;
 			yield { type: 'phase_checkpoint', message: 'All modules built. Download untested package or continue to testing.' };
 			while (_paused && !_aborted) await _sleep(200);
 			if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
 			_state = 'running';
+			} // end if parallelN <= 1
 
 			// ---- PHASE 2: Test each module with patch-based repair ----
 		for (const artifact of _moduleArtifacts) {
@@ -4765,6 +4935,63 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 			return { ok: true, newContent: lines.join('\n') };
 		}
 
+			async function _buildOneModule(modId, skeleton, spec, currentArtifacts) {
+				const mod = skeleton.modules.find(m => m.id === modId);
+				if (!mod) return { error: new Error('Module not found: ' + modId) };
+				const isWebapp = spec.target_type === 'webapp' || spec.target_type === 'single_page_webapp';
+				const depCode = SymbolTable.getDependencyCode(modId, skeleton, currentArtifacts);
+				const dummyInputs = (spec.inputs && spec.inputs.example) ? spec.inputs.example : '';
+				const workOrder = {
+				module_spec: mod, symbol_table: SymbolTable.get(),
+				dependency_code: depCode, dummy_inputs: dummyInputs,
+				cdn_libraries: skeleton.cdn_libraries || [], shared_state: skeleton.shared_state || {},
+				};
+				const workerSystem = isWebapp
+				? STAGE_C_WEBAPP_WORKER_SYSTEM.replace('{style_brief}', spec.style_brief || 'Clean modern defaults.')
+				: STAGE_C_WORKER_SYSTEM;
+				try {
+				const result = await CodeSmith.llm.chatComplete({
+					messages: [
+					{ role: 'system', content: workerSystem },
+					{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+					],
+					tier: 'worker', temperature: 0.2, maxTokens: 20000,
+				});
+				const parsed = _parseJSON(result.text);
+				if (!parsed || !parsed.code || parsed.code.trim().length < 20) {
+					return { error: new Error('Empty/short code from worker') };
+				}
+				let outputFilename;
+				if (isWebapp) {
+					outputFilename = mod.name || (mod.id + (mod.kind === 'html' ? '.html' : mod.kind === 'css' ? '.css' : '.js'));
+				} else {
+					const safeName = _sanitizeModuleName(mod.name || mod.id);
+					mod.name = safeName;
+					outputFilename = safeName + '.py';
+				}
+				try {
+					await CodeSmith.sandbox.writeFile('/workdir/' + outputFilename, parsed.code);
+					if (parsed.tests && !isWebapp) {
+					await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', parsed.tests);
+					}
+				} catch {}
+				for (const pkg of (parsed.imports_needed || [])) {
+					try { await CodeSmith.sandbox.installPackage(pkg); } catch {}
+				}
+				const artifact = {
+					id: modId + '_' + Date.now(),
+					sessionId: CodeSmith.state.currentId,
+					moduleName: modId,
+					code: parsed.code, tests: parsed.tests || '',
+					spec: mod, createdAt: Date.now(), status: 'built',
+					_imports: parsed.imports_needed || [],
+				};
+				try { await CodeSmith.db.putArtifact(artifact); } catch {}
+				return { artifact };
+				} catch (err) {
+				return { error: err };
+				}
+			}
 //-------------------
   async function _negotiateSymbols(requested) {
     const prompt = STAGE_C_SYMBOL_PROMPT
@@ -6673,14 +6900,16 @@ function wireComposer() {
   function openSettings() {
     lastFocused = document.activeElement;
     const s = CodeSmith.state.settings || CodeSmith.DEFAULTS;
-    $('#s-api-url').value     = s.apiUrl || '';
-    $('#s-api-key').value     = s.apiKey || '';
-    $('#s-model-orch').value  = s.modelOrchestrator || '';
-    $('#s-model-worker').value= s.modelWorker || '';
-	$('#s-model-fast').value  = s.modelFast || '';
+		$('#s-api-url').value     = s.apiUrl || '';
+		$('#s-api-key').value     = s.apiKey || '';
+		$('#s-model-orch').value  = s.modelOrchestrator || '';
+		$('#s-model-worker').value= s.modelWorker || '';
+		$('#s-model-fast').value  = s.modelFast || '';
+		$('#s-collab-mode').value = s.collabMode || 'solo';
 	    $('#s-max-orch').value    = s.maxTokensOrchestrator || CodeSmith.DEFAULTS.maxTokensOrchestrator;
 	    $('#s-max-worker').value  = s.maxTokensWorker || CodeSmith.DEFAULTS.maxTokensWorker;
 	    $('#s-max-fast').value    = s.maxTokensFast || CodeSmith.DEFAULTS.maxTokensFast;
+	    $('#s-parallel-workers').value = s.parallelWorkers || CodeSmith.DEFAULTS.parallelWorkers;
 	    $('#s-budget-cap').value  = s.tokenBudgetCap || CodeSmith.DEFAULTS.tokenBudgetCap;
 	    $('#test-result').textContent = '';
     populateDatalist(s.modelsCache || []);
@@ -6742,7 +6971,9 @@ function wireComposer() {
 	      maxTokensOrchestrator: _clampTokens($('#s-max-orch').value, CodeSmith.DEFAULTS.maxTokensOrchestrator),
 	      maxTokensWorker:       _clampTokens($('#s-max-worker').value, CodeSmith.DEFAULTS.maxTokensWorker),
 	      maxTokensFast:         _clampTokens($('#s-max-fast').value, CodeSmith.DEFAULTS.maxTokensFast),
+		  parallelWorkers: Math.max(1, Math.min(6, parseInt($('#s-parallel-workers').value, 10) || 1)),
 	      tokenBudgetCap:        Math.max(1000, parseInt($('#s-budget-cap').value, 10) || CodeSmith.DEFAULTS.tokenBudgetCap),
+		  collabMode: $('#s-collab-mode').value || 'solo',
 	    };
     await CodeSmith.db.saveSettings(next);
     CodeSmith.state.settings = { ...next, id: 'app' };
@@ -6938,6 +7169,13 @@ function wireComposer() {
     $('#btn-cancel-settings').addEventListener('click', closeSettings);
     $('#settings-backdrop').addEventListener('click', closeSettings);
     $('#btn-save-settings').addEventListener('click', saveSettingsFromModal);
+  	const resetBudgetBtn = $('#btn-reset-budget');
+		if (resetBudgetBtn) resetBudgetBtn.addEventListener('click', () => {
+		CodeSmith.llm.resetBudget();
+		renderStatusStrip();
+		resetBudgetBtn.textContent = '✓ Reset';
+		setTimeout(() => { resetBudgetBtn.textContent = 'Reset usage'; }, 1500);
+		});
     $('#btn-test-conn').addEventListener('click', runTestConnection);
     $('#btn-fetch-models').addEventListener('click', runFetchModels);
 	$('#btn-toggle-sidebar').addEventListener('click', () => {
@@ -8331,6 +8569,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			case 'smoke_start':
 				_scLog('Running smoke test: import all modules together…', 'log-info');
 				break;
+			case 'parallel_wave':
+				_scLog('🔧 Building ' + ev.modules.length + ' modules in parallel: ' + ev.modules.join(', '), 'log-info');
+				break;
 			case 'smoke_result':
 				_scLog(ev.passed ? '✓ Smoke test passed' : '✗ Smoke test FAILED — modules cannot import', ev.passed ? 'log-pass' : 'log-fail');
 				break;	
@@ -8346,6 +8587,31 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				if (_scModuleData[ev.moduleId]) {
 				_scModuleData[ev.moduleId]._rawWorker = (_scModuleData[ev.moduleId]._rawWorker || '') + ev.delta;
 				}
+				break;
+				case 'critic_start':
+				_scLog('🔍 Critic reviewing ' + ev.moduleId + '…', 'log-info');
+				break;
+				case 'critic_verdict':
+				if (ev.verdict === 'accept') _scLog('✓ Critic accepted ' + ev.moduleId, 'log-pass');
+				else _scLog('✎ Critic flagged ' + ev.issues.length + ' issue(s) in ' + ev.moduleId, 'log-warn');
+				break;
+				case 'reviser_start':
+				_scLog('🔧 Reviser fixing ' + ev.moduleId + '…', 'log-info');
+				break;
+				case 'reviser_done':
+				_scLog('✓ Reviser updated ' + ev.moduleId, 'log-pass');
+				break;
+				case 'reviser_failed':
+				_scLog('⚠ Revision failed: ' + ev.reason, 'log-warn');
+				break;
+				case 'vote_start':
+				_scLog('🗳 Voting on ' + ev.moduleId + ' (3 candidates)…', 'log-info');
+				break;
+				case 'vote_done':
+				_scLog('🏆 Picked candidate ' + ev.winner + ' of ' + ev.totalCandidates + ' for ' + ev.moduleId + (ev.rationale ? ' — ' + ev.rationale.slice(0, 80) : ''), 'log-pass');
+				break;
+				case 'vote_failed':
+				_scLog('⚠ Vote failed: ' + ev.reason, 'log-warn');
 				break;
 			case 'worker_done':
 						if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
@@ -10810,6 +11076,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 					setTimeout(() => { btn.disabled = false; btn.textContent = 'Test'; btn.style.color = '#4ade80'; }, 4000);
 				}
 				});
+			row.querySelector('.ep-remove').addEventListener('click', (ev) => {
+				ev.preventDefault();
+				ev.stopPropagation();
+				row.remove();
+				});	
 
 		    return row;
 		  }
