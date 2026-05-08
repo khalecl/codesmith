@@ -1833,6 +1833,9 @@
       <span>Orchestrator: </span><span id="st-orch-text">no key</span></span>
     <span>Tokens: <span id="st-tokens" class="font-mono">0 / 100,000</span></span>
     <span class="ml-auto font-mono text-muted/70" id="st-session-id">—</span>
+	<div style="position:fixed;bottom:28px;right:8px;font-size:10px;color:#5b6474;font-family:monospace;z-index:5;pointer-events:auto;">
+	Built with <a href="https://khalecl.github.io/codesmith/" target="_blank" rel="noopener" style="color:#4f8cff;text-decoration:none;">CodeSmith</a> by <a href="https://github.com/khalecl" target="_blank" rel="noopener" style="color:#8b92a1;text-decoration:none;">Khaled Diab</a>
+	</div>
   </footer>
 </div>
 <!-- ========= Debug panel (Ctrl+Shift+D) — Day 2 ========= -->
@@ -9137,8 +9140,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			Modules: ${arts.map(a => a.moduleName).join(', ')}
 			Has run.py: ${!!runPy}
 			Spec goal: ${spec.goal || ''}`;
-
 					let readme = '# ' + (spec.goal || 'CodeSmith Project') + '\n\nRun: `python run.py`\n';
+					const attribution = '\n\n---\n_Generated with [CodeSmith](https://khalecl.github.io/codesmith/) by Khaled Diab._\n';
+
 					try {
 					const r2 = await CodeSmith.llm.chatComplete({
 						messages: [
@@ -11308,6 +11312,17 @@ CodeSmith.ui = UI;
  * ==========================================================================*/
 (async function boot() {
   try {
+		// Canonical source notice (non-blocking)
+		try {
+		const host = window.location.hostname;
+		const isCanonical = host === 'khalecl.github.io' || host === 'localhost' || host === '127.0.0.1' || host === '';
+		if (!isCanonical) {
+			const banner = document.createElement('div');
+			banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1f2a;color:#e8ecf1;padding:8px 14px;text-align:center;font-size:12px;z-index:9999;border-bottom:1px solid #4f8cff;font-family:system-ui;';
+			banner.innerHTML = '⚡ This is an unofficial copy of <strong>CodeSmith</strong>. The official version is at <a href="https://khalecl.github.io/codesmith/" style="color:#4f8cff;font-weight:600;">khalecl.github.io/codesmith</a> by Khaled Diab. <button onclick="this.parentElement.remove()" style="margin-left:8px;background:transparent;border:1px solid #4f8cff;color:#4f8cff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;">Dismiss</button>';
+			document.body.insertBefore(banner, document.body.firstChild);
+		}
+		} catch {}
     await CodeSmith.db.init();
     const saved = await CodeSmith.db.getSettings();
     CodeSmith.state.settings = saved || { ...CodeSmith.DEFAULTS };
