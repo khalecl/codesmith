@@ -1,0 +1,2732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AuditFlow L1 — ASHRAE Level 1 Energy Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --sidebar-bg: #0f1923;
+  --sidebar-hover: #1a2c3d;
+  --sidebar-active: #0ea5e9;
+  --main-bg: #f0f4f8;
+  --card-bg: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-light: #e0f2fe;
+  --success: #10b981;
+  --success-bg: #d1fae5;
+  --warning: #f59e0b;
+  --warning-bg: #fef3c7;
+  --danger: #ef4444;
+  --danger-bg: #fee2e2;
+  --border: #e2e8f0;
+  --input-bg: #f8fafc;
+  --input-border: #cbd5e1;
+  --mono: 'JetBrains Mono', 'Courier New', monospace;
+  --sans: 'DM Sans', -apple-system, sans-serif;
+  --sidebar-w: 240px;
+  --topbar-h: 52px;
+  --radius: 8px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.1);
+  --table-stripe: #f8fafc;
+  --table-hover: #f1f5f9;
+}
+[data-theme="dark"] {
+  --sidebar-bg: #0a1018;
+  --sidebar-hover: #141e2a;
+  --main-bg: #111827;
+  --card-bg: #1e293b;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-light: #0c2d4a;
+  --border: #334155;
+  --input-bg: #1e293b;
+  --input-border: #475569;
+  --table-stripe: #1a2332;
+  --table-hover: #243044;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body { font-family: var(--sans); background: var(--main-bg); color: var(--text-primary); overflow: hidden; height: 100vh; }
+input, select, textarea, button { font-family: inherit; font-size: .875rem; }
+input[type="number"], input[type="text"], input[type="date"], input[type="tel"], input[type="email"], select, textarea {
+  background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary);
+  border-radius: 4px; padding: 6px 8px; outline: none; transition: border .2s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(14,165,233,.15); }
+/* Required field highlight */
+input.required-empty, select.required-empty, textarea.required-empty {
+  background: #fffde7 !important; border-color: #f59e0b !important;
+}
+[data-theme="dark"] input.required-empty, [data-theme="dark"] select.required-empty, [data-theme="dark"] textarea.required-empty {
+  background: #3b3412 !important; border-color: #f59e0b !important;
+}
+input[type="number"] { font-family: var(--mono); text-align: right; }
+textarea { font-family: var(--sans); resize: vertical; min-height: 60px; }
+button { cursor: pointer; border: none; border-radius: 4px; padding: 6px 14px; font-weight: 600; transition: all .15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--border); color: var(--text-primary); }
+.btn-secondary:hover { background: var(--input-border); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: .8rem; }
+.btn-icon { background: transparent; padding: 4px 8px; color: var(--text-secondary); font-size: 1.1rem; }
+.btn-icon:hover { color: var(--accent); }
+
+/* LAYOUT */
+#app { display: flex; height: 100vh; }
+#sidebar {
+  width: var(--sidebar-w); background: var(--sidebar-bg); display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; transition: transform .3s;
+}
+#sidebar .logo { padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
+#sidebar .logo span { color: #fff; font-weight: 700; font-size: 1.1rem; letter-spacing: .5px; }
+#sidebar .logo .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+#sidebar .progress-wrap { padding: 10px 18px; }
+#sidebar .progress-wrap .ptext { color: var(--text-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+#sidebar .pbar { height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+#sidebar .pbar .pfill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s; }
+#sidebar nav { flex: 1; overflow-y: auto; padding: 6px 0; }
+#sidebar nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 18px;
+  color: rgba(255,255,255,.55); text-decoration: none; font-size: .82rem; font-weight: 500;
+  transition: all .15s; border-left: 3px solid transparent; letter-spacing: .2px;
+}
+#sidebar nav a:hover { background: var(--sidebar-hover); color: rgba(255,255,255,.85); }
+#sidebar nav a.active { color: #fff; background: var(--sidebar-hover); border-left-color: var(--accent); }
+#sidebar nav a .nav-icon { font-size: 1rem; width: 22px; text-align: center; }
+#sidebar nav a .nav-badge { margin-left: auto; background: var(--accent); color: #fff; font-size: .65rem; padding: 1px 6px; border-radius: 8px; font-weight: 700; }
+#sidebar .sidebar-footer { padding: 12px 18px; border-top: 1px solid rgba(255,255,255,.06); display: flex; gap: 6px; flex-wrap: wrap; }
+#sidebar .sidebar-footer button { font-size: .72rem; padding: 4px 8px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.5); border-radius: 4px; }
+#sidebar .sidebar-footer button:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+#main-wrap { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; height: 100vh; }
+#topbar {
+  height: var(--topbar-h); background: var(--card-bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 12px; flex-shrink: 0;
+}
+#topbar .building-name { font-weight: 600; color: var(--text-secondary); font-size: .85rem; }
+#topbar .spacer { flex: 1; }
+#topbar .theme-toggle { background: var(--input-bg); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; font-size: .8rem; display: flex; align-items: center; gap: 4px; }
+#topbar .menu-btn { display: none; background: transparent; color: var(--text-primary); font-size: 1.4rem; }
+
+#content { flex: 1; overflow-y: auto; padding: 20px; }
+.section { display: none; animation: fadeIn .25s; }
+.section.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* CARDS */
+.card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm);
+}
+.card-accent { border-left: 4px solid var(--accent); }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.card-title { font-size: .95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-primary); }
+.card-subtitle { font-size: .78rem; color: var(--text-secondary); margin-top: 2px; }
+
+/* FORM GROUPS */
+.fg { margin-bottom: 12px; }
+.fg label { display: block; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text-secondary); margin-bottom: 4px; }
+.fg input, .fg select, .fg textarea { width: 100%; }
+.fg-inline { display: flex; gap: 8px; align-items: flex-end; }
+.fg-inline .fg { flex: 1; }
+.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.form-row-3 { grid-template-columns: repeat(3, 1fr); }
+.form-row-4 { grid-template-columns: repeat(4, 1fr); }
+.unit-group { display: flex; }
+.unit-group input { border-radius: 4px 0 0 4px; flex: 1; }
+.unit-group select { border-radius: 0 4px 4px 0; border-left: none; max-width: 90px; font-size: .75rem; background: var(--accent-light); font-weight: 600; }
+
+/* TABLES */
+.table-wrap { overflow-x: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: var(--radius); }
+table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+thead th {
+  background: var(--sidebar-bg); color: #fff; padding: 8px 10px; text-align: left;
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .8px; font-weight: 600;
+  position: sticky; top: 0; z-index: 2; white-space: nowrap;
+}
+tbody td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+tbody tr:hover { background: var(--table-hover); }
+table input, table select { width: 100%; min-width: 70px; padding: 4px 6px; font-size: .78rem; }
+table input[type="number"] { min-width: 60px; }
+tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(--mono); }
+
+/* BADGES */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.badge-green { background: var(--success-bg); color: #065f46; }
+.badge-amber { background: var(--warning-bg); color: #92400e; }
+.badge-red { background: var(--danger-bg); color: #991b1b; }
+.badge-blue { background: var(--accent-light); color: #0c4a6e; }
+.badge-gray { background: #f1f5f9; color: #475569; }
+
+/* FLAGS */
+.flag-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.flag-btn {
+  padding: 5px 12px; border-radius: 20px; font-size: .75rem; font-weight: 600;
+  border: 2px solid var(--border); background: var(--card-bg); color: var(--text-secondary);
+  cursor: pointer; transition: all .2s; display: flex; align-items: center; gap: 4px;
+}
+.flag-btn.active { border-color: var(--warning); background: var(--warning-bg); color: #92400e; }
+.flag-btn:hover { border-color: var(--warning); }
+
+/* TRAFFIC LIGHT */
+.traffic-light { display: flex; gap: 8px; align-items: center; }
+.tl-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); opacity: .3; transition: all .3s; }
+.tl-dot.active { opacity: 1; box-shadow: 0 0 12px currentColor; border-color: currentColor; }
+.tl-green { background: var(--success); color: var(--success); }
+.tl-yellow { background: var(--warning); color: var(--warning); }
+.tl-red { background: var(--danger); color: var(--danger); }
+
+/* PROGRESS TILES */
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+.tile {
+  padding: 8px; border-radius: 6px; text-align: center; font-size: .7rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px; cursor: pointer; transition: all .2s;
+  border: 1px solid var(--border);
+}
+.tile-empty { background: var(--input-bg); color: var(--text-muted); }
+.tile-partial { background: var(--warning-bg); color: #92400e; }
+.tile-complete { background: var(--success-bg); color: #065f46; }
+
+/* CHECKLIST */
+.checklist label { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: .85rem; cursor: pointer; }
+.checklist input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+
+/* GAUGE / METRIC */
+.metric-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.metric-box { flex: 1; min-width: 140px; padding: 14px; background: var(--input-bg); border-radius: var(--radius); border: 1px solid var(--border); text-align: center; }
+.metric-box .mv { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+.metric-box .ml { font-size: .7rem; text-transform: uppercase; letter-spacing: .8px; color: var(--text-secondary); margin-top: 2px; }
+
+/* CHART CONTAINER */
+.chart-box { position: relative; max-height: 340px; margin: 10px 0; }
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+
+/* PHOTO GRID */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 10px 0; }
+.photo-thumb { position: relative; border-radius: 6px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); aspect-ratio: 4/3; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-thumb .photo-caption { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.7); color: #fff; font-size: .65rem; padding: 3px 6px; }
+.photo-thumb .photo-del { position: absolute; top: 4px; right: 4px; background: var(--danger); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: .7rem; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .2s; }
+.photo-thumb:hover .photo-del { opacity: 1; }
+/* Equipment photo types */
+.photo-type-badge { position: absolute; top: 4px; left: 4px; font-size: .6rem; padding: 1px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+.photo-type-nameplate { background: #0ea5e9; color: #fff; }
+.photo-type-overview { background: #10b981; color: #fff; }
+.photo-type-deficiency { background: #ef4444; color: #fff; }
+.photo-type-detail { background: #8b5cf6; color: #fff; }
+
+/* AI Analysis section */
+.ai-section { margin: 16px 0; }
+.ai-textarea { width: 100%; min-height: 200px; font-family: var(--sans); font-size: .85rem; line-height: 1.6; padding: 12px; }
+.ai-loading { display: inline-block; padding: 4px 12px; background: var(--accent-light); border-radius: 12px; font-size: .78rem; color: var(--accent); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+/* MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500; align-items: center; justify-content: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: var(--card-bg); border-radius: var(--radius); padding: 24px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-md); }
+.modal h3 { margin-bottom: 14px; }
+.modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* UTILIZATION BAR */
+.util-bar { height: 20px; border-radius: 4px; overflow: hidden; background: var(--border); position: relative; }
+.util-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+.util-label { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: .7rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+
+/* TABS inside section */
+.subtabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
+.subtab { padding: 8px 16px; font-size: .8rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .2s; background: none; }
+.subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.subpanel { display: none; }
+.subpanel.active { display: block; }
+
+/* MOBILE */
+@media (max-width: 768px) {
+  #sidebar { transform: translateX(-100%); }
+  #sidebar.open { transform: translateX(0); }
+  #main-wrap { margin-left: 0; }
+  #topbar .menu-btn { display: block; }
+  .form-row { grid-template-columns: 1fr; }
+  .chart-row { grid-template-columns: 1fr; }
+  .form-row-3, .form-row-4 { grid-template-columns: 1fr 1fr; }
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* PRINT */
+@media print { #sidebar, #topbar, button, .flag-group, .subtabs { display: none !important; } #main-wrap { margin-left: 0; } }
+</style>
+</head>
+<body>
+<div id="app">
+<!-- SIDEBAR -->
+<aside id="sidebar">
+  <div class="logo"><div class="dot"></div><span>AuditFlow L1</span></div>
+  <div class="progress-wrap">
+    <div class="ptext" id="progress-text">0 of 13 complete</div>
+    <div class="pbar"><div class="pfill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+  <nav id="sidebar-nav"></nav>
+  <div class="sidebar-footer">
+    <button onclick="exportJSON()" title="Export project as JSON">💾 Export</button>
+    <button onclick="document.getElementById('importInput').click()" title="Import project JSON">📂 Import</button>
+    <input type="file" id="importInput" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button onclick="if(confirm('Reset all data?')){localStorage.removeItem('auditflow_state');location.reload();}">🗑 Reset</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div id="main-wrap">
+  <header id="topbar">
+    <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+    <span class="building-name" id="topbar-building">No Project</span>
+    <div class="spacer"></div>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="theme-label">Dark</span></button>
+  </header>
+  <main id="content">
+
+<!-- ============ SECTION 1: DASHBOARD ============ -->
+<div class="section" id="sec-dashboard">
+  <div class="card card-accent">
+    <div class="card-header"><div class="card-title">Project Summary</div><div id="dash-status" class="badge badge-gray">NOT STARTED</div></div>
+    <div id="dash-summary" style="font-size:.85rem;color:var(--text-secondary);">Load or create a project to begin.</div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Energy Use Intensity</div></div>
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+      <div class="traffic-light" id="dash-tl">
+        <div class="tl-dot tl-green" id="tl-g"></div>
+        <div class="tl-dot tl-yellow" id="tl-y"></div>
+        <div class="tl-dot tl-red" id="tl-r"></div>
+      </div>
+      <div id="dash-eui" style="font-family:var(--mono);font-size:1.8rem;font-weight:700;color:var(--accent);">— kBtu/ft²</div>
+      <div id="dash-eui-label" style="font-size:.8rem;color:var(--text-secondary);"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Section Completion</div></div>
+    <div class="tile-grid" id="dash-tiles"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Pre-Visit Checklist</div></div>
+    <div class="checklist" id="dash-checklist"></div>
+  </div>
+  <div style="margin-top:12px;">
+    <button class="btn-primary" onclick="loadDemo()" style="padding:10px 24px;font-size:.9rem;">⚡ Load Demo Project</button>
+  </div>
+</div>
+
+<!-- ============ SECTION 2: SETTINGS ============ -->
+<div class="section" id="sec-settings">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">AUDITOR SETTINGS</div>
+    <div class="form-row">
+      <div class="fg"><label>Auditor Name</label><input type="text" data-bind="settings.auditorName"></div>
+      <div class="fg"><label>Company Name</label><input type="text" data-bind="settings.companyName"></div>
+    </div>
+      <div class="fg"><label>Company Logo (URL or Upload)</label>
+        <div class="fg-inline">
+          <input type="text" data-bind="settings.companyLogoURL" placeholder="https://example.com/logo.png" onchange="updateCompanyLogo()">
+          <input type="file" accept="image/*" onchange="handleLogoUpload(event)" style="max-width:200px;">
+        </div>
+        <div id="logo-preview" style="margin-top:8px;"></div>
+      </div>
+    <div class="form-row">
+      <div class="fg"><label>Climate Zone</label>
+        <select data-bind="settings.climateZone" onchange="save()">
+          <option value="0A">0A - Extremely Hot Humid</option><option value="0B">0B - Extremely Hot Dry</option>
+          <option value="1A">1A - Very Hot Humid</option><option value="1B">1B - Very Hot Dry</option>
+          <option value="2A" selected>2A - Hot Humid</option><option value="2B">2B - Hot Dry</option>
+          <option value="3A">3A - Warm Humid</option><option value="3B">3B - Warm Dry</option><option value="3C">3C - Warm Marine</option>
+          <option value="4A">4A - Mixed Humid</option><option value="4B">4B - Mixed Dry</option><option value="4C">4C - Mixed Marine</option>
+          <option value="5A">5A - Cool Humid</option><option value="5B">5B - Cool Dry</option><option value="5C">5C - Cool Marine</option>
+          <option value="6A">6A - Cold Humid</option><option value="6B">6B - Cold Dry</option>
+          <option value="7">7 - Very Cold</option><option value="8">8 - Subarctic/Arctic</option>
+        </select>
+      </div>
+      <div class="fg"><label>Units</label>
+        <select data-bind="settings.units" onchange="save()">
+          <option value="IP">IP (ft², kBtu, °F)</option>
+          <option value="SI">SI (m², kWh, °C)</option>
+        </select>
+      </div>
+      <div class="form-row">
+      <div class="fg"><label>ASHRAE Audit Level</label>
+        <select data-bind="settings.ashraeLevel" onchange="save()">
+          <option value="1">Level 1 — Walk-Through Analysis</option>
+          <option value="2">Level 2 — Energy Survey & Analysis</option>
+          <option value="3">Level 3 — Detailed Analysis / Investment-Grade</option>
+        </select>
+      </div>
+      <div class="fg"><label>AI Inference API Key (Gemini)</label>
+        <input type="text" data-bind="settings.aiApiKey" placeholder="AIzaSy..." onchange="save()">
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SECTION 3: PROJECT SETUP ============ -->
+<div class="section" id="sec-project">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">PROJECT INFORMATION</div>
+    <div class="form-row">
+      <div class="fg"><label>Building Name</label><input type="text" data-bind="project.buildingName" onchange="updateTopbar()"></div>
+      <div class="fg"><label>Address</label><input type="text" data-bind="project.address"></div>
+    </div>
+    <div class="form-row form-row-4">
+      <div class="fg"><label>City</label><input type="text" data-bind="project.city"></div>
+      <div class="fg"><label>State</label><input type="text" data-bind="project.state"></div>
+      <div class="fg"><label>Country</label><input type="text" data-bind="project.country" value="USA"></div>
+      <div class="fg"><label>Year Built</label><input type="number" data-bind="project.yearBuilt"></div>
+    </div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Floors</label><input type="number" data-bind="project.floors"></div>
+      <div class="fg"><label>Gross Area</label>
+        <div class="unit-group">
+          <input type="number" data-bind="project.grossArea">
+          <select data-bind="project.areaUnit"><option value="ft²">ft²</option><option value="m²">m²</option></select>
+        </div>
+      </div>
+      <div class="fg"><label>Occupancy Type</label>
+        <select data-bind="project.occupancyType">
+          <option value="Office Large">Office Large</option><option value="Office Medium">Office Medium</option><option value="Office Small">Office Small</option>
+          <option value="Retail">Retail</option><option value="Hotel">Hotel</option><option value="Hotel Small">Hotel Small</option><option value="Motel">Motel</option>
+          <option value="School">School</option><option value="University">University</option>
+          <option value="Healthcare Clinic">Healthcare Clinic</option><option value="Hospital">Hospital</option>
+          <option value="Warehouse">Warehouse</option><option value="Factory Small">Factory Small</option><option value="Factory Medium">Factory Medium</option><option value="Factory Large">Factory Large</option>
+          <option value="Restaurant">Restaurant</option><option value="Supermarket">Supermarket</option>
+          <option value="Data Center">Data Center</option><option value="Mixed Use">Mixed Use</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Facility Contact</label><input type="text" data-bind="project.contact"></div>
+      <div class="fg"><label>Phone</label><input type="tel" data-bind="project.phone"></div>
+      <div class="fg"><label>Audit Date</label><input type="date" data-bind="project.auditDate"></div>
+    </div>
+    </div>
+  <div class="card" style="border-left:3px solid var(--accent);margin-top:16px;">
+    <div class="card-title" style="margin-bottom:14px;">CLIENT INFORMATION</div>
+    <div class="form-row">
+      <div class="fg"><label>Client Company Name</label><input type="text" data-bind="project.clientCompany"></div>
+      <div class="fg"><label>Client Contact Person</label><input type="text" data-bind="project.clientContact"></div>
+    </div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Client Email</label><input type="email" data-bind="project.clientEmail"></div>
+      <div class="fg"><label>Client Phone</label><input type="tel" data-bind="project.clientPhone"></div>
+      <div class="fg"><label>Industry Sector</label><select data-bind="project.clientSector">
+        <option>Commercial</option><option>Hospitality</option><option>Healthcare</option><option>Education</option>
+        <option>Manufacturing</option><option>Food & Beverage</option><option>Retail</option><option>Government</option><option>Other</option>
+      </select></div>
+    </div>
+    <div class="fg"><label>Client Logo (URL or Upload)</label>
+      <div class="fg-inline">
+        <input type="text" data-bind="project.clientLogoURL" placeholder="https://example.com/logo.png" onchange="updateClientLogo()">
+        <input type="file" accept="image/*" onchange="handleClientLogoUpload(event)" style="max-width:200px;">
+      </div>
+      <div id="client-logo-preview" style="margin-top:8px;"></div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ============ SECTION 4: UTILITY BILLS ============ -->
+<div class="section" id="sec-utility">
+  <div class="card card-accent">
+    <div class="card-header">
+      <div class="card-title">UTILITY BILLS</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sm btn-secondary" onclick="addUtilityRows(12)">+12 Rows</button>
+        <button class="btn-sm btn-secondary" onclick="addUtilityRows(1)">+1 Row</button>
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:12px;">
+      <div class="fg"><label>Elec Tariff ($/kWh)</label><input type="number" step="0.01" data-bind="utility.elecRate" value="0.10" onchange="calcUtility()"></div>
+      <div class="fg"><label>Gas Rate ($/therm)</label><input type="number" step="0.01" data-bind="utility.gasRate" value="1.20" onchange="calcUtility()"></div>
+    </div>
+    <div class="table-wrap"><table id="utility-table">
+      <thead><tr><th>#</th><th>Month/Year</th><th>kWh</th><th>Elec Cost $</th><th>Peak kW</th><th>Gas (therms)</th><th>Gas Cost $</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="utility-body"></tbody>
+      <tfoot><tr><td></td><td><b>TOTALS</b></td><td id="ut-kwh">0</td><td id="ut-ecost">0</td><td id="ut-pkw">—</td><td id="ut-gas">0</td><td id="ut-gcost">0</td><td></td><td></td></tr></tfoot>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px;">EUI CALCULATION</div>
+    <div class="metric-row" id="eui-metrics"></div>
+    <div class="chart-box" style="max-height:200px;margin-top:16px;"><canvas id="eui-benchmark-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 5: ENVELOPE ============ -->
+<div class="section" id="sec-envelope">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">BUILDING ENVELOPE</div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Wall Construction</label><select data-bind="envelope.wallConst"><option>Steel Frame</option><option>CMU Block</option><option>Concrete Tilt-Up</option><option>Brick Veneer</option><option>Wood Frame</option><option>Curtain Wall</option><option>Other</option></select></div>
+      <div class="fg"><label>Wall Insulation</label><select data-bind="envelope.wallIns"><option>None</option><option>Fiberglass Batts</option><option>Rigid Foam Board</option><option>Spray Foam</option><option>Blown-In</option><option>Unknown</option></select></div>
+      <div class="fg"><label>Roof Type</label><select data-bind="envelope.roofType"><option>Built-Up</option><option>Single-Ply Membrane</option><option>Metal Standing Seam</option><option>Concrete Deck</option><option>Shingle</option><option>Other</option></select></div>
+    </div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Roof Insulation</label><select data-bind="envelope.roofIns"><option>None</option><option>Rigid Board Above Deck</option><option>Batts Below Deck</option><option>Spray Foam</option><option>Unknown</option></select></div>
+      <div class="fg"><label>Roof Color</label><select data-bind="envelope.roofColor"><option>Dark</option><option>Medium</option><option>Light/White</option><option>Reflective/Cool Roof</option></select></div>
+      <div class="fg"><label>Window Type</label><select data-bind="envelope.windowType"><option>Single Clear</option><option>Single Tinted</option><option>Double Clear</option><option>Double Low-E</option><option>Triple Low-E</option><option>Other</option></select></div>
+    </div>
+    <div class="form-row form-row-4">
+      <div class="fg"><label>Window Framing</label><select data-bind="envelope.windowFrame"><option>Aluminum No Break</option><option>Aluminum Thermal Break</option><option>Vinyl</option><option>Wood</option><option>Fiberglass</option></select></div>
+      <div class="fg"><label>Window-to-Wall Ratio %</label><input type="number" data-bind="envelope.wwr" min="0" max="100"></div>
+      <div class="fg"><label>Infiltration Level</label><select data-bind="envelope.infiltration"><option>Tight</option><option>Average</option><option>Leaky</option><option>Unknown</option></select></div>
+      <div class="fg"><label>Overall Condition</label><select data-bind="envelope.condition"><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option></select></div>
+    </div>
+    <div class="card" style="background:var(--accent-light);margin-top:10px;">
+      <div class="card-title" style="font-size:.8rem;">ASHRAE 90.1-2022 Minimums — Zone <span id="env-zone"></span></div>
+      <div id="env-ashrae" style="font-family:var(--mono);font-size:.82rem;margin-top:6px;"></div>
+    </div>
+    <div class="flag-group" style="margin-top:14px;">
+      <button class="flag-btn" data-flag="envelope.airSealing" onclick="toggleFlag(this)">🔧 Air Sealing</button>
+      <button class="flag-btn" data-flag="envelope.coolRoof" onclick="toggleFlag(this)">☀️ Cool Roof</button>
+      <button class="flag-btn" data-flag="envelope.addInsulation" onclick="toggleFlag(this)">🧱 Add Insulation</button>
+      <button class="flag-btn" data-flag="envelope.windowUpgrade" onclick="toggleFlag(this)">🪟 Window Upgrade</button>
+      <button class="flag-btn" data-flag="envelope.shading" onclick="toggleFlag(this)">🏗 Shading</button>
+    </div>
+    <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea data-bind="envelope.notes" rows="3"></textarea></div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('envelope')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-envelope"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 6: LIGHTING ============ -->
+<div class="section" id="sec-lighting">
+  <div class="card card-accent">
+    <div class="card-header"><div class="card-title">INTERIOR LIGHTING INVENTORY</div>
+      <button class="btn-sm btn-primary" onclick="addLightingRow()">+ Add Row</button>
+    </div>
+    <div class="table-wrap"><table id="lighting-table">
+      <thead><tr><th>Space</th><th>Area</th><th>Unit</th><th>Fixture</th><th>Count</th><th>W/Fix</th><th>Control</th><th>Hr/Day</th><th>Day/Yr</th><th>%LED</th><th>Cond</th><th>LPD</th><th>Bench</th><th></th></tr></thead>
+      <tbody id="lighting-body"></tbody>
+    </table></div>
+    <div class="flag-group">
+      <button class="flag-btn" data-flag="lighting.ledRetrofit" onclick="toggleFlag(this)">💡 LED Retrofit</button>
+      <button class="flag-btn" data-flag="lighting.occSensors" onclick="toggleFlag(this)">👁 Occ Sensors</button>
+      <button class="flag-btn" data-flag="lighting.daylighting" onclick="toggleFlag(this)">☀️ Daylighting</button>
+      <button class="flag-btn" data-flag="lighting.reduceHours" onclick="toggleFlag(this)">⏰ Reduce Hours</button>
+      <button class="flag-btn" data-flag="lighting.exteriorControls" onclick="toggleFlag(this)">🔦 Exterior Controls</button>
+    </div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('lighting')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-lighting"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 7: HVAC ============ -->
+<div class="section" id="sec-hvac">
+  <div class="card card-accent">
+    <div class="card-header"><div class="card-title">HVAC SYSTEMS</div>
+      <button class="btn-sm btn-primary" onclick="addHVACRow()">+ Add System</button>
+    </div>
+    <div class="table-wrap"><table id="hvac-table">
+      <thead><tr><th>Name</th><th>Type</th><th>Cap</th><th>Unit</th><th>Year</th><th>Cond</th><th>Refrig</th><th>Eff</th><th>Eff Unit</th><th>Controls</th><th>Econ</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="hvac-body"></tbody>
+    </table></div>
+    <div class="flag-group">
+      <button class="flag-btn" data-flag="hvac.upgradeControls" onclick="toggleFlag(this)">🎛 Upgrade Controls</button>
+      <button class="flag-btn" data-flag="hvac.economizer" onclick="toggleFlag(this)">🌬 Economizer</button>
+      <button class="flag-btn" data-flag="hvac.dcv" onclick="toggleFlag(this)">🫁 DCV</button>
+      <button class="flag-btn" data-flag="hvac.replaceOld" onclick="toggleFlag(this)">♻️ Replace Old</button>
+      <button class="flag-btn" data-flag="hvac.vfd" onclick="toggleFlag(this)">⚡ VFD</button>
+      <button class="flag-btn" data-flag="hvac.ductSeal" onclick="toggleFlag(this)">🔧 Duct Sealing</button>
+      <button class="flag-btn" data-flag="hvac.refrigerant" onclick="toggleFlag(this)">❄️ Refrigerant</button>
+      <button class="flag-btn" data-flag="hvac.scheduling" onclick="toggleFlag(this)">📅 Scheduling</button>
+      <button class="flag-btn" data-flag="hvac.erv" onclick="toggleFlag(this)">🔄 ERV</button>
+    </div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('hvac')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-hvac"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 8: DHW ============ -->
+<div class="section" id="sec-dhw">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">DOMESTIC HOT WATER</div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Heater Type</label><select data-bind="dhw.type"><option>Gas Storage</option><option>Gas Tankless</option><option>Electric Storage</option><option>Electric Tankless</option><option>Heat Pump WH</option><option>Boiler/Indirect</option><option>Solar Thermal</option><option>None</option></select></div>
+      <div class="fg"><label>Capacity</label><div class="unit-group"><input type="number" data-bind="dhw.capacity"><select data-bind="dhw.capacityUnit"><option>gallons</option><option>liters</option></select></div></div>
+      <div class="fg"><label>Input Rating</label><div class="unit-group"><input type="number" data-bind="dhw.inputRating"><select data-bind="dhw.inputUnit"><option>kBtu/h</option><option>kW</option></select></div></div>
+    </div>
+    <div class="form-row form-row-4">
+      <div class="fg"><label>Year</label><input type="number" data-bind="dhw.year"></div>
+      <div class="fg"><label>Efficiency</label><div class="unit-group"><input type="number" step="0.01" data-bind="dhw.efficiency"><select data-bind="dhw.effUnit"><option>UEF</option><option>EF</option><option>Et%</option></select></div></div>
+      <div class="fg"><label>Piping Insulated</label><select data-bind="dhw.pipingInsulated"><option>Yes</option><option>No</option><option>Partial</option></select></div>
+      <div class="fg"><label>Recirculation</label><select data-bind="dhw.recirculation"><option>Yes</option><option>No</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Recirc Pump Controls</label><select data-bind="dhw.recircControls"><option>Continuous</option><option>Timer</option><option>Demand/Aquastat</option><option>None</option></select></div>
+      <div class="fg"><label>Est. Daily Use (gallons)</label><input type="number" data-bind="dhw.dailyUse"></div>
+    </div>
+    <div class="fg"><label>Notes</label><textarea data-bind="dhw.notes" rows="3"></textarea></div>
+    <div class="flag-group">
+      <button class="flag-btn" data-flag="dhw.insulatePipes" onclick="toggleFlag(this)">🔧 Insulate Pipes</button>
+      <button class="flag-btn" data-flag="dhw.tankless" onclick="toggleFlag(this)">🔥 Upgrade Tankless</button>
+      <button class="flag-btn" data-flag="dhw.hpwh" onclick="toggleFlag(this)">♨️ Upgrade HPWH</button>
+      <button class="flag-btn" data-flag="dhw.recircTimer" onclick="toggleFlag(this)">⏰ Recirc Timer</button>
+      <button class="flag-btn" data-flag="dhw.reduceTemp" onclick="toggleFlag(this)">🌡 Reduce Temp</button>
+    </div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('dhw')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-dhw"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 9: PLUG LOADS ============ -->
+<div class="section" id="sec-plugloads">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">PLUG & PROCESS LOADS</div>
+    <div class="table-wrap"><table id="plug-table">
+      <thead><tr><th>Equipment</th><th>Count</th><th>Avg W</th><th>Hr/Day</th><th>Days/Yr</th><th>Power Mgmt</th><th>Annual kWh</th></tr></thead>
+      <tbody id="plug-body"></tbody>
+      <tfoot><tr><td colspan="6"><b>TOTAL</b></td><td id="plug-total" style="font-family:var(--mono);">0</td></tr></tfoot>
+    </table></div>
+    <div class="flag-group">
+      <button class="flag-btn" data-flag="plugloads.powerMgmt" onclick="toggleFlag(this)">💻 Power Management</button>
+      <button class="flag-btn" data-flag="plugloads.energyStar" onclick="toggleFlag(this)">⭐ ENERGY STAR</button>
+      <button class="flag-btn" data-flag="plugloads.smartStrips" onclick="toggleFlag(this)">🔌 Smart Strips</button>
+      <button class="flag-btn" data-flag="plugloads.vendingMisers" onclick="toggleFlag(this)">🥤 Vending Misers</button>
+      <button class="flag-btn" data-flag="plugloads.removeUnused" onclick="toggleFlag(this)">🗑 Remove Unused</button>
+    </div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('plugloads')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-plugloads"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 10: OTHER SYSTEMS ============ -->
+<div class="section" id="sec-other">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">OTHER SYSTEMS</div>
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <div class="card-title" style="font-size:.82rem;">ELEVATORS</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Count</label><input type="number" data-bind="other.elevCount"></div>
+        <div class="fg"><label>Type</label><select data-bind="other.elevType"><option>Hydraulic</option><option>Traction</option><option>MRL</option></select></div>
+        <div class="fg"><label>Age (years)</label><input type="number" data-bind="other.elevAge"></div>
+        <div class="fg"><label>Regen Drive</label><select data-bind="other.elevRegen"><option>No</option><option>Yes</option></select></div>
+      </div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <div class="card-title" style="font-size:.82rem;">DATA CENTER / SERVER ROOM</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Present</label><select data-bind="other.dcPresent"><option>No</option><option>Yes</option></select></div>
+        <div class="fg"><label>Area (ft²)</label><input type="number" data-bind="other.dcArea"></div>
+        <div class="fg"><label>IT Power (kW)</label><input type="number" data-bind="other.dcITkW"></div>
+        <div class="fg"><label>PUE</label><input type="number" step="0.01" data-bind="other.dcPUE"></div>
+      </div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <div class="card-title" style="font-size:.82rem;">KITCHEN / FOOD SERVICE</div>
+      <div class="form-row form-row-3">
+        <div class="fg"><label>Present</label><select data-bind="other.kitchenPresent"><option>No</option><option>Yes</option></select></div>
+        <div class="fg"><label>ENERGY STAR Appliances</label><select data-bind="other.kitchenES"><option>No</option><option>Partial</option><option>Yes</option></select></div>
+        <div class="fg"><label>Hood Controls</label><select data-bind="other.kitchenHood"><option>No</option><option>Yes</option></select></div>
+      </div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <div class="card-title" style="font-size:.82rem;">PARKING / EV / RENEWABLES</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Parking Present</label><select data-bind="other.parkingPresent"><option>No</option><option>Yes</option></select></div>
+        <div class="fg"><label>Parking Lighting</label><select data-bind="other.parkingLighting"><option>HID</option><option>LED</option><option>Fluorescent</option></select></div>
+        <div class="fg"><label>EV Charging</label><select data-bind="other.evCharging"><option>No</option><option>Yes</option></select></div>
+        <div class="fg"><label>Solar PV (kW)</label><input type="number" data-bind="other.solarPV"></div>
+      </div>
+    </div>
+    <div class="fg"><label>Notes</label><textarea data-bind="other.notes" rows="3"></textarea></div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('other')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-other"></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 11: ELECTRICAL SYSTEMS ============ -->
+<div class="section" id="sec-electrical">
+  <div class="subtabs">
+    <button class="subtab active" onclick="switchSubtab(this,'elec-supply')">Supply & Transformers</button>
+    <button class="subtab" onclick="switchSubtab(this,'elec-pq')">Power Quality</button>
+    <button class="subtab" onclick="switchSubtab(this,'elec-loads')">Loads</button>
+    <button class="subtab" onclick="switchSubtab(this,'elec-demand')">Demand Profile</button>
+  </div>
+
+  <!-- SUPPLY -->
+  <div class="subpanel active" id="elec-supply">
+    <div class="card card-accent">
+      <div class="card-title" style="margin-bottom:14px;">ELECTRICAL SUPPLY</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Nominal Voltage</label><div class="unit-group"><input type="number" data-bind="electrical.nomVoltage"><select data-bind="electrical.voltUnit"><option>V</option><option>kV</option></select></div></div>
+        <div class="fg"><label>Voltage Level</label><select data-bind="electrical.voltLevel"><option>LV</option><option>MV</option><option>HV</option></select></div>
+        <div class="fg"><label>Supply Type</label><select data-bind="electrical.supplyType"><option>Utility Grid</option><option>Grid + Generator</option><option>Grid + Solar</option><option>Microgrid</option></select></div>
+        <div class="fg"><label>Phases</label><select data-bind="electrical.phases"><option>3-Phase</option><option>Single-Phase</option></select></div>
+      </div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Frequency (Hz)</label><input type="number" data-bind="electrical.frequency" value="60"></div>
+        <div class="fg"><label>Measured V L1</label><input type="number" step="0.1" data-bind="electrical.vL1" onchange="calcVoltImbalance()"></div>
+        <div class="fg"><label>Measured V L2</label><input type="number" step="0.1" data-bind="electrical.vL2" onchange="calcVoltImbalance()"></div>
+        <div class="fg"><label>Measured V L3</label><input type="number" step="0.1" data-bind="electrical.vL3" onchange="calcVoltImbalance()"></div>
+      </div>
+      <div id="volt-imbalance-badge" style="margin-bottom:10px;"></div>
+    </div>
+    <div class="card card-accent">
+      <div class="card-header"><div class="card-title">TRANSFORMERS</div>
+        <button class="btn-sm btn-primary" onclick="addTransformer()">+ Add Transformer</button>
+      </div>
+      <div id="transformer-cards"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">MAIN PANELS</div>
+        <button class="btn-sm btn-primary" onclick="addPanel()">+ Add Panel</button>
+      </div>
+      <div class="table-wrap"><table id="panel-table">
+        <thead><tr><th>Tag</th><th>Type</th><th>Rated A</th><th>Voltage</th><th>Year</th><th>Condition</th><th>Metering</th><th></th></tr></thead>
+        <tbody id="panel-body"></tbody>
+      </table></div>
+    </div>
+    <button class="btn-sm btn-secondary" onclick="openPhotoModal('electrical')" style="margin-top:8px;">📷 Add Photo</button>
+    <div class="photo-grid" id="photos-electrical"></div>
+  </div>
+
+  <!-- POWER QUALITY -->
+  <div class="subpanel" id="elec-pq">
+    <div class="card card-accent">
+      <div class="card-title" style="margin-bottom:10px;">DATA SOURCE</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcBill" onchange="togglePQSection()"> Utility Bill</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcMeter" onchange="togglePQSection()"> Panel Meter</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcLogger" onchange="togglePQSection()"> PQ Logger</label>
+      </div>
+    </div>
+    <div class="card" id="pq-bill-section" style="display:none;">
+      <div class="card-title" style="margin-bottom:10px;">UTILITY BILL — POWER QUALITY</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Peak Demand (kW)</label><input type="number" data-bind="pq.billPeakKW"></div>
+        <div class="fg"><label>PF Penalty on Bill</label><select data-bind="pq.billPFPenalty"><option>No</option><option>Yes</option></select></div>
+        <div class="fg"><label>Penalty $/month</label><input type="number" data-bind="pq.billPenalty"></div>
+        <div class="fg"><label>Penalty Threshold PF</label><input type="number" step="0.01" data-bind="pq.billPFThreshold"></div>
+      </div>
+    </div>
+    <div class="card" id="pq-meter-section" style="display:none;">
+      <div class="card-title" style="margin-bottom:10px;">PANEL METER READINGS</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Date/Time</label><input type="datetime-local" data-bind="pq.meterDate"></div>
+        <div class="fg"><label>kW</label><input type="number" step="0.1" data-bind="pq.meterKW"></div>
+        <div class="fg"><label>kVAR</label><input type="number" step="0.1" data-bind="pq.meterKVAR"></div>
+        <div class="fg"><label>kVA</label><input type="number" step="0.1" data-bind="pq.meterKVA"></div>
+      </div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>PF</label><input type="number" step="0.01" data-bind="pq.meterPF"></div>
+        <div class="fg"><label>V L1</label><input type="number" step="0.1" data-bind="pq.meterVL1"></div>
+        <div class="fg"><label>V L2</label><input type="number" step="0.1" data-bind="pq.meterVL2"></div>
+        <div class="fg"><label>V L3</label><input type="number" step="0.1" data-bind="pq.meterVL3"></div>
+      </div>
+      <div class="form-row form-row-3">
+        <div class="fg"><label>I L1 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL1"></div>
+        <div class="fg"><label>I L2 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL2"></div>
+        <div class="fg"><label>I L3 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL3"></div>
+      </div>
+    </div>
+    <div class="card" id="pq-logger-section" style="display:none;">
+      <div class="card-title" style="margin-bottom:10px;">PQ LOGGER DATA</div>
+      <div class="form-row form-row-3">
+        <div class="fg"><label>Logger Model</label><input type="text" data-bind="pq.loggerModel"></div>
+        <div class="fg"><label>Logging Period</label><input type="text" data-bind="pq.loggerPeriod" placeholder="e.g. 7 days"></div>
+        <div class="fg"><label>Measurement Point</label><input type="text" data-bind="pq.loggerPoint" placeholder="e.g. Main MSB"></div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--accent);">
+        <div class="card-title" style="font-size:.8rem;">VOLTAGE</div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Avg V</label><input type="number" step="0.1" data-bind="pq.logAvgV"></div>
+          <div class="fg"><label>Min V</label><input type="number" step="0.1" data-bind="pq.logMinV"></div>
+          <div class="fg"><label>Max V</label><input type="number" step="0.1" data-bind="pq.logMaxV"></div>
+          <div class="fg"><label>Imbalance %</label><input type="number" step="0.01" data-bind="pq.logVImbal"></div>
+        </div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--accent);">
+        <div class="card-title" style="font-size:.8rem;">POWER</div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Avg kW</label><input type="number" step="0.1" data-bind="pq.logAvgKW"></div>
+          <div class="fg"><label>Peak kW</label><input type="number" step="0.1" data-bind="pq.logPeakKW"></div>
+          <div class="fg"><label>Min kW</label><input type="number" step="0.1" data-bind="pq.logMinKW"></div>
+          <div class="fg"><label>Avg kVAR</label><input type="number" step="0.1" data-bind="pq.logAvgKVAR"></div>
+        </div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Avg kVA</label><input type="number" step="0.1" data-bind="pq.logAvgKVA"></div>
+          <div class="fg"><label>Displacement PF</label><input type="number" step="0.01" data-bind="pq.logDPF"></div>
+          <div class="fg"><label>Min PF</label><input type="number" step="0.01" data-bind="pq.logMinPF"></div>
+          <div class="fg"><label>True PF</label><input type="number" step="0.01" data-bind="pq.logTruePF"></div>
+        </div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--accent);">
+        <div class="card-title" style="font-size:.8rem;">HARMONICS</div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>THD-V L1 %</label><input type="number" step="0.1" data-bind="pq.thdVL1"></div>
+          <div class="fg"><label>THD-V L2 %</label><input type="number" step="0.1" data-bind="pq.thdVL2"></div>
+          <div class="fg"><label>THD-V L3 %</label><input type="number" step="0.1" data-bind="pq.thdVL3"></div>
+          <div class="fg"><label>THD-V Avg %</label><input type="number" step="0.1" data-bind="pq.thdVAvg"></div>
+        </div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>THD-I L1 %</label><input type="number" step="0.1" data-bind="pq.thdIL1"></div>
+          <div class="fg"><label>THD-I L2 %</label><input type="number" step="0.1" data-bind="pq.thdIL2"></div>
+          <div class="fg"><label>THD-I L3 %</label><input type="number" step="0.1" data-bind="pq.thdIL3"></div>
+          <div class="fg"><label>THD-I Avg %</label><input type="number" step="0.1" data-bind="pq.thdIAvg"></div>
+        </div>
+        <div class="card-title" style="font-size:.75rem;margin:10px 0 6px;">INDIVIDUAL HARMONICS (% fundamental)</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Order</th><th>H3</th><th>H5</th><th>H7</th><th>H9</th><th>H11</th><th>H13</th><th>H17</th><th>H19</th><th>H23</th><th>H25</th></tr></thead>
+          <tbody>
+            <tr><td>Voltage %</td>
+              <td><input type="number" step="0.1" data-bind="pq.hV3" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV5" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV7" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV9" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV11" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV13" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV17" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV19" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV23" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hV25" style="width:55px;"></td>
+            </tr>
+            <tr><td>Current %</td>
+              <td><input type="number" step="0.1" data-bind="pq.hI3" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI5" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI7" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI9" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI11" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI13" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI17" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI19" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI23" style="width:55px;"></td>
+              <td><input type="number" step="0.1" data-bind="pq.hI25" style="width:55px;"></td>
+            </tr>
+          </tbody>
+        </table></div>
+        <div class="form-row form-row-3" style="margin-top:10px;">
+          <div class="fg"><label>IEEE 519 Compliance</label><select data-bind="pq.ieee519"><option>Compliant</option><option>Non-Compliant</option><option>Not Assessed</option></select></div>
+          <div class="fg"><label>Dominant Source</label><input type="text" data-bind="pq.harmonicSource" placeholder="e.g. VFDs, UPS"></div>
+          <div class="fg"><label>K-Factor</label><input type="number" step="0.1" data-bind="pq.kFactor"></div>
+        </div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--accent);">
+        <div class="card-title" style="font-size:.8rem;">VOLTAGE EVENTS</div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Sags Count</label><input type="number" data-bind="pq.sagsCount"></div>
+          <div class="fg"><label>Worst Mag %</label><input type="number" step="0.1" data-bind="pq.sagsWorstMag"></div>
+          <div class="fg"><label>Worst Duration ms</label><input type="number" data-bind="pq.sagsWorstDur"></div>
+          <div class="fg"><label>Swells Count</label><input type="number" data-bind="pq.swellsCount"></div>
+        </div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Swell Worst %</label><input type="number" step="0.1" data-bind="pq.swellsWorstMag"></div>
+          <div class="fg"><label>Swell Worst ms</label><input type="number" data-bind="pq.swellsWorstDur"></div>
+          <div class="fg"><label>Interruptions</label><input type="number" data-bind="pq.interruptCount"></div>
+          <div class="fg"><label>Interrupt Duration</label><input type="number" data-bind="pq.interruptDur"></div>
+        </div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Transients Count</label><input type="number" data-bind="pq.transientCount"></div>
+          <div class="fg"><label>Worst Transient V</label><input type="number" data-bind="pq.transientWorst"></div>
+          <div class="fg"><label>Neutral Current A</label><input type="number" data-bind="pq.neutralCurrent"></div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label>Neutral Overloaded</label><select data-bind="pq.neutralOverloaded"><option>No</option><option>Yes</option></select></div>
+          <div class="fg"><label>Pst (Flicker)</label><input type="number" step="0.01" data-bind="pq.pst"></div>
+          <div class="fg"><label>Plt (Flicker)</label><input type="number" step="0.01" data-bind="pq.plt"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:10px;">PFC EQUIPMENT</div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>PFC Installed</label><select data-bind="pq.pfcInstalled"><option>No</option><option>Yes</option></select></div>
+        <div class="fg"><label>PFC Type</label><select data-bind="pq.pfcType"><option>Fixed Capacitor</option><option>Auto-Switched</option><option>Active Filter</option><option>Hybrid</option></select></div>
+        <div class="fg"><label>Rated kVAR</label><input type="number" data-bind="pq.pfcKVAR"></div>
+        <div class="fg"><label>PFC Condition</label><select data-bind="pq.pfcCondition"><option>Good</option><option>Fair</option><option>Poor</option><option>Failed</option></select></div>
+      </div>
+      <div id="pq-calcs" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- LOADS -->
+  <div class="subpanel" id="elec-loads">
+    <div class="card card-accent">
+      <div class="card-header"><div class="card-title">LOAD INVENTORY</div>
+        <button class="btn-sm btn-primary" onclick="addLoadRow()">+ Add Load</button>
+      </div>
+      <div class="table-wrap" style="max-height:500px;overflow-y:auto;"><table id="load-table">
+        <thead><tr><th>Load</th><th>Category</th><th>NP kW</th><th>Meas kW</th><th>Meas PF</th><th>Mode</th><th>Hr/D</th><th>D/Wk</th><th>Wk/Yr</th><th>Control</th><th>Util%</th><th>Ann kWh</th><th>Ann $</th><th></th></tr></thead>
+        <tbody id="load-body"></tbody>
+      </table></div>
+    </div>
+    <div class="flag-group">
+      <button class="flag-btn" data-flag="electrical.apfc" onclick="toggleFlag(this)">⚡ APFC Bank</button>
+      <button class="flag-btn" data-flag="electrical.rightSizeXfmr" onclick="toggleFlag(this)">📐 Right-size Xfmr</button>
+      <button class="flag-btn" data-flag="electrical.vfdMotors" onclick="toggleFlag(this)">🔄 VFDs on Motors</button>
+      <button class="flag-btn" data-flag="electrical.ie3Motors" onclick="toggleFlag(this)">🏭 IE3/IE4 Motors</button>
+      <button class="flag-btn" data-flag="electrical.loadScheduling" onclick="toggleFlag(this)">📅 Load Scheduling</button>
+      <button class="flag-btn" data-flag="electrical.deenergize" onclick="toggleFlag(this)">🔌 De-energize Decom</button>
+      <button class="flag-btn" data-flag="electrical.submetering" onclick="toggleFlag(this)">📊 Sub-metering</button>
+      <button class="flag-btn" data-flag="electrical.voltImbalFix" onclick="toggleFlag(this)">⚖️ V Imbalance Fix</button>
+      <button class="flag-btn" data-flag="electrical.harmonicFilter" onclick="toggleFlag(this)">〰️ Harmonic Filter</button>
+      <button class="flag-btn" data-flag="electrical.reduceBaseLoad" onclick="toggleFlag(this)">🌙 Reduce Base Load</button>
+    </div>
+  </div>
+
+  <!-- DEMAND PROFILE -->
+  <div class="subpanel" id="elec-demand">
+    <div class="card card-accent">
+      <div class="card-title" style="margin-bottom:14px;">DEMAND PROFILE</div>
+      <div class="table-wrap"><table id="demand-table">
+        <thead><tr><th></th><th>0–6h</th><th>6–9h</th><th>9–12h</th><th>12–17h</th><th>17–21h</th><th>21–24h</th></tr></thead>
+        <tbody>
+          <tr><td><b>Weekday kW</b></td>
+            <td><input type="number" data-bind="demand.wd0" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.wd1" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.wd2" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.wd3" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.wd4" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.wd5" onchange="calcDemand()"></td>
+          </tr>
+          <tr><td><b>Weekend kW</b></td>
+            <td><input type="number" data-bind="demand.we0" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.we1" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.we2" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.we3" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.we4" onchange="calcDemand()"></td>
+            <td><input type="number" data-bind="demand.we5" onchange="calcDemand()"></td>
+          </tr>
+        </tbody>
+      </table></div>
+      <div class="metric-row" id="demand-metrics" style="margin-top:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SECTION 12: ANALYSIS ============ -->
+<div class="section" id="sec-analysis">
+  <div class="card card-accent"><div class="card-title">ANALYSIS & CHARTS</div><div class="card-subtitle">Auto-generated from entered data</div></div>
+  <div class="chart-row">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">UTILITY TREND</div><div class="chart-box"><canvas id="chart-utility"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">EUI BENCHMARK</div><div class="chart-box"><canvas id="chart-eui"></canvas></div></div>
+  </div>
+  <div class="chart-row">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">END-USE BREAKDOWN</div><div class="chart-box"><canvas id="chart-enduse"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">LIGHTING LPD BY SPACE</div><div class="chart-box"><canvas id="chart-lpd"></canvas></div></div>
+  </div>
+  <div class="chart-row">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">ECM SAVINGS SUMMARY</div><div class="chart-box"><canvas id="chart-ecm"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">DEMAND PROFILE</div><div class="chart-box"><canvas id="chart-demand"></canvas></div></div>
+  </div>
+  <div class="chart-row">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER UTILIZATION</div><div class="chart-box"><canvas id="chart-xfmr"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">POWER FACTOR</div><div class="chart-box"><canvas id="chart-pf"></canvas></div></div>
+  </div>
+  <div class="chart-row">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">LOAD BY CATEGORY</div><div class="chart-box"><canvas id="chart-loadcat"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">OPERATING MODE</div><div class="chart-box"><canvas id="chart-opmode"></canvas></div></div>
+  </div>
+  <div class="chart-row" id="pq-charts-row" style="display:none;">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">HARMONIC SPECTRUM</div><div class="chart-box"><canvas id="chart-harmonics"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">VOLTAGE EVENTS</div><div class="chart-box"><canvas id="chart-voltevents"></canvas></div></div>
+  </div>
+  <div class="chart-row">
+    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER LOSSES</div><div class="chart-box"><canvas id="chart-xfmrloss"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ============ SECTION 13: REPORT ============ -->
+<div class="section" id="sec-report">
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:14px;">GENERATE REPORT</div>
+    <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:16px;">Generate a self-contained HTML report or export all data as CSV.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="generateReport()" style="padding:12px 28px;font-size:.95rem;">📄 Generate HTML Report</button>
+      <button class="btn-secondary" onclick="downloadCSV()" style="padding:12px 28px;font-size:.95rem;">📊 Download CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px;">ECM RECOMMENDATIONS</div>
+    <div class="table-wrap"><table id="ecm-table">
+      <thead><tr><th>ID</th><th>System</th><th>Title</th><th>Savings %</th><th>Priority</th><th>Est Cost $</th><th>Ann Savings $</th><th>Payback</th><th>Selected</th></tr></thead>
+      <tbody id="ecm-body"></tbody>
+    </table></div>
+  </div>
+  <div class="card card-accent">
+    <div class="card-title" style="margin-bottom:10px;">AI-ASSISTED ANALYSIS</div>
+    <p style="color:var(--text-secondary);font-size:.82rem;margin-bottom:10px;">Generate AI narrative analysis for your report. Review and edit before exporting.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn-primary" onclick="generateAIAnalysis('executive')">📝 Executive Summary</button>
+      <button class="btn-secondary" onclick="generateAIAnalysis('findings')">🔍 Key Findings</button>
+      <button class="btn-secondary" onclick="generateAIAnalysis('ecm')">💡 ECM Analysis</button>
+      <button class="btn-secondary" onclick="generateAIAnalysis('electrical')">⚡ Electrical Analysis</button>
+      <button class="btn-secondary" onclick="generateAIAnalysis('full')">📄 Full Report Narrative</button>
+    </div>
+    <div id="ai-status" style="margin-bottom:8px;"></div>
+    <textarea id="ai-output" class="ai-textarea" placeholder="AI-generated analysis will appear here. You can edit before including in the report."></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn-sm btn-secondary" onclick="document.getElementById('ai-output').value='';document.getElementById('ai-status').innerHTML='';">Clear</button>
+      <button class="btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('ai-output').value);alert('Copied!');">📋 Copy</button>
+    </div>
+  </div>
+</div>
+
+  </main>
+</div>
+</div>
+
+<!-- PHOTO MODAL -->
+
+<div class="modal-overlay" id="photo-modal">
+  <div class="modal">
+    <h3>📷 Capture Photo</h3>
+    <div class="fg"><label>Photo</label><input type="file" accept="image/*" capture="environment" id="photo-file" multiple></div>
+    <div id="photo-preview" style="margin:10px 0;display:flex;gap:6px;flex-wrap:wrap;"></div>
+    <div class="fg"><label>Caption</label><input type="text" id="photo-caption"></div>
+    <div class="form-row form-row-3">
+      <div class="fg"><label>Section</label><select id="photo-tag"><option>Envelope</option><option>Lighting</option><option>HVAC</option><option>DHW</option><option>Plug Loads</option><option>Electrical</option><option>General</option></select></div>
+      <div class="fg"><label>Photo Type</label><select id="photo-type"><option>Overview</option><option>Nameplate</option><option>Detail</option><option>Deficiency</option></select></div>
+      <div class="fg"><label>Flag</label><select id="photo-flag"><option>Documentation</option><option>Deficiency</option><option>Opportunity</option></select></div>
+    </div>
+    <div class="fg"><label>Equipment Name (optional)</label><input type="text" id="photo-equipment" placeholder="e.g. RTU-1, Chiller-1, TR-1"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closePhotoModal()">Cancel</button>
+      <button class="btn-primary" onclick="savePhoto()">Save Photo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== CONSTANTS ==========
+const NAV_ITEMS = [
+  {id:'dashboard',icon:'📊',label:'Dashboard'},
+  {id:'settings',icon:'⚙️',label:'Settings'},
+  {id:'project',icon:'🏢',label:'Project Setup'},
+  {id:'utility',icon:'⚡',label:'Utility Bills'},
+  {id:'envelope',icon:'🧱',label:'Envelope'},
+  {id:'lighting',icon:'💡',label:'Lighting'},
+  {id:'hvac',icon:'❄️',label:'HVAC'},
+  {id:'dhw',icon:'🚿',label:'DHW'},
+  {id:'plugloads',icon:'🔌',label:'Plug Loads'},
+  {id:'other',icon:'🏗',label:'Other Systems'},
+  {id:'electrical',icon:'🔋',label:'Electrical'},
+  {id:'analysis',icon:'📈',label:'Analysis'},
+  {id:'report',icon:'📄',label:'Report'}
+];
+
+const BENCHMARKS = {
+  'Office Large':{median:81,es75:54},'Office Medium':{median:78,es75:51},'Office Small':{median:74,es75:48},
+  'Retail':{median:69,es75:47},'Hotel':{median:114,es75:77},'Hotel Small':{median:100,es75:68},'Motel':{median:96,es75:65},
+  'School':{median:72,es75:48},'University':{median:132,es75:89},
+  'Healthcare Clinic':{median:113,es75:75},'Hospital':{median:249,es75:169},
+  'Warehouse':{median:39,es75:25},'Factory Small':{median:95,es75:65},'Factory Medium':{median:120,es75:85},'Factory Large':{median:155,es75:110},
+  'Restaurant':{median:432,es75:290},'Supermarket':{median:200,es75:140},
+  'Data Center':{median:800,es75:450},'Mixed Use':{median:85,es75:58}
+};
+
+const LPD_BUILDING = {'Office Large':11.06,'Office Medium':11.06,'Office Small':11.06,'Retail':16.99,'Hotel':7.82,'Hotel Small':7.82,'Motel':7.82,'School':11.73,'University':11.73,'Healthcare Clinic':12.14,'Hospital':14.16,'Warehouse':8.90,'Factory Small':12.00,'Factory Medium':12.00,'Factory Large':12.00,'Restaurant':9.90,'Supermarket':16.10,'Data Center':5.00,'Mixed Use':11.06};
+const LPD_SPACE = {'Open Plan Office':11.84,'Conference Room':14.00,'Corridor':5.38,'Lobby':13.99,'Restroom':9.69,'Stairwell':6.46,'Storage':8.61,'Office':11.84,'Break Room':7.15,'Kitchen':13.99};
+
+const PLUG_DEFAULTS = [
+  {name:'Computers',watts:120,hrs:10,days:261},{name:'Monitors',watts:30,hrs:10,days:261},
+  {name:'Printers',watts:400,hrs:10,days:261},{name:'Servers',watts:500,hrs:24,days:365},
+  {name:'Copiers',watts:1200,hrs:10,days:261},{name:'Vending Machines',watts:400,hrs:24,days:365},
+  {name:'Refrigerators',watts:150,hrs:24,days:365},{name:'Coffee Brewers',watts:1000,hrs:10,days:261}
+];
+
+const PLUG_DEFAULTS_BY_TYPE = {
+  'Hotel': [{name:'Guest Room TV',watts:100,hrs:12,days:365},{name:'Guest Room Mini-Fridge',watts:80,hrs:24,days:365},{name:'Laundry Washer',watts:2000,hrs:12,days:365},{name:'Laundry Dryer',watts:5000,hrs:12,days:365},{name:'Ice Machines',watts:800,hrs:24,days:365},{name:'Pool Pump',watts:1500,hrs:12,days:365},{name:'Kitchen Range',watts:8000,hrs:14,days:365},{name:'Kitchen Dishwasher',watts:3000,hrs:8,days:365}],
+  'Hotel Small': [{name:'Guest Room TV',watts:100,hrs:12,days:365},{name:'Guest Room Mini-Fridge',watts:80,hrs:24,days:365},{name:'Laundry Washer',watts:2000,hrs:8,days:365},{name:'Laundry Dryer',watts:5000,hrs:8,days:365},{name:'Ice Machines',watts:800,hrs:24,days:365}],
+  'Motel': [{name:'Guest Room TV',watts:100,hrs:10,days:365},{name:'Guest Room Mini-Fridge',watts:80,hrs:24,days:365},{name:'Ice Machines',watts:800,hrs:24,days:365},{name:'Laundry Washer',watts:2000,hrs:6,days:365}],
+  'Factory Small': [{name:'CNC Machine',watts:7500,hrs:16,days:300},{name:'Compressor',watts:15000,hrs:16,days:300},{name:'Conveyor',watts:3000,hrs:16,days:300},{name:'Welding Station',watts:5000,hrs:8,days:300},{name:'Hydraulic Press',watts:10000,hrs:8,days:300},{name:'Packaging Machine',watts:2000,hrs:16,days:300},{name:'Office Computers',watts:120,hrs:10,days:261}],
+  'Factory Medium': [{name:'CNC Machine',watts:15000,hrs:16,days:300},{name:'Compressor (main)',watts:45000,hrs:20,days:300},{name:'Conveyor System',watts:8000,hrs:16,days:300},{name:'Injection Molder',watts:30000,hrs:16,days:300},{name:'Welding Robot',watts:12000,hrs:16,days:300},{name:'Packaging Line',watts:5000,hrs:16,days:300},{name:'Cooling Tower',watts:7500,hrs:20,days:300},{name:'Office Equipment',watts:120,hrs:10,days:261}],
+  'Factory Large': [{name:'Process Line A',watts:50000,hrs:20,days:330},{name:'Compressor Array',watts:100000,hrs:20,days:330},{name:'Conveyor System',watts:15000,hrs:20,days:330},{name:'Cooling Water Pumps',watts:30000,hrs:20,days:330},{name:'HVAC-Process',watts:25000,hrs:20,days:330},{name:'Packaging Line',watts:8000,hrs:16,days:330},{name:'Boiler FD/ID Fans',watts:20000,hrs:20,days:330},{name:'Office/Admin',watts:120,hrs:10,days:261}],
+  'Restaurant': [{name:'Walk-in Cooler',watts:1200,hrs:24,days:365},{name:'Walk-in Freezer',watts:1800,hrs:24,days:365},{name:'Range/Oven',watts:12000,hrs:14,days:365},{name:'Dishwasher',watts:3000,hrs:10,days:365},{name:'Exhaust Hood',watts:1500,hrs:14,days:365},{name:'Fryer',watts:8000,hrs:14,days:365}],
+  'Supermarket': [{name:'Refrigerated Cases',watts:25000,hrs:24,days:365},{name:'Freezer Cases',watts:15000,hrs:24,days:365},{name:'Compressor Rack',watts:30000,hrs:24,days:365},{name:'Bakery Oven',watts:8000,hrs:12,days:365},{name:'Deli Equipment',watts:3000,hrs:14,days:365}]
+};
+
+const ASHRAE_ZONES = {
+  '0A':{roofR:25,wallU:0.151,winU:0.50,winSHGC:0.25},'0B':{roofR:25,wallU:0.151,winU:0.50,winSHGC:0.25},
+  '1A':{roofR:25,wallU:0.151,winU:0.50,winSHGC:0.25},'1B':{roofR:25,wallU:0.151,winU:0.50,winSHGC:0.25},
+  '2A':{roofR:30,wallU:0.084,winU:0.40,winSHGC:0.25},'2B':{roofR:30,wallU:0.084,winU:0.40,winSHGC:0.25},
+  '3A':{roofR:30,wallU:0.084,winU:0.36,winSHGC:0.25},'3B':{roofR:30,wallU:0.084,winU:0.36,winSHGC:0.25},'3C':{roofR:30,wallU:0.084,winU:0.36,winSHGC:0.25},
+  '4A':{roofR:30,wallU:0.064,winU:0.34,winSHGC:0.36},'4B':{roofR:30,wallU:0.064,winU:0.34,winSHGC:0.36},'4C':{roofR:30,wallU:0.064,winU:0.34,winSHGC:0.36},
+  '5A':{roofR:35,wallU:0.055,winU:0.30,winSHGC:0.38},'5B':{roofR:35,wallU:0.055,winU:0.30,winSHGC:0.38},'5C':{roofR:35,wallU:0.055,winU:0.30,winSHGC:0.38},
+  '6A':{roofR:35,wallU:0.048,winU:0.28,winSHGC:0.40},'6B':{roofR:35,wallU:0.048,winU:0.28,winSHGC:0.40},
+  '7':{roofR:40,wallU:0.042,winU:0.26,winSHGC:0.40},'8':{roofR:40,wallU:0.037,winU:0.24,winSHGC:0.40}
+};
+
+const ECM_LIB = [
+  {id:'L01',sys:'Lighting',title:'LED Retrofit',range:'40-60%',lo:40,hi:60,complexity:'Low',costRange:'$2-5/ft²',ref:'ASHRAE 90.1 §9',quickWin:true,typicalROI:'1-3 yr',impact:'Reduces lighting energy 40-60%. LED lasts 50,000+ hrs vs 20,000 for T8. Eliminates ballast maintenance.'},
+  {id:'L02',sys:'Lighting',title:'Occupancy Sensors',range:'20-40%',lo:20,hi:40,complexity:'Low',costRange:'$50-150/sensor',ref:'ASHRAE 90.1 §9.4.1',quickWin:true,typicalROI:'<1 yr',impact:'Cuts lighting in unoccupied spaces 20-40%. Best for conference rooms, restrooms, private offices.'},
+  {id:'L03',sys:'Lighting',title:'Daylighting Controls',range:'15-30%',lo:15,hi:30,complexity:'Medium',costRange:'$1-3/ft²',ref:'ASHRAE 90.1 §9.4.1',quickWin:false,typicalROI:'2-4 yr',impact:'Dims/switches perimeter lighting based on daylight. Requires photosensors and dimmable ballasts/drivers.'},
+  {id:'L04',sys:'Lighting',title:'Exterior Controls',range:'30-50%',lo:30,hi:50,complexity:'Low',costRange:'$200-500/zone',ref:'ASHRAE 90.1 §9.4.1',quickWin:true,typicalROI:'<1 yr',impact:'Photocells + timers eliminate daytime exterior lighting burn. Astronomical timers prevent drift.'},
+  {id:'L05',sys:'Lighting',title:'Reduce Over-Lit Spaces',range:'10-30%',lo:10,hi:30,complexity:'Low',costRange:'Minimal',ref:'IES RP-1',quickWin:true,typicalROI:'Immediate',impact:'De-lamp or reduce wattage where measured LPD exceeds ASHRAE allowance. No-cost/low-cost.'},
+  {id:'H01',sys:'HVAC',title:'Smart Thermostat',range:'10-20%',lo:10,hi:20,complexity:'Low',costRange:'$200-500/unit',ref:'ASHRAE 90.1 §6.4',quickWin:true,typicalROI:'<1 yr',impact:'Programmable setback/setup during unoccupied hours. Typical 2-4°F setback saves 10-15%.'},
+  {id:'H02',sys:'HVAC',title:'Economizer',range:'10-25%',lo:10,hi:25,complexity:'Medium',costRange:'$2k-5k/unit',ref:'ASHRAE 90.1 §6.5.1',quickWin:false,typicalROI:'2-3 yr',impact:'Free cooling when outdoor conditions allow. Required by code in many climate zones.'},
+  {id:'H03',sys:'HVAC',title:'Demand Control Ventilation',range:'8-20%',lo:8,hi:20,complexity:'Medium',costRange:'$1k-3k/zone',ref:'ASHRAE 62.1',quickWin:false,typicalROI:'2-4 yr',impact:'CO2 sensors modulate outdoor air. Greatest savings in variable-occupancy spaces like conference rooms.'},
+  {id:'H04',sys:'HVAC',title:'VFDs on AHU Fans',range:'20-50%',lo:20,hi:50,complexity:'Medium',costRange:'$5k-15k/unit',ref:'ASHRAE 90.1 §6.5.3',quickWin:false,typicalROI:'2-4 yr',impact:'Fan affinity laws — 50% speed = 12.5% power. Huge savings on variable-load systems.'},
+  {id:'H05',sys:'HVAC',title:'Replace Aging Equipment',range:'15-35%',lo:15,hi:35,complexity:'High',costRange:'$15k-100k+',ref:'ASHRAE 90.1 §6.4',quickWin:false,typicalROI:'5-10 yr',impact:'New equipment 30-50% more efficient than 20-yr-old units. R-22 phase-out forces replacement anyway.'},
+  {id:'H06',sys:'HVAC',title:'Duct Sealing',range:'5-15%',lo:5,hi:15,complexity:'Low',costRange:'$1k-5k',ref:'ASHRAE 90.1 §6.4.4',quickWin:true,typicalROI:'1-2 yr',impact:'Sealed ducts prevent conditioned air loss. Test with duct blaster to find worst leaks.'},
+  {id:'H07',sys:'HVAC',title:'Energy Recovery Ventilator',range:'10-30%',lo:10,hi:30,complexity:'High',costRange:'$5k-20k',ref:'ASHRAE 90.1 §6.5.6',quickWin:false,typicalROI:'3-6 yr',impact:'Pre-conditions outdoor air using exhaust stream. Enthalpy wheels recover both sensible and latent.'},
+  {id:'H08',sys:'HVAC',title:'Replace R-22 Equipment',range:'10-20%',lo:10,hi:20,complexity:'High',costRange:'$10k-50k+',ref:'EPA Phase-out',quickWin:false,typicalROI:'3-7 yr',impact:'R-22 production ceased. Replacement refrigerant prices rising. New equipment uses R-410A/R-32.'},
+  {id:'E01',sys:'Envelope',title:'Roof Insulation',range:'5-15%',lo:5,hi:15,complexity:'Medium',costRange:'$2-6/ft²',ref:'ASHRAE 90.1 §5',quickWin:false,typicalROI:'3-7 yr',impact:'Reduces roof heat gain/loss. Most effective in hot climates or under-insulated roofs.'},
+  {id:'E02',sys:'Envelope',title:'Cool Roof',range:'5-15%',lo:5,hi:15,complexity:'Low',costRange:'$1-3/ft²',ref:'ASHRAE 90.1 §5.5.3',quickWin:true,typicalROI:'2-4 yr',impact:'White/reflective coating reduces solar heat gain 30-40%. Best payback in CZ 1-3.'},
+  {id:'E03',sys:'Envelope',title:'Air Sealing',range:'3-12%',lo:3,hi:12,complexity:'Low',costRange:'$0.5-2/ft²',ref:'ASHRAE 90.1 §5.4.3',quickWin:true,typicalROI:'1-2 yr',impact:'Caulk, weatherstrip, seal penetrations. Blower door test identifies worst areas.'},
+  {id:'E04',sys:'Envelope',title:'Window Film',range:'8-18%',lo:8,hi:18,complexity:'Low',costRange:'$5-12/ft²',ref:'ASHRAE 90.1 §5.5.4',quickWin:false,typicalROI:'3-5 yr',impact:'Low-E film on existing single/double-clear glass. Reduces SHGC without window replacement.'},
+  {id:'W01',sys:'DHW',title:'Pipe Insulation',range:'5-15%',lo:5,hi:15,complexity:'Low',costRange:'$2-5/LF',ref:'ASHRAE 90.1 §7.4.3',quickWin:true,typicalROI:'<1 yr',impact:'Insulate all accessible DHW piping. Required by code — often missing on older systems.'},
+  {id:'W02',sys:'DHW',title:'Recirc Timer',range:'30-60%',lo:30,hi:60,complexity:'Low',costRange:'$100-300',ref:'ASHRAE 90.1 §7.4.4',quickWin:true,typicalROI:'<0.5 yr',impact:'Timer or aquastat on recirc pump eliminates 24/7 heat loss. One of the fastest paybacks.'},
+  {id:'W03',sys:'DHW',title:'HPWH Upgrade',range:'50-70%',lo:50,hi:70,complexity:'High',costRange:'$3k-8k',ref:'ENERGY STAR',quickWin:false,typicalROI:'4-7 yr',impact:'Heat pump water heater COP 2.0-3.5 vs 0.9 for electric resistance. Best for warm climates.'},
+  {id:'P01',sys:'Plug Loads',title:'Power Management',range:'60-80%',lo:60,hi:80,complexity:'Low',costRange:'Minimal',ref:'ENERGY STAR',quickWin:true,typicalROI:'Immediate',impact:'Enable sleep/hibernate on PCs. Group policy deployment. 60-80% of individual PC standby consumption.'},
+  {id:'P02',sys:'Plug Loads',title:'Vending Misers',range:'30-50%',lo:30,hi:50,complexity:'Low',costRange:'$150-300/unit',ref:'ENERGY STAR',quickWin:true,typicalROI:'<1 yr',impact:'Occupancy/timer control on vending machines. Cuts compressor runtime in unoccupied hours.'},
+  {id:'P03',sys:'Plug Loads',title:'Smart Strips',range:'10-20%',lo:10,hi:20,complexity:'Low',costRange:'$30-60/strip',ref:'ENERGY STAR',quickWin:true,typicalROI:'<1 yr',impact:'Auto-cut peripheral power when master device sleeps. Eliminates phantom loads at workstations.'},
+  {id:'EL01',sys:'Electrical',title:'APFC Capacitor Bank',range:'3-8%',lo:3,hi:8,complexity:'Medium',costRange:'$5k-25k',ref:'IEEE 1036',quickWin:false,typicalROI:'1-3 yr',impact:'Corrects lagging PF to 0.95+. Eliminates utility PF penalties. Reduces I²R losses in cables.'},
+  {id:'EL02',sys:'Electrical',title:'Right-size Transformer',range:'1-3%',lo:1,hi:3,complexity:'High',costRange:'$15k-80k',ref:'DOE TP-1',quickWin:false,typicalROI:'5-10 yr',impact:'Oversized transformers waste iron-core losses 24/7. Right-sizing optimizes efficiency point.'},
+  {id:'EL03',sys:'Electrical',title:'Replace Aging Transformer',range:'1-2%',lo:1,hi:2,complexity:'High',costRange:'$20k-100k',ref:'IEEE C57.12',quickWin:false,typicalROI:'7-12 yr',impact:'Modern high-efficiency transformers (DOE 2016 standard) reduce losses 20-30% vs pre-2010.'},
+  {id:'EL04',sys:'Electrical',title:'VFDs on Motors',range:'20-50%',lo:20,hi:50,complexity:'Medium',costRange:'$3k-15k/unit',ref:'NEMA MG1',quickWin:false,typicalROI:'1-3 yr',impact:'Variable-speed drive on pumps/fans. Affinity laws yield cubic power reduction with speed.'},
+  {id:'EL05',sys:'Electrical',title:'IE3/IE4 Premium Motors',range:'2-5%',lo:2,hi:5,complexity:'Medium',costRange:'$1k-5k/unit',ref:'IEC 60034-30',quickWin:false,typicalROI:'2-5 yr',impact:'Replace at failure with IE3/IE4. 2-5% efficiency gain on each motor.'},
+  {id:'EL06',sys:'Electrical',title:'Load Scheduling',range:'5-15%',lo:5,hi:15,complexity:'Low',costRange:'$1k-5k',ref:'ASHRAE 90.1 §8',quickWin:true,typicalROI:'<1 yr',impact:'Stagger start times to reduce peak demand. Schedule non-critical loads to off-peak.'},
+  {id:'EL07',sys:'Electrical',title:'De-energize Decommissioned',range:'1-5%',lo:1,hi:5,complexity:'Low',costRange:'Minimal',ref:'NFPA 70',quickWin:true,typicalROI:'Immediate',impact:'Disconnect loads that are installed but no longer used. Zero cost, immediate savings.'},
+  {id:'EL08',sys:'Electrical',title:'Sub-metering',range:'3-8%',lo:3,hi:8,complexity:'Medium',costRange:'$2k-10k',ref:'ASHRAE Guideline 14',quickWin:false,typicalROI:'1-3 yr',impact:'Enables measurement-based accountability. Typical 3-8% savings from awareness alone.'},
+  {id:'EL09',sys:'Electrical',title:'Voltage Imbalance Fix',range:'1-3%',lo:1,hi:3,complexity:'Medium',costRange:'$1k-5k',ref:'NEMA MG1',quickWin:false,typicalROI:'1-3 yr',impact:'Rebalance phases to reduce motor heating and losses. >1% imbalance causes 6-10x temperature rise.'},
+  {id:'EL10',sys:'Electrical',title:'Active Harmonic Filter',range:'2-5%',lo:2,hi:5,complexity:'High',costRange:'$10k-50k',ref:'IEEE 519',quickWin:false,typicalROI:'3-6 yr',impact:'Reduces THD-I to comply with IEEE 519. Prevents transformer overheating and neutral overload.'},
+  {id:'EL11',sys:'Electrical',title:'Line Reactors on VFDs',range:'1-3%',lo:1,hi:3,complexity:'Low',costRange:'$500-2k/unit',ref:'IEEE 519',quickWin:true,typicalROI:'<1 yr',impact:'3-5% impedance reactor on VFD input. Reduces harmonics by 30-50% at low cost.'},
+  {id:'EL12',sys:'Electrical',title:'K-rated Transformer',range:'1-2%',lo:1,hi:2,complexity:'High',costRange:'$15k-40k',ref:'IEEE C57.110',quickWin:false,typicalROI:'5-8 yr',impact:'Handles harmonic currents without derating. Required when K-factor >4.'},
+  {id:'EL13',sys:'Electrical',title:'Reduce After-Hours Base',range:'5-15%',lo:5,hi:15,complexity:'Low',costRange:'$1k-5k',ref:'ASHRAE 90.1 §8',quickWin:true,typicalROI:'<1 yr',impact:'Turn off/setback equipment after hours. Base load >30% of peak indicates opportunity.'},
+  {id:'EL14',sys:'Electrical',title:'Sag Protection',range:'0-0%',lo:0,hi:0,complexity:'Medium',costRange:'$5k-20k',ref:'IEEE 1159',quickWin:false,typicalROI:'N/A — reliability',impact:'Protects sensitive equipment from voltage sags. UPS or dynamic sag corrector. No energy savings but prevents process losses.'}
+];
+
+const CHECKLIST_ITEMS = ['Utility bills (12+ months)','Building drawings/plans','Equipment schedules','O&M manuals','Previous audit reports','Interview questions for FM staff','Audit equipment (light meter, IR camera, clamp meter)'];
+
+// ========== APP STATE ==========
+let appState = {
+  settings:{auditorName:'',companyName:'',companyLogo:'',climateZone:'2A',units:'IP',ashraeLevel:'1',aiApiKey:'AIzaSyAHd1TGPyt6MtP7MEJUNICmTJUGlIcF9f4',companyLogoURL:''},
+  project:{buildingName:'',address:'',city:'',state:'',country:'USA',yearBuilt:'',floors:'',grossArea:'',areaUnit:'ft²',occupancyType:'Office Large',contact:'',phone:'',auditDate:'',clientCompany:'',clientContact:'',clientEmail:'',clientPhone:'',clientSector:'Commercial',clientLogoURL:'',clientLogo:''},
+  utility:{elecRate:0.10,gasRate:1.20,rows:[]},
+  envelope:{wallConst:'Steel Frame',wallIns:'None',roofType:'Built-Up',roofIns:'None',roofColor:'Dark',windowType:'Single Clear',windowFrame:'Aluminum No Break',wwr:'',infiltration:'Average',condition:'Fair',notes:'',airSealing:false,coolRoof:false,addInsulation:false,windowUpgrade:false,shading:false},
+  lighting:{rows:[],ledRetrofit:false,occSensors:false,daylighting:false,reduceHours:false,exteriorControls:false},
+  hvac:{rows:[],upgradeControls:false,economizer:false,dcv:false,replaceOld:false,vfd:false,ductSeal:false,refrigerant:false,scheduling:false,erv:false},
+  dhw:{type:'Gas Storage',capacity:'',capacityUnit:'gallons',inputRating:'',inputUnit:'kBtu/h',year:'',efficiency:'',effUnit:'UEF',pipingInsulated:'No',recirculation:'No',recircControls:'Continuous',dailyUse:'',notes:'',insulatePipes:false,tankless:false,hpwh:false,recircTimer:false,reduceTemp:false},
+  plugloads:{rows:[],powerMgmt:false,energyStar:false,smartStrips:false,vendingMisers:false,removeUnused:false},
+  other:{elevCount:'',elevType:'Hydraulic',elevAge:'',elevRegen:'No',dcPresent:'No',dcArea:'',dcITkW:'',dcPUE:'',kitchenPresent:'No',kitchenES:'No',kitchenHood:'No',parkingPresent:'No',parkingLighting:'HID',evCharging:'No',solarPV:'',notes:''},
+  electrical:{nomVoltage:'',voltUnit:'V',voltLevel:'LV',supplyType:'Utility Grid',phases:'3-Phase',frequency:60,vL1:'',vL2:'',vL3:'',transformers:[],panels:[],apfc:false,rightSizeXfmr:false,vfdMotors:false,ie3Motors:false,loadScheduling:false,deenergize:false,submetering:false,voltImbalFix:false,harmonicFilter:false,reduceBaseLoad:false},
+  pq:{srcBill:false,srcMeter:false,srcLogger:false,billPeakKW:'',billPFPenalty:'No',billPenalty:'',billPFThreshold:'',meterDate:'',meterKW:'',meterKVAR:'',meterKVA:'',meterPF:'',meterVL1:'',meterVL2:'',meterVL3:'',meterIL1:'',meterIL2:'',meterIL3:'',loggerModel:'',loggerPeriod:'',loggerPoint:'',logAvgV:'',logMinV:'',logMaxV:'',logVImbal:'',logAvgKW:'',logPeakKW:'',logMinKW:'',logAvgKVAR:'',logAvgKVA:'',logDPF:'',logMinPF:'',logTruePF:'',thdVL1:'',thdVL2:'',thdVL3:'',thdVAvg:'',thdIL1:'',thdIL2:'',thdIL3:'',thdIAvg:'',hV3:'',hV5:'',hV7:'',hV9:'',hV11:'',hV13:'',hV17:'',hV19:'',hV23:'',hV25:'',hI3:'',hI5:'',hI7:'',hI9:'',hI11:'',hI13:'',hI17:'',hI19:'',hI23:'',hI25:'',ieee519:'Not Assessed',harmonicSource:'',kFactor:'',sagsCount:'',sagsWorstMag:'',sagsWorstDur:'',swellsCount:'',swellsWorstMag:'',swellsWorstDur:'',interruptCount:'',interruptDur:'',transientCount:'',transientWorst:'',neutralCurrent:'',neutralOverloaded:'No',pst:'',plt:'',pfcInstalled:'No',pfcType:'Fixed Capacitor',pfcKVAR:'',pfcCondition:'Good'},
+  demand:{wd0:'',wd1:'',wd2:'',wd3:'',wd4:'',wd5:'',we0:'',we1:'',we2:'',we3:'',we4:'',we5:''},
+  loads:[],
+  ecmSelections:{},
+  ecmCosts:{},
+  photos:{envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]},
+  checklist:{},aiDraft:''
+};
+
+let charts = {};
+let currentPhotoSection = '';
+
+// ========== INIT ==========
+function init() {
+  loadState();
+  buildNav();
+  buildDashboard();
+  buildUtilityTable();
+  buildPlugTable();
+  buildECMTable();
+  bindAll();
+  updateFlagButtons();
+  renderPhotos();
+  renderTransformers();
+  renderPanels();
+  renderLoadTable();
+  showSection('dashboard');
+  updateTopbar();
+  updateEnvelope();
+  togglePQSection();
+  calcUtility();
+  calcDemand();
+  highlightRequired();
+}
+
+function loadState() {
+  try { const s = localStorage.getItem('auditflow_state'); if (s) appState = JSON.parse(s); } catch(e) {}
+  if (!appState.photos) appState.photos = {envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]};
+  if (!appState.loads) appState.loads = [];
+  if (!appState.ecmSelections) appState.ecmSelections = {};
+  if (!appState.ecmCosts) appState.ecmCosts = {};
+  if (!appState.checklist) appState.checklist = {};
+  if (!appState.electrical.transformers) appState.electrical.transformers = [];
+  if (!appState.electrical.panels) appState.electrical.panels = [];
+}
+
+function save() {
+  readBindings();
+  try { localStorage.setItem('auditflow_state', JSON.stringify(appState)); } catch(e) {}
+  highlightRequired();
+}
+
+function readBindings() {
+  document.querySelectorAll('[data-bind]').forEach(el => {
+    const path = el.getAttribute('data-bind').split('.');
+    let obj = appState;
+    for (let i = 0; i < path.length - 1; i++) { if (!obj[path[i]]) obj[path[i]] = {}; obj = obj[path[i]]; }
+    const key = path[path.length - 1];
+    if (el.type === 'checkbox') obj[key] = el.checked;
+    else if (el.type === 'number') obj[key] = el.value === '' ? '' : parseFloat(el.value);
+    else obj[key] = el.value;
+  });
+}
+
+function bindAll() {
+  document.querySelectorAll('[data-bind]').forEach(el => {
+    const path = el.getAttribute('data-bind').split('.');
+    let obj = appState;
+    for (let i = 0; i < path.length - 1; i++) { if (!obj[path[i]]) return; obj = obj[path[i]]; }
+    const val = obj[path[path.length - 1]];
+    if (val === undefined || val === null) return;
+    if (el.type === 'checkbox') el.checked = val;
+    else el.value = val;
+    if (!el._bound) {
+      el.addEventListener('change', save);
+      if (el.tagName !== 'SELECT') el.addEventListener('input', save);
+      el._bound = true;
+    }
+  });
+}
+
+// ========== NAV ==========
+function buildNav() {
+  const nav = document.getElementById('sidebar-nav');
+  nav.innerHTML = NAV_ITEMS.map(n => `<a href="#" data-sec="${n.id}" onclick="showSection('${n.id}');return false;"><span class="nav-icon">${n.icon}</span>${n.label}</a>`).join('');
+}
+
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const sec = document.getElementById('sec-' + id);
+  if (sec) sec.classList.add('active');
+  document.querySelectorAll('#sidebar-nav a').forEach(a => a.classList.toggle('active', a.dataset.sec === id));
+  document.getElementById('sidebar').classList.remove('open');
+  if (id === 'analysis') setTimeout(renderCharts, 100);
+  if (id === 'envelope') updateEnvelope();
+  if (id === 'report') buildECMTable();
+  updateProgress();
+}
+
+function switchSubtab(btn, panelId) {
+  const parent = btn.closest('.section');
+  parent.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
+  parent.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+function updateTopbar() {
+  const name = appState.project.buildingName || 'No Project';
+  document.getElementById('topbar-building').textContent = name;
+}
+
+function updateProgress() {
+  let complete = 0;
+  const checks = [
+    appState.project.buildingName, appState.settings.auditorName,
+    appState.utility.rows.length > 0, appState.project.grossArea,
+    appState.envelope.condition, appState.lighting.rows.length > 0,
+    appState.hvac.rows.length > 0, appState.dhw.type,
+    appState.plugloads.rows.length > 0, true,
+    appState.electrical.transformers.length > 0 || appState.loads.length > 0,
+    true, true
+  ];
+  checks.forEach(c => { if (c) complete++; });
+  const pct = Math.round(complete / 13 * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = `${complete} of 13 complete`;
+  buildTiles(complete);
+}
+
+function buildTiles(complete) {
+  const container = document.getElementById('dash-tiles');
+  if (!container) return;
+  container.innerHTML = NAV_ITEMS.map((n, i) => {
+    let cls = 'tile-empty';
+    if (i < complete) cls = 'tile-complete';
+    return `<div class="tile ${cls}" onclick="showSection('${n.id}')">${n.icon}<br>${n.label}</div>`;
+  }).join('');
+}
+
+// ========== DASHBOARD ==========
+function buildDashboard() {
+  const cl = document.getElementById('dash-checklist');
+  cl.innerHTML = CHECKLIST_ITEMS.map((item, i) =>
+    `<label><input type="checkbox" ${appState.checklist[i]?'checked':''} onchange="appState.checklist[${i}]=this.checked;save();"> ${item}</label>`
+  ).join('');
+  updateDashSummary();
+}
+
+function updateDashSummary() {
+  const p = appState.project;
+  const sum = document.getElementById('dash-summary');
+  if (p.buildingName) {
+    sum.innerHTML = `<b>${p.buildingName}</b> — ${p.address||''} ${p.city||''} ${p.state||''}<br>
+      ${p.occupancyType} | ${p.floors||'?'} floors | ${fmt(p.grossArea)} ${p.areaUnit||'ft²'} | Built ${p.yearBuilt||'?'}`;
+    document.getElementById('dash-status').className = 'badge badge-blue';
+    document.getElementById('dash-status').textContent = 'IN PROGRESS';
+  }
+  updateEUIDisplay();
+}
+
+function updateEUIDisplay() {
+  const eui = calcEUI();
+  const euiEl = document.getElementById('dash-eui');
+  const labelEl = document.getElementById('dash-eui-label');
+  if (eui !== null) {
+    euiEl.textContent = eui.toFixed(1) + ' kBtu/ft²';
+    const bm = BENCHMARKS[appState.project.occupancyType] || BENCHMARKS['Office Large'];
+    let rating = '', color = '';
+    if (eui <= bm.es75) { rating = 'EXCELLENT — Below ENERGY STAR 75th pct'; color = 'green'; }
+    else if (eui <= bm.median) { rating = 'FAIR — Between ES75 and CBECS Median'; color = 'yellow'; }
+    else { rating = 'POOR — Above CBECS Median'; color = 'red'; }
+    labelEl.textContent = rating;
+    document.getElementById('tl-g').classList.toggle('active', color==='green');
+    document.getElementById('tl-y').classList.toggle('active', color==='yellow');
+    document.getElementById('tl-r').classList.toggle('active', color==='red');
+  } else {
+    euiEl.textContent = '— kBtu/ft²';
+    labelEl.textContent = 'Enter utility data and building area';
+  }
+}
+
+// ========== THEME ==========
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
+  document.getElementById('theme-label').textContent = isDark ? 'Dark' : 'Light';
+}
+
+// ========== UTILITY ==========
+function buildUtilityTable() {
+  if (appState.utility.rows.length === 0) addUtilityRows(12);
+  renderUtilityRows();
+}
+
+function addUtilityRows(n) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for (let i = 0; i < n; i++) {
+    const idx = appState.utility.rows.length;
+    appState.utility.rows.push({month: months[idx % 12] + ' ' + (new Date().getFullYear()), kwh:'',ecost:'',pkw:'',gas:'',gcost:'',notes:''});
+  }
+  save();
+  renderUtilityRows();
+}
+
+function renderUtilityRows() {
+  const body = document.getElementById('utility-body');
+  body.innerHTML = appState.utility.rows.map((r, i) => `<tr>
+    <td>${i+1}</td>
+    <td><input type="text" value="${r.month}" onchange="appState.utility.rows[${i}].month=this.value;save();calcUtility();" style="min-width:90px;"></td>
+    <td><input type="number" value="${r.kwh}" onchange="appState.utility.rows[${i}].kwh=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.ecost}" onchange="appState.utility.rows[${i}].ecost=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.pkw}" onchange="appState.utility.rows[${i}].pkw=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.gas}" onchange="appState.utility.rows[${i}].gas=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.gcost}" onchange="appState.utility.rows[${i}].gcost=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="text" value="${r.notes||''}" onchange="appState.utility.rows[${i}].notes=this.value;save();" style="min-width:80px;"></td>
+    <td><button class="btn-icon btn-sm" onclick="appState.utility.rows.splice(${i},1);save();renderUtilityRows();calcUtility();">✕</button></td>
+  </tr>`).join('');
+}
+
+function calcUtility() {
+  readBindings();
+  let totalKWH=0, totalECost=0, totalGas=0, totalGCost=0, maxPKW=0;
+  appState.utility.rows.forEach(r => {
+    totalKWH += (parseFloat(r.kwh)||0);
+    totalECost += (parseFloat(r.ecost)||0);
+    totalGas += (parseFloat(r.gas)||0);
+    totalGCost += (parseFloat(r.gcost)||0);
+    const pk = parseFloat(r.pkw)||0;
+    if (pk > maxPKW) maxPKW = pk;
+  });
+  document.getElementById('ut-kwh').textContent = fmt(totalKWH);
+  document.getElementById('ut-ecost').textContent = '$' + fmt(totalECost);
+  document.getElementById('ut-pkw').textContent = maxPKW > 0 ? fmt(maxPKW) : '—';
+  document.getElementById('ut-gas').textContent = fmt(totalGas);
+  document.getElementById('ut-gcost').textContent = '$' + fmt(totalGCost);
+
+  const eui = calcEUI();
+  const metrics = document.getElementById('eui-metrics');
+  const annKBtu = totalKWH * 3.412 + totalGas * 100;
+  metrics.innerHTML = `
+    <div class="metric-box"><div class="mv">${fmt(totalKWH)}</div><div class="ml">Total kWh</div></div>
+    <div class="metric-box"><div class="mv">${fmt(totalGas)}</div><div class="ml">Total Therms</div></div>
+    <div class="metric-box"><div class="mv">${fmt(Math.round(annKBtu))}</div><div class="ml">Annual kBtu</div></div>
+    <div class="metric-box"><div class="mv" style="color:${eui!==null?(eui<=(BENCHMARKS[appState.project.occupancyType]||{es75:54}).es75?'var(--success)':eui<=(BENCHMARKS[appState.project.occupancyType]||{median:81}).median?'var(--warning)':'var(--danger)'):'var(--accent)'}">${eui!==null?eui.toFixed(1):'—'}</div><div class="ml">EUI kBtu/ft²·yr</div></div>
+  `;
+  updateDashSummary();
+  save();
+}
+
+function calcEUI() {
+  let totalKWH=0, totalGas=0;
+  appState.utility.rows.forEach(r => { totalKWH += (parseFloat(r.kwh)||0); totalGas += (parseFloat(r.gas)||0); });
+  const area = parseFloat(appState.project.grossArea) || 0;
+  if (area === 0 || totalKWH === 0) return null;
+  let areaFt2 = area;
+  if (appState.project.areaUnit === 'm²') areaFt2 = area * 10.7639;
+  const annKBtu = totalKWH * 3.412 + totalGas * 100;
+  return annKBtu / areaFt2;
+}
+
+// ========== ENVELOPE ==========
+function updateEnvelope() {
+  const zone = appState.settings.climateZone || '2A';
+  document.getElementById('env-zone').textContent = zone;
+  const z = ASHRAE_ZONES[zone] || ASHRAE_ZONES['2A'];
+  document.getElementById('env-ashrae').innerHTML =
+    `Roof R-ci: <b>R-${z.roofR}</b> &nbsp;|&nbsp; Wall U-max: <b>${z.wallU} Btu/h·ft²·°F</b> &nbsp;|&nbsp; Window U-max: <b>${z.winU}</b> &nbsp;|&nbsp; Window SHGC-max: <b>${z.winSHGC}</b>`;
+}
+
+// ========== LIGHTING ==========
+function addLightingRow() {
+  appState.lighting.rows.push({space:'',area:'',areaUnit:'ft²',fixture:'T8 Fluor',count:'',wpf:'32',control:'Manual',hpd:'10',dpy:'261',pctLed:'0',condition:'Fair'});
+  save(); renderLightingRows();
+}
+
+function renderLightingRows() {
+  const body = document.getElementById('lighting-body');
+  body.innerHTML = appState.lighting.rows.map((r, i) => {
+    const area = parseFloat(r.area)||0;
+    const count = parseFloat(r.count)||0;
+    const wpf = parseFloat(r.wpf)||0;
+    let areaM2 = area;
+    if (r.areaUnit === 'ft²') areaM2 = area * 0.0929;
+    const lpd = areaM2 > 0 ? (count * wpf / areaM2).toFixed(2) : '—';
+    const spaceLower = (r.space||'').toLowerCase();
+    let bench = LPD_BUILDING[appState.project.occupancyType] || 11.06;
+    // Try space-by-space match
+    for (const [sn, sv] of Object.entries(LPD_SPACE)) {
+      if (spaceLower.includes(sn.toLowerCase())) { bench = sv; break; }
+    }
+    const lpdNum = parseFloat(lpd);
+    const lpdColor = (!isNaN(lpdNum) && bench) ? (lpdNum <= bench ? 'color:var(--success);font-weight:700' : 'color:var(--danger);font-weight:700') : '';
+    return `<tr>
+      <td><input type="text" value="${r.space}" onchange="appState.lighting.rows[${i}].space=this.value;save();renderLightingRows();" style="min-width:100px;" placeholder="e.g. Open Plan Office"></td>
+      <td><input type="number" value="${r.area}" onchange="appState.lighting.rows[${i}].area=parseFloat(this.value)||0;save();renderLightingRows();"></td>
+      <td><select onchange="appState.lighting.rows[${i}].areaUnit=this.value;save();renderLightingRows();"><option ${r.areaUnit==='ft²'?'selected':''}>ft²</option><option ${r.areaUnit==='m²'?'selected':''}>m²</option></select></td>
+      <td><select onchange="appState.lighting.rows[${i}].fixture=this.value;save();">
+        ${['T8 Fluor','T5','T12','LED Troffer','LED Panel','LED Downlight','HID','Incandescent','CFL','Other'].map(o=>`<option ${r.fixture===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="number" value="${r.count}" onchange="appState.lighting.rows[${i}].count=parseFloat(this.value)||0;save();renderLightingRows();"></td>
+      <td><input type="number" value="${r.wpf}" onchange="appState.lighting.rows[${i}].wpf=parseFloat(this.value)||0;save();renderLightingRows();"></td>
+      <td><select onchange="appState.lighting.rows[${i}].control=this.value;save();">
+        ${['Manual','Occ Sensor Auto-On','Occ Sensor Manual-On','Daylight','Dimmer','Timer','Always On'].map(o=>`<option ${r.control===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="number" value="${r.hpd}" onchange="appState.lighting.rows[${i}].hpd=parseFloat(this.value)||0;save();"></td>
+      <td><input type="number" value="${r.dpy}" onchange="appState.lighting.rows[${i}].dpy=parseFloat(this.value)||0;save();"></td>
+      <td><input type="number" value="${r.pctLed}" onchange="appState.lighting.rows[${i}].pctLed=parseFloat(this.value)||0;save();" style="width:50px;"></td>
+      <td><select onchange="appState.lighting.rows[${i}].condition=this.value;save();">
+        ${['Excellent','Good','Fair','Poor'].map(o=>`<option ${r.condition===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td style="font-family:var(--mono);${lpdColor}">${lpd}</td>
+      <td style="font-family:var(--mono);font-size:.75rem;">${bench.toFixed(1)}</td>
+      <td><button class="btn-icon btn-sm" onclick="appState.lighting.rows.splice(${i},1);save();renderLightingRows();">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ========== HVAC ==========
+function addHVACRow() {
+  appState.hvac.rows.push({name:'',type:'Packaged RTU/VAV',cap:'',capUnit:'tons',year:'',condition:'Fair',refrigerant:'R-410A',eff:'',effUnit:'SEER',controls:'',economizer:'No',notes:''});
+  save(); renderHVACRows();
+}
+
+function renderHVACRows() {
+  const body = document.getElementById('hvac-body');
+  body.innerHTML = appState.hvac.rows.map((r, i) => {
+    const isR22 = r.refrigerant === 'R-22';
+    return `<tr>
+      <td><input type="text" value="${r.name}" onchange="appState.hvac.rows[${i}].name=this.value;save();" style="min-width:80px;"></td>
+      <td><select onchange="appState.hvac.rows[${i}].type=this.value;save();">
+        ${['Packaged RTU/VAV','Split AC','Split HP','Chilled Water','VRF','PTAC','Fan Coil','DOAS','Boiler+AHU','GSHP','Evaporative','Other'].map(o=>`<option ${r.type===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="number" value="${r.cap}" onchange="appState.hvac.rows[${i}].cap=parseFloat(this.value)||0;save();"></td>
+      <td><select onchange="appState.hvac.rows[${i}].capUnit=this.value;save();"><option ${r.capUnit==='tons'?'selected':''}>tons</option><option ${r.capUnit==='kW'?'selected':''}>kW</option></select></td>
+      <td><input type="number" value="${r.year}" onchange="appState.hvac.rows[${i}].year=this.value;save();" style="width:60px;"></td>
+      <td><select onchange="appState.hvac.rows[${i}].condition=this.value;save();">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${r.condition===o?'selected':''}>${o}</option>`).join('')}</select></td>
+      <td>${isR22?'<span class="badge badge-red">⚠ R-22</span>':''}<select onchange="appState.hvac.rows[${i}].refrigerant=this.value;save();renderHVACRows();">
+        ${['R-22','R-410A','R-32','R-134a','R-407C','Other'].map(o=>`<option ${r.refrigerant===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="number" step="0.01" value="${r.eff}" onchange="appState.hvac.rows[${i}].eff=parseFloat(this.value)||0;save();" style="width:60px;"></td>
+      <td><select onchange="appState.hvac.rows[${i}].effUnit=this.value;save();">
+        ${['SEER','EER','COP','kW/ton'].map(o=>`<option ${r.effUnit===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="text" value="${r.controls||''}" onchange="appState.hvac.rows[${i}].controls=this.value;save();" style="min-width:70px;"></td>
+      <td><select onchange="appState.hvac.rows[${i}].economizer=this.value;save();"><option ${r.economizer==='Yes'?'selected':''}>Yes</option><option ${r.economizer==='No'?'selected':''}>No</option></select></td>
+      <td><input type="text" value="${r.notes||''}" onchange="appState.hvac.rows[${i}].notes=this.value;save();" style="min-width:60px;"></td>
+      <td><button class="btn-icon btn-sm" onclick="appState.hvac.rows.splice(${i},1);save();renderHVACRows();">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ========== PLUG LOADS ==========
+function buildPlugTable() {
+  if (appState.plugloads.rows.length === 0) {
+    const typeDefaults = PLUG_DEFAULTS_BY_TYPE[appState.project.occupancyType];
+    const defaults = typeDefaults || PLUG_DEFAULTS;
+    appState.plugloads.rows = defaults.map(d => ({...d, count:0, powerMgmt:false}));
+    save();
+  }
+  renderPlugRows();
+}
+
+function renderPlugRows() {
+  const body = document.getElementById('plug-body');
+  let total = 0;
+  body.innerHTML = appState.plugloads.rows.map((r, i) => {
+    const annKwh = (r.count||0) * (r.watts||0) * (r.hrs||0) * (r.days||0) / 1000;
+    total += annKwh;
+    return `<tr>
+      <td>${r.name}</td>
+      <td><input type="number" value="${r.count}" onchange="appState.plugloads.rows[${i}].count=parseFloat(this.value)||0;save();renderPlugRows();"></td>
+      <td><input type="number" value="${r.watts}" onchange="appState.plugloads.rows[${i}].watts=parseFloat(this.value)||0;save();renderPlugRows();" style="font-family:var(--mono);"></td>
+      <td><input type="number" value="${r.hrs}" onchange="appState.plugloads.rows[${i}].hrs=parseFloat(this.value)||0;save();renderPlugRows();"></td>
+      <td><input type="number" value="${r.days}" onchange="appState.plugloads.rows[${i}].days=parseFloat(this.value)||0;save();renderPlugRows();"></td>
+      <td><select onchange="appState.plugloads.rows[${i}].powerMgmt=this.value==='Yes';save();"><option ${r.powerMgmt?'selected':''}>Yes</option><option ${!r.powerMgmt?'selected':''}>No</option></select></td>
+      <td style="font-family:var(--mono);">${fmt(Math.round(annKwh))}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('plug-total').textContent = fmt(Math.round(total));
+}
+
+// ========== ELECTRICAL: TRANSFORMERS ==========
+function addTransformer() {
+  appState.electrical.transformers.push({tag:'TR-'+(appState.electrical.transformers.length+1),type:'Dry',ratedKVA:'',year:'',priV:'',secV:'',ironLoss:'',copperLoss:'',measKW:'',measKVAR:'',measKVA:'',measPF:'',tempRise:'',condition:'Fair'});
+  save(); renderTransformers();
+}
+
+function renderTransformers() {
+  const container = document.getElementById('transformer-cards');
+  if (!container) return;
+  container.innerHTML = appState.electrical.transformers.map((t, i) => {
+    const ratedKVA = parseFloat(t.ratedKVA)||0;
+    const measKVA = parseFloat(t.measKVA)||0;
+    const measKW = parseFloat(t.measKW)||0;
+    const ironLoss = parseFloat(t.ironLoss)||0;
+    const copperLoss = parseFloat(t.copperLoss)||0;
+    const util = ratedKVA > 0 ? (measKVA / ratedKVA * 100) : 0;
+    const copperActual = ratedKVA > 0 ? copperLoss * Math.pow(measKVA / ratedKVA, 2) : 0;
+    const totalLoss = ironLoss + copperActual;
+    const eff = (measKW * 1000 + totalLoss) > 0 ? (measKW * 1000 / (measKW * 1000 + totalLoss) * 100) : 0;
+    const annLossKWH = totalLoss / 1000 * 8760;
+    const annLossCost = annLossKWH * (parseFloat(appState.utility.elecRate) || 0.10);
+    const yearAge = t.year ? (new Date().getFullYear() - parseInt(t.year)) : 0;
+
+    let utilColor = '#94a3b8';
+    if (util > 100) utilColor = '#ef4444';
+    else if (util > 80) utilColor = '#f59e0b';
+    else if (util > 40) utilColor = '#10b981';
+
+    let badges = '';
+    if (util > 100) badges += '<span class="badge badge-red">OVERLOADED</span> ';
+    if (util > 0 && util < 40) badges += '<span class="badge badge-amber">UNDERLOADED</span> ';
+    if (yearAge > 25) badges += '<span class="badge badge-amber">AGING >25yr</span> ';
+    if (eff > 0 && eff < 98.5) badges += '<span class="badge badge-red">LOW EFF</span> ';
+
+    return `<div class="card" style="border-left:3px solid ${utilColor};margin-bottom:12px;">
+      <div class="card-header"><div style="font-weight:700;">${t.tag} — ${t.type} ${ratedKVA?ratedKVA+'kVA':''}</div>
+        <button class="btn-icon" onclick="appState.electrical.transformers.splice(${i},1);save();renderTransformers();">✕</button>
+      </div>
+      <div>${badges}</div>
+      <div class="form-row form-row-4" style="margin-top:8px;">
+        <div class="fg"><label>Tag</label><input type="text" value="${t.tag}" onchange="appState.electrical.transformers[${i}].tag=this.value;save();renderTransformers();"></div>
+        <div class="fg"><label>Type</label><select onchange="appState.electrical.transformers[${i}].type=this.value;save();">
+          ${['Dry','Oil-Filled','Cast Resin'].map(o=>`<option ${t.type===o?'selected':''}>${o}</option>`).join('')}</select></div>
+        <div class="fg"><label>Rated kVA</label><input type="number" value="${t.ratedKVA}" onchange="appState.electrical.transformers[${i}].ratedKVA=parseFloat(this.value)||0;save();renderTransformers();"></div>
+        <div class="fg"><label>Year</label><input type="number" value="${t.year}" onchange="appState.electrical.transformers[${i}].year=this.value;save();renderTransformers();"></div>
+      </div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Primary V</label><input type="number" value="${t.priV}" onchange="appState.electrical.transformers[${i}].priV=this.value;save();"></div>
+        <div class="fg"><label>Secondary V</label><input type="number" value="${t.secV}" onchange="appState.electrical.transformers[${i}].secV=this.value;save();"></div>
+        <div class="fg"><label>Iron Loss W</label><input type="number" value="${t.ironLoss}" onchange="appState.electrical.transformers[${i}].ironLoss=parseFloat(this.value)||0;save();renderTransformers();"></div>
+        <div class="fg"><label>Copper Loss W</label><input type="number" value="${t.copperLoss}" onchange="appState.electrical.transformers[${i}].copperLoss=parseFloat(this.value)||0;save();renderTransformers();"></div>
+      </div>
+      <div class="form-row form-row-4">
+        <div class="fg"><label>Measured kW</label><input type="number" step="0.1" value="${t.measKW}" onchange="appState.electrical.transformers[${i}].measKW=parseFloat(this.value)||0;save();renderTransformers();"></div>
+        <div class="fg"><label>Measured kVAR</label><input type="number" step="0.1" value="${t.measKVAR}" onchange="appState.electrical.transformers[${i}].measKVAR=parseFloat(this.value)||0;save();"></div>
+        <div class="fg"><label>Measured kVA</label><input type="number" step="0.1" value="${t.measKVA}" onchange="appState.electrical.transformers[${i}].measKVA=parseFloat(this.value)||0;save();renderTransformers();"></div>
+        <div class="fg"><label>Measured PF</label><input type="number" step="0.01" value="${t.measPF}" onchange="appState.electrical.transformers[${i}].measPF=parseFloat(this.value)||0;save();"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Temp Rise</label><input type="text" value="${t.tempRise||''}" onchange="appState.electrical.transformers[${i}].tempRise=this.value;save();"></div>
+        <div class="fg"><label>Condition</label><select onchange="appState.electrical.transformers[${i}].condition=this.value;save();">
+          ${['Excellent','Good','Fair','Poor'].map(o=>`<option ${t.condition===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      </div>
+      <div style="margin-top:10px;">
+        <div class="util-bar"><div class="util-fill" style="width:${Math.min(util,120)}%;background:${utilColor};"></div><div class="util-label">${util.toFixed(1)}%</div></div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-family:var(--mono);font-size:.78rem;">
+        <span>Util: <b>${util.toFixed(1)}%</b></span>
+        <span>Cu Loss: <b>${copperActual.toFixed(0)}W</b></span>
+        <span>Total Loss: <b>${totalLoss.toFixed(0)}W</b></span>
+        <span>Eff: <b>${eff.toFixed(2)}%</b></span>
+        <span>Ann Loss: <b>${fmt(Math.round(annLossKWH))} kWh</b></span>
+        <span>Ann Cost: <b>$${fmt(Math.round(annLossCost))}</b></span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ========== PANELS ==========
+function addPanel() {
+  appState.electrical.panels.push({tag:'',type:'Distribution',ratedA:'',voltage:'',year:'',condition:'Fair',metering:'None'});
+  save(); renderPanels();
+}
+
+function renderPanels() {
+  const body = document.getElementById('panel-body');
+  if (!body) return;
+  body.innerHTML = appState.electrical.panels.map((p, i) => `<tr>
+    <td><input type="text" value="${p.tag}" onchange="appState.electrical.panels[${i}].tag=this.value;save();"></td>
+    <td><select onchange="appState.electrical.panels[${i}].type=this.value;save();">
+      ${['Main Switchboard','Distribution','Motor Control Center','Sub-Panel','Transfer Switch'].map(o=>`<option ${p.type===o?'selected':''}>${o}</option>`).join('')}</select></td>
+    <td><input type="number" value="${p.ratedA}" onchange="appState.electrical.panels[${i}].ratedA=this.value;save();"></td>
+    <td><input type="number" value="${p.voltage}" onchange="appState.electrical.panels[${i}].voltage=this.value;save();"></td>
+    <td><input type="number" value="${p.year}" onchange="appState.electrical.panels[${i}].year=this.value;save();"></td>
+    <td><select onchange="appState.electrical.panels[${i}].condition=this.value;save();">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${p.condition===o?'selected':''}>${o}</option>`).join('')}</select></td>
+    <td><select onchange="appState.electrical.panels[${i}].metering=this.value;save();">${['None','Analog','Digital','Smart Meter','CT Logger'].map(o=>`<option ${p.metering===o?'selected':''}>${o}</option>`).join('')}</select></td>
+    <td><button class="btn-icon btn-sm" onclick="appState.electrical.panels.splice(${i},1);save();renderPanels();">✕</button></td>
+  </tr>`).join('');
+}
+
+// ========== VOLTAGE IMBALANCE ==========
+function calcVoltImbalance() {
+  readBindings();
+  const v1 = parseFloat(appState.electrical.vL1)||0;
+  const v2 = parseFloat(appState.electrical.vL2)||0;
+  const v3 = parseFloat(appState.electrical.vL3)||0;
+  const el = document.getElementById('volt-imbalance-badge');
+  if (v1 && v2 && v3) {
+    const avg = (v1+v2+v3)/3;
+    const maxDev = Math.max(Math.abs(v1-avg), Math.abs(v2-avg), Math.abs(v3-avg));
+    const imbal = (maxDev / avg * 100).toFixed(2);
+    const cls = imbal > 1 ? 'badge-red' : 'badge-green';
+    el.innerHTML = `<span class="badge ${cls}">Voltage Imbalance: ${imbal}% ${imbal>1?'⚠ EXCEEDS 1% LIMIT':''}</span>`;
+  } else { el.innerHTML = ''; }
+  save();
+}
+
+// ========== LOADS ==========
+function addLoadRow() {
+  appState.loads.push({name:'',category:'Other',npKW:'',measKW:'',measPF:'',mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'None',condition:'Fair',notes:''});
+  save(); renderLoadTable();
+}
+
+function renderLoadTable() {
+  const body = document.getElementById('load-body');
+  if (!body) return;
+  const rate = parseFloat(appState.utility.elecRate) || 0.10;
+  body.innerHTML = appState.loads.map((l, i) => {
+    const npKW = parseFloat(l.npKW)||0;
+    const measKW = parseFloat(l.measKW)||0;
+    const util = npKW > 0 ? (measKW / npKW * 100).toFixed(0) : '—';
+    const annHrs = (parseFloat(l.hpd)||0) * (parseFloat(l.dpw)||0) * (parseFloat(l.wpy)||0);
+    const annKWH = measKW * annHrs;
+    const annCost = annKWH * rate;
+    const modeColors = {'24/7 Continuous':'color:#0ea5e9','Business Hours 8am-6pm':'color:#10b981','Standby/Backup-normally off':'color:#94a3b8','Decommissioned-still connected':'color:#ef4444;text-decoration:line-through'};
+    const modeStyle = modeColors[l.mode] || '';
+    return `<tr>
+      <td><input type="text" value="${l.name}" onchange="appState.loads[${i}].name=this.value;save();" style="min-width:90px;"></td>
+      <td><select onchange="appState.loads[${i}].category=this.value;save();" style="font-size:.72rem;">
+        ${['HVAC-Chiller','HVAC-AHU-Fan','HVAC-Cooling Tower','HVAC-Pump','HVAC-Compressor','Lighting-Interior','Lighting-Exterior','Elevator','IT/Server','Office Equipment','Kitchen','DHW','Fire/Safety','Security','EV Charging','Standby Generator','UPS','Other'].map(o=>`<option ${l.category===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="number" value="${l.npKW}" onchange="appState.loads[${i}].npKW=parseFloat(this.value)||0;save();renderLoadTable();" style="width:60px;"></td>
+      <td><input type="number" value="${l.measKW}" onchange="appState.loads[${i}].measKW=parseFloat(this.value)||0;save();renderLoadTable();" style="width:60px;"></td>
+      <td><input type="number" step="0.01" value="${l.measPF}" onchange="appState.loads[${i}].measPF=parseFloat(this.value)||0;save();" style="width:50px;"></td>
+      <td style="${modeStyle}"><select onchange="appState.loads[${i}].mode=this.value;save();renderLoadTable();" style="font-size:.7rem;">
+        ${['24/7 Continuous','Business Hours 8am-6pm','Partial Day','Seasonal','Standby/Backup-normally off','Cyclic','Manual/Unscheduled','Decommissioned-still connected'].map(o=>`<option ${l.mode===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td><input type="number" value="${l.hpd}" onchange="appState.loads[${i}].hpd=parseFloat(this.value)||0;save();renderLoadTable();" style="width:40px;"></td>
+      <td><input type="number" value="${l.dpw}" onchange="appState.loads[${i}].dpw=parseFloat(this.value)||0;save();renderLoadTable();" style="width:40px;"></td>
+      <td><input type="number" value="${l.wpy}" onchange="appState.loads[${i}].wpy=parseFloat(this.value)||0;save();renderLoadTable();" style="width:40px;"></td>
+      <td><select onchange="appState.loads[${i}].control=this.value;save();" style="font-size:.7rem;">
+        ${['DOL','Star-Delta','Soft Starter','VFD','Inverter','Manual','BAS','Timer','Thermostat','None'].map(o=>`<option ${l.control===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>
+      <td style="font-family:var(--mono);font-size:.75rem;">${util}%</td>
+      <td style="font-family:var(--mono);font-size:.75rem;">${fmt(Math.round(annKWH))}</td>
+      <td style="font-family:var(--mono);font-size:.75rem;">$${fmt(Math.round(annCost))}</td>
+      <td><button class="btn-icon btn-sm" onclick="appState.loads.splice(${i},1);save();renderLoadTable();">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ========== PQ ==========
+function togglePQSection() {
+  readBindings();
+  const show = (id, val) => { const el = document.getElementById(id); if(el) el.style.display = val ? '' : 'none'; };
+  show('pq-bill-section', appState.pq.srcBill);
+  show('pq-meter-section', appState.pq.srcMeter);
+  show('pq-logger-section', appState.pq.srcLogger);
+  calcPQ();
+  save();
+}
+
+function calcPQ() {
+  readBindings();
+  const el = document.getElementById('pq-calcs');
+  if (!el) return;
+  let html = '';
+  const pf = parseFloat(appState.pq.meterPF) || parseFloat(appState.pq.logTruePF) || parseFloat(appState.pq.logDPF) || 0;
+  const kw = parseFloat(appState.pq.meterKW) || parseFloat(appState.pq.logAvgKW) || 0;
+  if (pf > 0 && pf < 1 && kw > 0) {
+    const kvarNeeded = kw * (Math.tan(Math.acos(pf)) - Math.tan(Math.acos(0.95)));
+    const bankSize = Math.ceil(kvarNeeded / 25) * 25;
+    const penalty = parseFloat(appState.pq.billPenalty) || 0;
+    const annSavings = penalty * 12;
+    html += `<div class="metric-row">
+      <div class="metric-box"><div class="mv">${pf.toFixed(3)}</div><div class="ml">Measured PF</div></div>
+      <div class="metric-box"><div class="mv">${kvarNeeded.toFixed(0)}</div><div class="ml">kVAR to PF=0.95</div></div>
+      <div class="metric-box"><div class="mv">${bankSize}</div><div class="ml">Bank Size kVAR</div></div>
+      ${penalty>0?`<div class="metric-box"><div class="mv">$${fmt(annSavings)}</div><div class="ml">Ann Penalty Savings</div></div>`:''}
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ========== DEMAND PROFILE ==========
+function calcDemand() {
+  readBindings();
+  const d = appState.demand;
+  const blockHrs = [6,3,3,5,4,3]; // hours per block
+  const wd = [parseFloat(d.wd0)||0,parseFloat(d.wd1)||0,parseFloat(d.wd2)||0,parseFloat(d.wd3)||0,parseFloat(d.wd4)||0,parseFloat(d.wd5)||0];
+  const we = [parseFloat(d.we0)||0,parseFloat(d.we1)||0,parseFloat(d.we2)||0,parseFloat(d.we3)||0,parseFloat(d.we4)||0,parseFloat(d.we5)||0];
+  const all = [...wd, ...we].filter(v => v > 0);
+  if (all.length === 0) { document.getElementById('demand-metrics').innerHTML = ''; return; }
+  const peak = Math.max(...all);
+  const minD = Math.min(...all);
+  // weighted average
+  let totalKWH = 0;
+  for (let b = 0; b < 6; b++) {
+    totalKWH += wd[b] * blockHrs[b] * 261; // weekday days
+    totalKWH += we[b] * blockHrs[b] * 104; // weekend days
+  }
+  const avgDemand = totalKWH / 8760;
+  const loadFactor = peak > 0 ? (avgDemand / peak) : 0;
+  const baseLoad = Math.min(wd[0], wd[5], we[0], we[5]);
+  const basePct = peak > 0 ? (baseLoad / peak * 100) : 0;
+
+  document.getElementById('demand-metrics').innerHTML = `
+    <div class="metric-box"><div class="mv">${fmt(peak)}</div><div class="ml">Peak kW</div></div>
+    <div class="metric-box"><div class="mv">${fmt(minD)}</div><div class="ml">Min kW</div></div>
+    <div class="metric-box"><div class="mv">${avgDemand.toFixed(0)}</div><div class="ml">Avg kW</div></div>
+    <div class="metric-box"><div class="mv">${(loadFactor*100).toFixed(1)}%</div><div class="ml">Load Factor</div></div>
+    <div class="metric-box"><div class="mv">${fmt(baseLoad)}</div><div class="ml">Base Load kW</div></div>
+    <div class="metric-box"><div class="mv" style="color:${basePct>30?'var(--warning)':'var(--success)'}">${basePct.toFixed(1)}%</div><div class="ml">Base %</div></div>
+    <div class="metric-box"><div class="mv">${fmt(Math.round(totalKWH))}</div><div class="ml">Est. Ann kWh</div></div>
+  `;
+  save();
+}
+
+// ========== FLAGS ==========
+function toggleFlag(btn) {
+  const path = btn.dataset.flag.split('.');
+  let obj = appState;
+  for (let i = 0; i < path.length - 1; i++) obj = obj[path[i]];
+  obj[path[path.length - 1]] = !obj[path[path.length - 1]];
+  btn.classList.toggle('active');
+  save();
+}
+
+function updateFlagButtons() {
+  document.querySelectorAll('.flag-btn[data-flag]').forEach(btn => {
+    const path = btn.dataset.flag.split('.');
+    let obj = appState;
+    for (let i = 0; i < path.length - 1; i++) { if (!obj[path[i]]) return; obj = obj[path[i]]; }
+    if (obj[path[path.length - 1]]) btn.classList.add('active');
+  });
+}
+
+// ========== REQUIRED FIELD HIGHLIGHTING ==========
+function highlightRequired() {
+  const requiredPaths = [
+    'settings.auditorName','settings.companyName',
+    'project.buildingName','project.address','project.city','project.grossArea','project.auditDate',
+    'project.clientCompany'
+  ];
+  document.querySelectorAll('[data-bind]').forEach(el => {
+    const bind = el.getAttribute('data-bind');
+    if (!requiredPaths.includes(bind)) return;
+    const path = bind.split('.');
+    let obj = appState;
+    for (let i = 0; i < path.length - 1; i++) { if (!obj[path[i]]) return; obj = obj[path[i]]; }
+    const val = obj[path[path.length - 1]];
+    if (!val || val === '' || val === 0) {
+      el.classList.add('required-empty');
+    } else {
+      el.classList.remove('required-empty');
+    }
+  });
+}
+// ========== PHOTOS ==========
+function openPhotoModal(section) {
+  currentPhotoSection = section;
+  document.getElementById('photo-modal').classList.add('show');
+  document.getElementById('photo-file').value = '';
+  document.getElementById('photo-caption').value = '';
+  document.getElementById('photo-preview').innerHTML = '';
+  document.getElementById('photo-tag').value = section.charAt(0).toUpperCase() + section.slice(1);
+}
+
+function closePhotoModal() {
+  document.getElementById('photo-modal').classList.remove('show');
+}
+
+  document.getElementById('photo-file').addEventListener('change', function(e) {
+    const files = e.target.files;
+    if (!files.length) return;
+    const preview = document.getElementById('photo-preview');
+    preview.innerHTML = '';
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        preview.innerHTML += `<img src="${ev.target.result}" style="max-width:120px;max-height:120px;border-radius:6px;border:1px solid var(--border);">`;
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  function savePhoto() {
+  const fileInput = document.getElementById('photo-file');
+  const files = fileInput.files;
+  if (!files.length) { alert('Please select at least one photo'); return; }
+  const section = currentPhotoSection;
+  const caption = document.getElementById('photo-caption').value;
+  const tag = document.getElementById('photo-tag').value;
+  const photoType = document.getElementById('photo-type').value;
+  const flag = document.getElementById('photo-flag').value;
+  const equipment = document.getElementById('photo-equipment').value;
+  let loaded = 0;
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      if (!appState.photos[section]) appState.photos[section] = [];
+      appState.photos[section].push({
+        data: ev.target.result,
+        caption: caption,
+        tag: tag,
+        photoType: photoType,
+        flag: flag,
+        equipment: equipment,
+        date: new Date().toISOString()
+      });
+      loaded++;
+      if (loaded === files.length) {
+        save();
+        renderPhotos();
+        closePhotoModal();
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+    function renderPhotos() {
+      ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(sec => {
+        const el = document.getElementById('photos-' + sec);
+        if (!el || !appState.photos[sec]) return;
+        el.innerHTML = appState.photos[sec].map((p, i) => {
+          const typeClass = 'photo-type-' + (p.photoType||'overview').toLowerCase();
+          return `<div class="photo-thumb">
+            <img src="${p.data}">
+            <span class="photo-type-badge ${typeClass}">${p.photoType||'Overview'}</span>
+            <div class="photo-caption">${p.equipment?p.equipment+': ':''}${p.caption||p.tag} | ${p.flag}</div>
+            <div class="photo-del" onclick="appState.photos.${sec}.splice(${i},1);save();renderPhotos();">✕</div>
+          </div>`;
+        }).join('');
+      });
+    }
+
+// ========== ECM TABLE ==========
+function buildECMTable() {
+  const body = document.getElementById('ecm-body');
+  const totalElecCost = appState.utility.rows.reduce((s, r) => s + (parseFloat(r.ecost)||0), 0);
+  const totalGasCost = appState.utility.rows.reduce((s, r) => s + (parseFloat(r.gcost)||0), 0);
+  const totalCost = totalElecCost + totalGasCost;
+
+  body.innerHTML = ECM_LIB.map(ecm => {
+    const selected = appState.ecmSelections[ecm.id] || false;
+    const userCost = appState.ecmCosts[ecm.id] || '';
+    const midPct = (ecm.lo + ecm.hi) / 2 / 100;
+    let sysCostShare = totalCost * 0.1;
+    if (ecm.sys === 'Lighting') sysCostShare = totalElecCost * 0.25;
+    else if (ecm.sys === 'HVAC') sysCostShare = totalElecCost * 0.40 + totalGasCost * 0.6;
+    else if (ecm.sys === 'Envelope') sysCostShare = totalElecCost * 0.15 + totalGasCost * 0.3;
+    else if (ecm.sys === 'DHW') sysCostShare = totalGasCost * 0.15 + totalElecCost * 0.02;
+    else if (ecm.sys === 'Plug Loads') sysCostShare = totalElecCost * 0.15;
+    else if (ecm.sys === 'Electrical') sysCostShare = totalElecCost * 0.05;
+    const annSavings = Math.round(sysCostShare * midPct);
+    const cost = parseFloat(userCost) || 0;
+    const payback = cost > 0 && annSavings > 0 ? (cost / annSavings).toFixed(1) + ' yr' : '—';
+    const qwBadge = ecm.quickWin ? '<span class="badge badge-green" style="margin-left:4px;">QUICK WIN</span>' : '';
+    return `<tr style="${selected?'background:var(--accent-light);':''}" title="${ecm.impact||''}">
+      <td style="font-family:var(--mono);font-weight:700;">${ecm.id}</td>
+      <td>${ecm.sys}</td>
+      <td>${ecm.title}${qwBadge}<br><span style="font-size:.7rem;color:var(--text-muted);">${ecm.typicalROI||''} ROI | ${ecm.ref}</span></td>
+      <td style="font-family:var(--mono);">${ecm.range}</td>
+      <td><span class="badge ${ecm.complexity==='Low'?'badge-green':ecm.complexity==='Medium'?'badge-amber':'badge-red'}">${ecm.complexity}</span></td>
+      <td><input type="number" value="${userCost}" onchange="appState.ecmCosts['${ecm.id}']=parseFloat(this.value)||0;save();buildECMTable();" style="width:80px;" placeholder="Est cost"></td>
+      <td style="font-family:var(--mono);">$${fmt(annSavings)}</td>
+      <td style="font-family:var(--mono);">${payback}</td>
+      <td><input type="checkbox" ${selected?'checked':''} onchange="appState.ecmSelections['${ecm.id}']=this.checked;save();buildECMTable();"></td>
+    </tr>`;
+  }).join('');
+}
+
+// ========== CHARTS ==========
+function renderCharts() {
+  // Destroy existing
+  Object.values(charts).forEach(c => { if (c) c.destroy(); });
+  charts = {};
+
+  const fontColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#1e293b';
+  const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e2e8f0';
+  Chart.defaults.color = fontColor;
+  Chart.defaults.borderColor = gridColor;
+  Chart.defaults.font.family = "'DM Sans', sans-serif";
+  Chart.defaults.font.size = 11;
+
+  // 1. Utility Trend
+  const months = appState.utility.rows.map(r => r.month || '');
+  const kwhData = appState.utility.rows.map(r => parseFloat(r.kwh)||0);
+  const costData = appState.utility.rows.map(r => parseFloat(r.ecost)||0);
+  if (kwhData.some(v => v > 0)) {
+    charts.utility = new Chart(document.getElementById('chart-utility'), {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          { label: 'kWh', data: kwhData, borderColor: '#0ea5e9', backgroundColor: 'rgba(14,165,233,.1)', fill: true, tension: 0.3 },
+          { label: 'Cost $', data: costData, borderColor: '#f59e0b', backgroundColor: 'transparent', tension: 0.3, yAxisID: 'y1' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'kWh' } }, y1: { position: 'right', beginAtZero: true, title: { display: true, text: '$' }, grid: { drawOnChartArea: false } } }
+      }
+    });
+  }
+
+  // 2. EUI Benchmark
+  const eui = calcEUI();
+  const bm = BENCHMARKS[appState.project.occupancyType] || BENCHMARKS['Office Large'];
+  if (eui !== null) {
+    charts.eui = new Chart(document.getElementById('chart-eui'), {
+      type: 'bar',
+      data: {
+        labels: ['Building', 'ENERGY STAR 75th', 'CBECS Median'],
+        datasets: [{ data: [eui, bm.es75, bm.median], backgroundColor: [eui<=bm.es75?'#10b981':eui<=bm.median?'#f59e0b':'#ef4444', '#0ea5e9', '#94a3b8'] }]
+      },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, title: { display: true, text: 'kBtu/ft²·yr' } } }
+      }
+    });
+  }
+
+  // 3. End-Use Breakdown (estimated)
+  const totalKWH = appState.utility.rows.reduce((s, r) => s + (parseFloat(r.kwh)||0), 0);
+  if (totalKWH > 0) {
+    charts.enduse = new Chart(document.getElementById('chart-enduse'), {
+      type: 'doughnut',
+      data: {
+        labels: ['HVAC Cooling', 'HVAC Heating', 'HVAC Fans', 'Lighting', 'Plug Loads', 'DHW', 'Other'],
+        datasets: [{ data: [30, 10, 12, 20, 18, 5, 5], backgroundColor: ['#0ea5e9','#ef4444','#8b5cf6','#f59e0b','#10b981','#ec4899','#94a3b8'] }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+  }
+
+  // 4. LPD by Space
+  if (appState.lighting.rows.length > 0) {
+    const spaces = appState.lighting.rows.filter(r => r.space && r.area);
+    if (spaces.length > 0) {
+      const labels = spaces.map(r => r.space);
+      const lpds = spaces.map(r => {
+        let areaM2 = parseFloat(r.area)||0;
+        if (r.areaUnit === 'ft²') areaM2 *= 0.0929;
+        return areaM2 > 0 ? ((parseFloat(r.count)||0) * (parseFloat(r.wpf)||0) / areaM2) : 0;
+      });
+      const benchVal = LPD_BUILDING[appState.project.occupancyType] || 11.06;
+      charts.lpd = new Chart(document.getElementById('chart-lpd'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Actual LPD', data: lpds, backgroundColor: lpds.map(v => v <= benchVal ? '#10b981' : '#ef4444') },
+            { label: 'ASHRAE Limit', data: Array(labels.length).fill(benchVal), type: 'line', borderColor: '#0ea5e9', borderDash: [5,3], pointRadius: 0, fill: false }
+          ]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, title: { display: true, text: 'W/m²' } } } }
+      });
+    }
+  }
+
+  // 5. ECM Savings
+  const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
+  if (selectedECMs.length > 0) {
+    const totalElecCost = appState.utility.rows.reduce((s, r) => s + (parseFloat(r.ecost)||0), 0);
+    const totalGasCost = appState.utility.rows.reduce((s, r) => s + (parseFloat(r.gcost)||0), 0);
+    const tc = totalElecCost + totalGasCost;
+    const ecmData = selectedECMs.map(ecm => {
+      const midPct = (ecm.lo + ecm.hi) / 2 / 100;
+      let share = tc * 0.1;
+      if (ecm.sys === 'Lighting') share = totalElecCost * 0.25;
+      else if (ecm.sys === 'HVAC') share = totalElecCost * 0.40 + totalGasCost * 0.6;
+      else if (ecm.sys === 'Envelope') share = totalElecCost * 0.15 + totalGasCost * 0.3;
+      else if (ecm.sys === 'DHW') share = totalGasCost * 0.15 + totalElecCost * 0.02;
+      else if (ecm.sys === 'Plug Loads') share = totalElecCost * 0.15;
+      else if (ecm.sys === 'Electrical') share = totalElecCost * 0.05;
+      return { label: ecm.id + ' ' + ecm.title, savings: Math.round(share * midPct), sys: ecm.sys };
+    }).sort((a,b) => b.savings - a.savings);
+    const sysColors = {'Lighting':'#f59e0b','HVAC':'#0ea5e9','Envelope':'#8b5cf6','DHW':'#ec4899','Plug Loads':'#10b981','Electrical':'#ef4444'};
+    charts.ecm = new Chart(document.getElementById('chart-ecm'), {
+      type: 'bar',
+      data: {
+        labels: ecmData.map(d => d.label),
+        datasets: [{ data: ecmData.map(d => d.savings), backgroundColor: ecmData.map(d => sysColors[d.sys]||'#94a3b8') }]
+      },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, title: { display: true, text: 'Annual Savings $' } } }
+      }
+    });
+  }
+
+  // 6. Demand Profile
+  const d = appState.demand;
+  const wdVals = [parseFloat(d.wd0)||0,parseFloat(d.wd1)||0,parseFloat(d.wd2)||0,parseFloat(d.wd3)||0,parseFloat(d.wd4)||0,parseFloat(d.wd5)||0];
+  const weVals = [parseFloat(d.we0)||0,parseFloat(d.we1)||0,parseFloat(d.we2)||0,parseFloat(d.we3)||0,parseFloat(d.we4)||0,parseFloat(d.we5)||0];
+  if (wdVals.some(v => v > 0)) {
+    charts.demand = new Chart(document.getElementById('chart-demand'), {
+      type: 'bar',
+      data: {
+        labels: ['0-6h','6-9h','9-12h','12-17h','17-21h','21-24h'],
+        datasets: [
+          { label: 'Weekday', data: wdVals, backgroundColor: '#0ea5e9' },
+          { label: 'Weekend', data: weVals, backgroundColor: '#94a3b8' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'kW' } } } }
+    });
+  }
+
+  // 7. Transformer Utilization
+  if (appState.electrical.transformers.length > 0) {
+    const xfmrs = appState.electrical.transformers;
+    charts.xfmr = new Chart(document.getElementById('chart-xfmr'), {
+      type: 'bar',
+      data: {
+        labels: xfmrs.map(t => t.tag),
+        datasets: [{ label: 'Utilization %', data: xfmrs.map(t => {
+          const rated = parseFloat(t.ratedKVA)||1;
+          const meas = parseFloat(t.measKVA)||0;
+          return (meas/rated*100).toFixed(1);
+        }), backgroundColor: xfmrs.map(t => {
+          const u = (parseFloat(t.measKVA)||0)/(parseFloat(t.ratedKVA)||1)*100;
+          return u>100?'#ef4444':u>80?'#f59e0b':u>40?'#10b981':'#94a3b8';
+        }) }]
+      },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, max: 120, title: { display: true, text: '%' } } }
+      }
+    });
+  }
+
+  // 8. Power Factor Gauge
+  const pf = parseFloat(appState.pq.meterPF) || parseFloat(appState.pq.logTruePF) || 0;
+  if (pf > 0) {
+    charts.pf = new Chart(document.getElementById('chart-pf'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Power Factor', 'Remaining'],
+        datasets: [{ data: [pf, 1 - pf], backgroundColor: [pf >= 0.95 ? '#10b981' : pf >= 0.90 ? '#f59e0b' : '#ef4444', '#e2e8f0'], circumference: 180, rotation: 270 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false },
+        tooltip: { enabled: false } }
+      },
+      plugins: [{
+        id: 'pfText',
+        afterDraw(chart) {
+          const { ctx, chartArea } = chart;
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.font = 'bold 24px JetBrains Mono';
+          ctx.fillStyle = fontColor;
+          ctx.fillText(pf.toFixed(3), chartArea.left + chartArea.width/2, chartArea.top + chartArea.height * 0.7);
+          ctx.font = '12px DM Sans';
+          ctx.fillText('Target: 0.950', chartArea.left + chartArea.width/2, chartArea.top + chartArea.height * 0.82);
+          ctx.restore();
+        }
+      }]
+    });
+  }
+
+  // 9. Load by Category
+  if (appState.loads.length > 0) {
+    const cats = {};
+    const rate = parseFloat(appState.utility.elecRate) || 0.10;
+    appState.loads.forEach(l => {
+      const kw = parseFloat(l.measKW)||0;
+      const annHrs = (parseFloat(l.hpd)||0)*(parseFloat(l.dpw)||0)*(parseFloat(l.wpy)||0);
+      const cat = l.category || 'Other';
+      cats[cat] = (cats[cat]||0) + kw * annHrs;
+    });
+    const sorted = Object.entries(cats).sort((a,b) => b[1]-a[1]);
+    charts.loadcat = new Chart(document.getElementById('chart-loadcat'), {
+      type: 'bar',
+      data: {
+        labels: sorted.map(s => s[0]),
+        datasets: [{ label: 'Annual kWh', data: sorted.map(s => Math.round(s[1])), backgroundColor: '#0ea5e9' }]
+      },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true } }
+      }
+    });
+
+    // 10. Operating Mode
+    const modes = {};
+    appState.loads.forEach(l => {
+      const kw = parseFloat(l.measKW)||0;
+      const m = l.mode || 'Other';
+      modes[m] = (modes[m]||0) + kw;
+    });
+    const modeColors = {'24/7 Continuous':'#0ea5e9','Business Hours 8am-6pm':'#10b981','Partial Day':'#f59e0b','Standby/Backup-normally off':'#94a3b8','Decommissioned-still connected':'#ef4444','Seasonal':'#8b5cf6','Cyclic':'#ec4899','Manual/Unscheduled':'#64748b'};
+    charts.opmode = new Chart(document.getElementById('chart-opmode'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(modes),
+        datasets: [{ data: Object.values(modes), backgroundColor: Object.keys(modes).map(k => modeColors[k]||'#94a3b8') }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+  }
+
+  // 11. Harmonics
+  if (appState.pq.srcLogger) {
+    document.getElementById('pq-charts-row').style.display = '';
+    const orders = ['H3','H5','H7','H9','H11','H13','H17','H19','H23','H25'];
+    const vData = orders.map(h => parseFloat(appState.pq['hV'+h.substring(1)])||0);
+    const iData = orders.map(h => parseFloat(appState.pq['hI'+h.substring(1)])||0);
+    if (iData.some(v => v > 0)) {
+      charts.harmonics = new Chart(document.getElementById('chart-harmonics'), {
+        type: 'bar',
+        data: {
+          labels: orders,
+          datasets: [
+            { label: 'Voltage %', data: vData, backgroundColor: '#0ea5e9' },
+            { label: 'Current %', data: iData, backgroundColor: '#ef4444' }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: '% fundamental' } } } }
+      });
+    }
+    // Voltage events
+    const evData = [parseFloat(appState.pq.sagsCount)||0, parseFloat(appState.pq.swellsCount)||0, parseFloat(appState.pq.interruptCount)||0, parseFloat(appState.pq.transientCount)||0];
+    if (evData.some(v => v > 0)) {
+      charts.voltevents = new Chart(document.getElementById('chart-voltevents'), {
+        type: 'bar',
+        data: {
+          labels: ['Sags','Swells','Interruptions','Transients'],
+          datasets: [{ data: evData, backgroundColor: ['#f59e0b','#0ea5e9','#ef4444','#8b5cf6'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+  } else {
+    document.getElementById('pq-charts-row').style.display = 'none';
+  }
+
+  // 12. Transformer Losses
+  if (appState.electrical.transformers.length > 0) {
+    const xfmrs = appState.electrical.transformers;
+    const rate = parseFloat(appState.utility.elecRate) || 0.10;
+    charts.xfmrloss = new Chart(document.getElementById('chart-xfmrloss'), {
+      type: 'bar',
+      data: {
+        labels: xfmrs.map(t => t.tag),
+        datasets: [
+          { label: 'Iron Loss kWh/yr', data: xfmrs.map(t => Math.round((parseFloat(t.ironLoss)||0)/1000*8760)), backgroundColor: '#0ea5e9' },
+          { label: 'Copper Loss kWh/yr', data: xfmrs.map(t => {
+            const rated = parseFloat(t.ratedKVA)||1;
+            const meas = parseFloat(t.measKVA)||0;
+            const cuNP = parseFloat(t.copperLoss)||0;
+            return Math.round(cuNP * Math.pow(meas/rated,2) / 1000 * 8760);
+          }), backgroundColor: '#f59e0b' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, scales: { x: {}, y: { beginAtZero: true, stacked: true, title: { display: true, text: 'kWh/yr' } } }, plugins: { legend: { position: 'top' } } }
+    });
+  }
+}
+
+// ========== LOGO UPLOAD ==========
+function handleLogoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    appState.settings.companyLogo = ev.target.result;
+    document.getElementById('logo-preview').innerHTML = `<img src="${ev.target.result}" style="max-height:50px;">`;
+    save();
+  };
+  reader.readAsDataURL(file);
+}
+function updateCompanyLogo() {
+  readBindings();
+  const url = appState.settings.companyLogoURL;
+  if (url) {
+    appState.settings.companyLogo = url;
+    document.getElementById('logo-preview').innerHTML = `<img src="${url}" style="max-height:50px;" onerror="this.style.display='none'">`;
+    save();
+  }
+}
+
+function handleClientLogoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    appState.project.clientLogo = ev.target.result;
+    document.getElementById('client-logo-preview').innerHTML = `<img src="${ev.target.result}" style="max-height:50px;">`;
+    save();
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateClientLogo() {
+  readBindings();
+  const url = appState.project.clientLogoURL;
+  if (url) {
+    appState.project.clientLogo = url;
+    document.getElementById('client-logo-preview').innerHTML = `<img src="${url}" style="max-height:50px;" onerror="this.style.display='none'">`;
+    save();
+  }
+}
+// ========== EXPORT/IMPORT ==========
+function exportJSON() {
+  readBindings();
+  const blob = new Blob([JSON.stringify(appState, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'AuditFlow_' + (appState.project.buildingName || 'project').replace(/\s/g, '_') + '.json';
+  a.click();
+}
+
+function importJSON(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      appState = JSON.parse(ev.target.result);
+      save();
+      location.reload();
+    } catch(err) { alert('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+}
+
+// ========== AI INFERENCE ==========
+async function generateAIAnalysis(mode) {
+  readBindings();
+  const statusEl = document.getElementById('ai-status');
+  const outputEl = document.getElementById('ai-output');
+  const apiKey = appState.settings.aiApiKey;
+  if (!apiKey) { alert('Please enter a Gemini API key in Settings'); return; }
+
+  statusEl.innerHTML = '<span class="ai-loading">⏳ Generating analysis...</span>';
+
+  const p = appState.project;
+  const s = appState.settings;
+  const eui = calcEUI();
+  const bm = BENCHMARKS[p.occupancyType] || BENCHMARKS['Office Large'];
+  const totalKWH = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.kwh)||0),0);
+  const totalGas = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.gas)||0),0);
+  const totalElecCost = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.ecost)||0),0);
+  const totalGasCost = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.gcost)||0),0);
+  const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
+  const pf = parseFloat(appState.pq.meterPF) || parseFloat(appState.pq.logTruePF) || 0;
+
+  let dataContext = `Building: ${p.buildingName}, ${p.address} ${p.city} ${p.state}
+Type: ${p.occupancyType}, ${p.floors} floors, ${p.grossArea} ${p.areaUnit}, Built ${p.yearBuilt}
+Climate Zone: ${s.climateZone}, ASHRAE Level: ${s.ashraeLevel}
+Client: ${p.clientCompany||'N/A'}
+Annual kWh: ${totalKWH}, Annual Therms: ${totalGas}
+Annual Elec Cost: $${totalElecCost}, Annual Gas Cost: $${totalGasCost}
+EUI: ${eui?eui.toFixed(1):'N/A'} kBtu/ft²·yr (Benchmark median: ${bm.median}, ES75: ${bm.es75})
+HVAC: ${appState.hvac.rows.map(r=>r.name+' '+r.type+' '+r.cap+r.capUnit+' '+r.refrigerant+' '+r.condition).join('; ')}
+Lighting: ${appState.lighting.rows.length} zones, ${appState.lighting.rows.filter(r=>r.fixture&&r.fixture.includes('LED')).length} LED
+Envelope: Wall ${appState.envelope.wallConst}/${appState.envelope.wallIns}, Roof ${appState.envelope.roofType}/${appState.envelope.roofColor}, Windows ${appState.envelope.windowType}, Condition ${appState.envelope.condition}
+Power Factor: ${pf||'N/A'}, THD-I: ${appState.pq.thdIAvg||'N/A'}%
+Selected ECMs: ${selectedECMs.map(e=>e.id+' '+e.title+' ('+e.range+')').join('; ')}
+Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kVA util='+(parseFloat(t.measKVA)||0)/(parseFloat(t.ratedKVA)||1)*100+'%').join('; ')}`;
+
+  let prompt = '';
+  if (mode === 'executive') {
+    prompt = `You are an ASHRAE-certified energy auditor writing a professional Level ${s.ashraeLevel} energy audit report. Write an executive summary (3-4 paragraphs) for this building based on the data below. Include EUI comparison to benchmarks, key findings, estimated savings potential, and priority recommendations. Be specific with numbers. Use professional energy engineering language.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'findings') {
+    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed "Key Findings" section (5-8 bullet points expanded into paragraphs) for this Level ${s.ashraeLevel} energy audit. Focus on deficiencies, code compliance gaps, aging equipment, efficiency opportunities. Be specific with data.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'ecm') {
+    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed ECM analysis section for this Level ${s.ashraeLevel} audit. For each selected ECM, provide: description, technical basis, estimated savings methodology, implementation considerations, and priority ranking. Group by system.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'electrical') {
+    prompt = `You are an electrical engineer writing the electrical systems analysis section of an ASHRAE Level ${s.ashraeLevel} energy audit. Cover: power quality (PF, harmonics, voltage), transformer loading and losses, load profile analysis, demand management opportunities. Be specific with measured data.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'full') {
+    prompt = `You are an ASHRAE-certified energy auditor. Write a complete narrative for an ASHRAE Level ${s.ashraeLevel} energy audit report including: Executive Summary, Building Description, Utility Analysis, Envelope Assessment, Lighting Assessment, HVAC Assessment, Electrical Systems Assessment, Key Findings, and ECM Recommendations. Be thorough and professional. Use specific data.\n\nDATA:\n${dataContext}`;
+  }
+
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
+      })
+    });
+    const data = await resp.json();
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+      const text = data.candidates[0].content.parts.map(p => p.text).join('\n');
+      outputEl.value = text;
+      appState.aiDraft = text;
+      save();
+      statusEl.innerHTML = '<span class="badge badge-green">✓ Generated — review and edit below</span>';
+    } else {
+      statusEl.innerHTML = '<span class="badge badge-red">Error: ' + (data.error?.message || 'No response from API') + '</span>';
+    }
+  } catch(err) {
+    statusEl.innerHTML = '<span class="badge badge-red">Error: ' + err.message + '</span>';
+  }
+}
+// ========== AI INFERENCE ==========
+async function generateAIAnalysis(mode) {
+  readBindings();
+  const statusEl = document.getElementById('ai-status');
+  const outputEl = document.getElementById('ai-output');
+  const apiKey = appState.settings.aiApiKey;
+  if (!apiKey) { alert('Please enter a Gemini API key in Settings'); return; }
+
+  statusEl.innerHTML = '<span class="ai-loading">⏳ Generating analysis...</span>';
+
+  const p = appState.project;
+  const s = appState.settings;
+  const eui = calcEUI();
+  const bm = BENCHMARKS[p.occupancyType] || BENCHMARKS['Office Large'];
+  const totalKWH = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.kwh)||0),0);
+  const totalGas = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.gas)||0),0);
+  const totalElecCost = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.ecost)||0),0);
+  const totalGasCost = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.gcost)||0),0);
+  const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
+  const pf = parseFloat(appState.pq.meterPF) || parseFloat(appState.pq.logTruePF) || 0;
+
+  let dataContext = `Building: ${p.buildingName}, ${p.address} ${p.city} ${p.state}
+Type: ${p.occupancyType}, ${p.floors} floors, ${p.grossArea} ${p.areaUnit}, Built ${p.yearBuilt}
+Climate Zone: ${s.climateZone}, ASHRAE Level: ${s.ashraeLevel}
+Client: ${p.clientCompany||'N/A'}
+Annual kWh: ${totalKWH}, Annual Therms: ${totalGas}
+Annual Elec Cost: $${totalElecCost}, Annual Gas Cost: $${totalGasCost}
+EUI: ${eui?eui.toFixed(1):'N/A'} kBtu/ft²·yr (Benchmark median: ${bm.median}, ES75: ${bm.es75})
+HVAC: ${appState.hvac.rows.map(r=>r.name+' '+r.type+' '+r.cap+r.capUnit+' '+r.refrigerant+' '+r.condition).join('; ')}
+Lighting: ${appState.lighting.rows.length} zones, ${appState.lighting.rows.filter(r=>r.fixture&&r.fixture.includes('LED')).length} LED
+Envelope: Wall ${appState.envelope.wallConst}/${appState.envelope.wallIns}, Roof ${appState.envelope.roofType}/${appState.envelope.roofColor}, Windows ${appState.envelope.windowType}, Condition ${appState.envelope.condition}
+Power Factor: ${pf||'N/A'}, THD-I: ${appState.pq.thdIAvg||'N/A'}%
+Selected ECMs: ${selectedECMs.map(e=>e.id+' '+e.title+' ('+e.range+')').join('; ')}
+Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kVA util='+(parseFloat(t.measKVA)||0)/(parseFloat(t.ratedKVA)||1)*100+'%').join('; ')}`;
+
+  let prompt = '';
+  if (mode === 'executive') {
+    prompt = `You are an ASHRAE-certified energy auditor writing a professional Level ${s.ashraeLevel} energy audit report. Write an executive summary (3-4 paragraphs) for this building based on the data below. Include EUI comparison to benchmarks, key findings, estimated savings potential, and priority recommendations. Be specific with numbers. Use professional energy engineering language.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'findings') {
+    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed "Key Findings" section (5-8 bullet points expanded into paragraphs) for this Level ${s.ashraeLevel} energy audit. Focus on deficiencies, code compliance gaps, aging equipment, efficiency opportunities. Be specific with data.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'ecm') {
+    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed ECM analysis section for this Level ${s.ashraeLevel} audit. For each selected ECM, provide: description, technical basis, estimated savings methodology, implementation considerations, and priority ranking. Group by system.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'electrical') {
+    prompt = `You are an electrical engineer writing the electrical systems analysis section of an ASHRAE Level ${s.ashraeLevel} energy audit. Cover: power quality (PF, harmonics, voltage), transformer loading and losses, load profile analysis, demand management opportunities. Be specific with measured data.\n\nDATA:\n${dataContext}`;
+  } else if (mode === 'full') {
+    prompt = `You are an ASHRAE-certified energy auditor. Write a complete narrative for an ASHRAE Level ${s.ashraeLevel} energy audit report including: Executive Summary, Building Description, Utility Analysis, Envelope Assessment, Lighting Assessment, HVAC Assessment, Electrical Systems Assessment, Key Findings, and ECM Recommendations. Be thorough and professional. Use specific data.\n\nDATA:\n${dataContext}`;
+  }
+
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
+      })
+    });
+    const data = await resp.json();
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+      const text = data.candidates[0].content.parts.map(p => p.text).join('\n');
+      outputEl.value = text;
+      appState.aiDraft = text;
+      save();
+      statusEl.innerHTML = '<span class="badge badge-green">✓ Generated — review and edit below</span>';
+    } else {
+      statusEl.innerHTML = '<span class="badge badge-red">Error: ' + (data.error?.message || 'No response from API') + '</span>';
+    }
+  } catch(err) {
+    statusEl.innerHTML = '<span class="badge badge-red">Error: ' + err.message + '</span>';
+  }
+}
+// ========== DEMO DATA ==========
+function loadDemo() {
+  if (!confirm('Load demo project? This will overwrite current data.')) return;
+  appState.settings = {auditorName:'Jane Smith, PE, CEM',companyName:'Energy Solutions LLC',companyLogo:'',climateZone:'2A',units:'IP'};
+  appState.project = {buildingName:'Greenfield Office Complex',address:'1200 Commerce Blvd',city:'Houston',state:'TX',country:'USA',yearBuilt:1998,floors:5,grossArea:85000,areaUnit:'ft²',occupancyType:'Office Large',contact:'Mike Johnson',phone:'713-555-0123',auditDate:'2026-05-09'};
+  const months = ['Jan 2025','Feb 2025','Mar 2025','Apr 2025','May 2025','Jun 2025','Jul 2025','Aug 2025','Sep 2025','Oct 2025','Nov 2025','Dec 2025'];
+  const kwhs = [285000,270000,295000,340000,410000,490000,530000,515000,460000,360000,300000,278000];
+  const gas = [1200,1050,800,400,120,60,60,60,120,400,900,1150];
+  appState.utility.elecRate = 0.10; appState.utility.gasRate = 1.20;
+  appState.utility.rows = months.map((m,i) => ({month:m,kwh:kwhs[i],ecost:kwhs[i]*0.10,pkw:0,gas:gas[i],gcost:gas[i]*1.20,notes:''}));
+  appState.lighting.rows = [
+    {space:'Open Plan Office',area:40000,areaUnit:'ft²',fixture:'T8 Fluor',count:800,wpf:32,control:'Manual',hpd:10,dpy:261,pctLed:5,condition:'Fair'},
+    {space:'Conference Rooms',area:5000,areaUnit:'ft²',fixture:'T8 Fluor',count:60,wpf:32,control:'Manual',hpd:8,dpy:261,pctLed:0,condition:'Fair'},
+    {space:'Lobby',area:3000,areaUnit:'ft²',fixture:'LED Downlight',count:40,wpf:18,control:'Always On',hpd:14,dpy:365,pctLed:100,condition:'Good'}
+  ];
+  appState.hvac.rows = [
+    {name:'RTU-1',type:'Packaged RTU/VAV',cap:60,capUnit:'tons',year:2005,condition:'Fair',refrigerant:'R-22',eff:9.8,effUnit:'EER',controls:'Programmable',economizer:'No',notes:'Aging, R-22 phase-out concern'},
+    {name:'Chiller-1',type:'Chilled Water',cap:400,capUnit:'tons',year:2001,condition:'Poor',refrigerant:'R-134a',eff:0.72,effUnit:'kW/ton',controls:'BAS',economizer:'No',notes:'End of useful life, low efficiency'}
+  ];
+  appState.hvac.replaceOld = true; appState.hvac.refrigerant = true; appState.hvac.vfd = true;
+  appState.lighting.ledRetrofit = true; appState.lighting.occSensors = true;
+  appState.envelope = {wallConst:'Steel Frame',wallIns:'Fiberglass Batts',roofType:'Single-Ply Membrane',roofIns:'Rigid Board Above Deck',roofColor:'Dark',windowType:'Double Clear',windowFrame:'Aluminum No Break',wwr:40,infiltration:'Average',condition:'Fair',notes:'Roof membrane showing wear. Windows original 1998, no low-E.',airSealing:true,coolRoof:true,addInsulation:false,windowUpgrade:true,shading:false};
+  appState.dhw = {type:'Gas Storage',capacity:120,capacityUnit:'gallons',inputRating:75,inputUnit:'kBtu/h',year:2010,efficiency:0.62,effUnit:'EF',pipingInsulated:'Partial',recirculation:'Yes',recircControls:'Continuous',dailyUse:300,notes:'Continuous recirc pump — timer recommended',insulatePipes:true,tankless:false,hpwh:false,recircTimer:true,reduceTemp:false};
+  appState.plugloads.rows = PLUG_DEFAULTS.map((d,i) => ({...d,count:[450,450,30,4,8,6,10,12][i]||0,powerMgmt:[false,false,false,false,false,false,false,false][i]}));
+  appState.plugloads.powerMgmt = true; appState.plugloads.smartStrips = true;
+  appState.electrical.transformers = [{tag:'TR-1',type:'Dry',ratedKVA:2000,year:1999,priV:13800,secV:480,ironLoss:3200,copperLoss:18000,measKW:680,measKVAR:510,measKVA:850,measPF:0.84,tempRise:'115°C',condition:'Fair'}];
+  appState.electrical.vL1 = 479; appState.electrical.vL2 = 481; appState.electrical.vL3 = 478;
+  appState.electrical.nomVoltage = 480; appState.electrical.voltUnit = 'V'; appState.electrical.voltLevel = 'LV';
+  appState.electrical.frequency = 60; appState.electrical.phases = '3-Phase'; appState.electrical.supplyType = 'Utility Grid';
+  appState.electrical.apfc = true; appState.electrical.vfdMotors = true; appState.electrical.harmonicFilter = true;
+  appState.electrical.reduceBaseLoad = true;
+  appState.pq = {srcBill:true,srcMeter:true,srcLogger:true,billPeakKW:1050,billPFPenalty:'Yes',billPenalty:850,billPFThreshold:0.90,
+    meterDate:'2026-05-01T14:00',meterKW:680,meterKVAR:510,meterKVA:850,meterPF:0.84,meterVL1:479,meterVL2:481,meterVL3:478,meterIL1:1022,meterIL2:1018,meterIL3:1025,
+    loggerModel:'Fluke 1760',loggerPeriod:'7 days',loggerPoint:'Main MSB',logAvgV:479.3,logMinV:462,logMaxV:488,logVImbal:0.42,logAvgKW:580,logPeakKW:1050,logMinKW:185,logAvgKVAR:435,logAvgKVA:725,logDPF:0.86,logMinPF:0.78,logTruePF:0.84,
+    thdVL1:3.2,thdVL2:3.1,thdVL3:3.4,thdVAvg:3.23,thdIL1:18.2,thdIL2:18.8,thdIL3:18.5,thdIAvg:18.5,
+    hV3:1.2,hV5:2.4,hV7:1.8,hV9:0.5,hV11:0.8,hV13:0.4,hV17:0.2,hV19:0.1,hV23:0.1,hV25:0.05,
+    hI3:3.2,hI5:14.8,hI7:9.1,hI9:2.1,hI11:4.2,hI13:2.8,hI17:1.5,hI19:1.0,hI23:0.8,hI25:0.5,
+    ieee519:'Non-Compliant',harmonicSource:'VFDs on chiller and AHU',kFactor:8.4,
+    sagsCount:12,sagsWorstMag:72,sagsWorstDur:450,swellsCount:3,swellsWorstMag:112,swellsWorstDur:200,interruptCount:1,interruptDur:2000,transientCount:5,transientWorst:650,
+    neutralCurrent:340,neutralOverloaded:'Yes',pst:0.8,plt:0.6,
+    pfcInstalled:'No',pfcType:'Fixed Capacitor',pfcKVAR:'',pfcCondition:'Good'};
+  appState.demand = {wd0:185,wd1:520,wd2:950,wd3:1050,wd4:620,wd5:210,we0:180,we1:195,we2:320,we3:350,we4:230,we5:185};
+  appState.loads = [
+    {name:'Chiller-1',category:'HVAC-Chiller',npKW:422,measKW:380,measPF:0.88,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'VFD',condition:'Poor',notes:''},
+    {name:'AHU-1 Fan',category:'HVAC-AHU-Fan',npKW:45,measKW:42,measPF:0.85,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',condition:'Fair',notes:'IE1 motor — upgrade candidate'},
+    {name:'IT UPS',category:'UPS',npKW:80,measKW:65,measPF:0.92,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'None',condition:'Good',notes:''},
+    {name:'Lighting Panel LP-1',category:'Lighting-Interior',npKW:96,measKW:88,measPF:0.95,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'Timer',condition:'Fair',notes:''},
+    {name:'Emergency Gen',category:'Standby Generator',npKW:500,measKW:0,measPF:0.80,mode:'Standby/Backup-normally off',hpd:0.5,dpw:1,wpy:52,control:'Manual',condition:'Good',notes:'Monthly test runs only'}
+  ];
+  appState.ecmSelections = {L01:true,L02:true,H04:true,H05:true,H08:true,E02:true,EL01:true,EL04:true,EL10:true,EL13:true,W02:true,P01:true};
+  save();
+  bindAll();
+  updateFlagButtons();
+  buildUtilityTable();
+  renderLightingRows();
+  renderHVACRows();
+  renderPlugRows();
+  renderTransformers();
+  renderPanels();
+  renderLoadTable();
+  updateTopbar();
+  calcUtility();
+  calcDemand();
+  calcVoltImbalance();
+  togglePQSection();
+  calcPQ();
+  updateDashSummary();
+  updateProgress();
+  buildECMTable();
+  showSection('dashboard');
+}
+
+// ========== REPORT GENERATION ==========
+function generateReport() {
+  readBindings();
+  const p = appState.project;
+  const s = appState.settings;
+  const eui = calcEUI();
+  const bm = BENCHMARKS[p.occupancyType] || BENCHMARKS['Office Large'];
+  const totalElecCost = appState.utility.rows.reduce((sum, r) => sum + (parseFloat(r.ecost)||0), 0);
+  const totalGasCost = appState.utility.rows.reduce((sum, r) => sum + (parseFloat(r.gcost)||0), 0);
+  const totalKWH = appState.utility.rows.reduce((sum, r) => sum + (parseFloat(r.kwh)||0), 0);
+  const totalGas = appState.utility.rows.reduce((sum, r) => sum + (parseFloat(r.gas)||0), 0);
+
+  // Gather selected ECMs
+  const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
+  let ecmTableHTML = selectedECMs.map((ecm, idx) => {
+    const midPct = (ecm.lo+ecm.hi)/2/100;
+    let share = (totalElecCost+totalGasCost)*0.1;
+    if (ecm.sys==='Lighting') share=totalElecCost*0.25;
+    else if (ecm.sys==='HVAC') share=totalElecCost*0.40+totalGasCost*0.6;
+    else if (ecm.sys==='Envelope') share=totalElecCost*0.15+totalGasCost*0.3;
+    else if (ecm.sys==='DHW') share=totalGasCost*0.15+totalElecCost*0.02;
+    else if (ecm.sys==='Plug Loads') share=totalElecCost*0.15;
+    else if (ecm.sys==='Electrical') share=totalElecCost*0.05;
+    const annSav = Math.round(share*midPct);
+    const cost = parseFloat(appState.ecmCosts[ecm.id])||0;
+    const payback = cost>0&&annSav>0?(cost/annSav).toFixed(1)+' yr':'—';
+    return `<tr><td>${ecm.id}</td><td>${ecm.sys}</td><td>${ecm.title}</td><td>$${fmt(annSav)}</td><td>${ecm.costRange}</td><td>${payback}</td><td>${ecm.complexity}</td></tr>`;
+  }).join('');
+
+  // Gather flags as findings
+  let findings = [];
+  if (appState.lighting.ledRetrofit) findings.push('LED lighting retrofit recommended — current fixtures predominantly T8 fluorescent');
+  if (appState.hvac.replaceOld) findings.push('Aging HVAC equipment identified for replacement');
+  if (appState.hvac.refrigerant) findings.push('R-22 refrigerant phase-out concern — equipment replacement advised');
+  if (appState.electrical.apfc) findings.push('Power factor correction recommended — current PF below 0.90');
+  if (appState.electrical.harmonicFilter) findings.push('Harmonic distortion exceeds IEEE 519 limits — active filtering recommended');
+  if (appState.electrical.reduceBaseLoad) findings.push('High after-hours base load — scheduling and de-energization opportunities');
+  if (appState.envelope.coolRoof) findings.push('Cool roof coating recommended — dark roof in hot-humid climate zone');
+  if (appState.dhw.recircTimer) findings.push('DHW recirculation pump runs continuously — timer recommended');
+
+  let totalECMSavings = 0;
+  selectedECMs.forEach(ecm => {
+    const midPct = (ecm.lo+ecm.hi)/2/100;
+    let share = (totalElecCost+totalGasCost)*0.1;
+    if (ecm.sys==='Lighting') share=totalElecCost*0.25;
+    else if (ecm.sys==='HVAC') share=totalElecCost*0.40+totalGasCost*0.6;
+    else if (ecm.sys==='Envelope') share=totalElecCost*0.15+totalGasCost*0.3;
+    else if (ecm.sys==='DHW') share=totalGasCost*0.15+totalElecCost*0.02;
+    else if (ecm.sys==='Plug Loads') share=totalElecCost*0.15;
+    else if (ecm.sys==='Electrical') share=totalElecCost*0.05;
+    totalECMSavings += Math.round(share*midPct);
+  });
+
+  // Transformer table
+  let xfmrHTML = appState.electrical.transformers.map(t => {
+    const rKVA = parseFloat(t.ratedKVA)||0;
+    const mKVA = parseFloat(t.measKVA)||0;
+    const mKW = parseFloat(t.measKW)||0;
+    const iron = parseFloat(t.ironLoss)||0;
+    const cu = parseFloat(t.copperLoss)||0;
+    const util = rKVA>0?(mKVA/rKVA*100).toFixed(1):'—';
+    const cuAct = rKVA>0?cu*Math.pow(mKVA/rKVA,2):0;
+    const totalLoss = iron+cuAct;
+    const eff = (mKW*1000+totalLoss)>0?(mKW*1000/(mKW*1000+totalLoss)*100).toFixed(2):'—';
+    const annLoss = Math.round(totalLoss/1000*8760);
+    return `<tr><td>${t.tag}</td><td>${t.type}</td><td>${rKVA}</td><td>${t.year||'—'}</td><td>${util}%</td><td>${eff}%</td><td>${fmt(annLoss)}</td><td>${t.condition}</td></tr>`;
+  }).join('');
+
+  // Photos by section
+  function photoHTML(section) {
+    const photos = appState.photos[section] || [];
+    if (photos.length === 0) return '';
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:10px 0;">
+      ${photos.map(p => `<div style="border:1px solid #ddd;border-radius:6px;overflow:hidden;"><img src="${p.data}" style="width:100%;height:140px;object-fit:cover;"><div style="padding:4px 8px;font-size:11px;">${p.caption||''} <span style="color:#888;">${p.flag}</span></div></div>`).join('')}
+    </div>`;
+  }
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Energy Audit Report — ${p.buildingName||'Building'}</title>
+<style>
+body{font-family:'Segoe UI',sans-serif;max-width:900px;margin:0 auto;padding:30px;color:#1e293b;font-size:13px;line-height:1.6;}
+h1{font-size:24px;color:#0f1923;border-bottom:3px solid #0ea5e9;padding-bottom:10px;}
+h2{font-size:16px;color:#0ea5e9;text-transform:uppercase;letter-spacing:1px;margin-top:30px;border-bottom:1px solid #e2e8f0;padding-bottom:5px;}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px;}
+th{background:#0f1923;color:#fff;padding:6px 8px;text-align:left;font-size:11px;text-transform:uppercase;}
+td{padding:5px 8px;border-bottom:1px solid #e2e8f0;}
+tr:nth-child(even){background:#f8fafc;}
+.metric{display:inline-block;padding:12px 20px;margin:4px;background:#f0f4f8;border-radius:6px;text-align:center;border:1px solid #e2e8f0;}
+.metric .v{font-size:20px;font-weight:700;color:#0ea5e9;font-family:'Courier New',monospace;}
+.metric .l{font-size:10px;text-transform:uppercase;color:#64748b;letter-spacing:.5px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+.bg{background:#d1fae5;color:#065f46;} .by{background:#fef3c7;color:#92400e;} .br{background:#fee2e2;color:#991b1b;}
+.finding{padding:6px 10px;margin:3px 0;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:0 4px 4px 0;font-size:12px;}
+@media print{body{padding:10px;font-size:11px;} .no-print{display:none!important;}}
+.footer{margin-top:40px;padding-top:10px;border-top:2px solid #0ea5e9;font-size:11px;color:#64748b;text-align:center;}
+</style></head><body>
+<div class="no-print" style="text-align:right;margin-bottom:20px;"><button onclick="window.print()" style="padding:8px 20px;background:#0ea5e9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;">🖨 Print Report</button></div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+  ${s.companyLogo?`<img src="${s.companyLogo}" style="max-height:60px;">`:''}
+  ${p.clientLogo?`<img src="${p.clientLogo}" style="max-height:60px;">`:''}
+</div>
+<h1>ASHRAE Level 1 Walk-Through Energy Audit</h1>
+<h2 style="border:none;font-size:20px;color:#0f1923;">${p.buildingName||'Building'}</h2>
+<p>${p.address||''} ${p.city||''} ${p.state||''}<br>
+${p.occupancyType} | ${p.floors||''} Floors | ${fmt(p.grossArea)} ${p.areaUnit||'ft²'} | Built ${p.yearBuilt||''}<br>
+
+Audit Date: ${p.auditDate||'—'} | Climate Zone: ${s.climateZone} | ASHRAE Level ${s.ashraeLevel||'1'}</p>
+${p.clientCompany?`<p><b>Client:</b> ${p.clientCompany} ${p.clientContact?'| Contact: '+p.clientContact:''}</p>`:''}
+
+<h2>Executive Summary</h2>
+<div style="display:flex;flex-wrap:wrap;gap:8px;">
+  <div class="metric"><div class="v">${eui?eui.toFixed(1):'—'}</div><div class="l">EUI kBtu/ft²·yr</div></div>
+  <div class="metric"><div class="v">${fmt(totalKWH)}</div><div class="l">Annual kWh</div></div>
+  <div class="metric"><div class="v">${fmt(totalGas)}</div><div class="l">Annual Therms</div></div>
+  <div class="metric"><div class="v">$${fmt(Math.round(totalElecCost+totalGasCost))}</div><div class="l">Annual Utility Cost</div></div>
+  <div class="metric"><div class="v">$${fmt(totalECMSavings)}</div><div class="l">Est. ECM Savings/yr</div></div>
+  <div class="metric"><div class="v">${selectedECMs.length}</div><div class="l">ECMs Identified</div></div>
+</div>
+<p style="margin-top:10px;">${eui?`Building EUI of ${eui.toFixed(1)} kBtu/ft²·yr is ${eui<=bm.es75?'<span class="badge bg">BELOW ENERGY STAR 75th percentile ('+bm.es75+')</span>':eui<=bm.median?'<span class="badge by">BETWEEN ES75 ('+bm.es75+') AND CBECS MEDIAN ('+bm.median+')</span>':'<span class="badge br">ABOVE CBECS MEDIAN ('+bm.median+')</span>'}.`:''}</p>
+<h3>Key Findings</h3>
+${findings.map(f=>`<div class="finding">⚠ ${f}</div>`).join('')}
+${appState.aiDraft?`<h3>Detailed Analysis</h3><div style="white-space:pre-wrap;font-size:12px;line-height:1.6;background:#f8fafc;padding:16px;border-radius:6px;border:1px solid #e2e8f0;">${appState.aiDraft}</div>`:''}
+
+<h2>Utility Analysis</h2>
+<table><thead><tr><th>Month</th><th>kWh</th><th>Elec Cost</th><th>Gas (therms)</th><th>Gas Cost</th></tr></thead>
+<tbody>${appState.utility.rows.map(r=>`<tr><td>${r.month}</td><td style="font-family:monospace;">${fmt(r.kwh)}</td><td>$${fmt(r.ecost)}</td><td style="font-family:monospace;">${fmt(r.gas)}</td><td>$${fmt(r.gcost)}</td></tr>`).join('')}
+<tr style="font-weight:700;background:#e0f2fe;"><td>TOTAL</td><td>${fmt(totalKWH)}</td><td>$${fmt(Math.round(totalElecCost))}</td><td>${fmt(totalGas)}</td><td>$${fmt(Math.round(totalGasCost))}</td></tr>
+</tbody></table>
+
+<h2>Building Envelope</h2>
+<p>Wall: ${appState.envelope.wallConst} / ${appState.envelope.wallIns} | Roof: ${appState.envelope.roofType} / ${appState.envelope.roofIns} / ${appState.envelope.roofColor}<br>
+Windows: ${appState.envelope.windowType} / ${appState.envelope.windowFrame} | WWR: ${appState.envelope.wwr||'—'}% | Infiltration: ${appState.envelope.infiltration} | Condition: ${appState.envelope.condition}</p>
+${appState.envelope.notes?`<p><em>${appState.envelope.notes}</em></p>`:''}
+${photoHTML('envelope')}
+
+<h2>Lighting</h2>
+<table><thead><tr><th>Space</th><th>Area</th><th>Fixture</th><th>Count</th><th>W/Fix</th><th>Control</th><th>LPD W/m²</th></tr></thead>
+<tbody>${appState.lighting.rows.map(r=>{
+  let am=parseFloat(r.area)||0; if(r.areaUnit==='ft²')am*=0.0929;
+  const lpd=am>0?((parseFloat(r.count)||0)*(parseFloat(r.wpf)||0)/am).toFixed(1):'—';
+  return `<tr><td>${r.space}</td><td>${r.area} ${r.areaUnit}</td><td>${r.fixture}</td><td>${r.count}</td><td>${r.wpf}</td><td>${r.control}</td><td style="font-family:monospace;">${lpd}</td></tr>`;
+}).join('')}</tbody></table>
+${photoHTML('lighting')}
+
+<h2>HVAC Systems</h2>
+<table><thead><tr><th>Name</th><th>Type</th><th>Capacity</th><th>Year</th><th>Refrigerant</th><th>Efficiency</th><th>Condition</th></tr></thead>
+<tbody>${appState.hvac.rows.map(r=>`<tr><td>${r.name}</td><td>${r.type}</td><td>${r.cap} ${r.capUnit}</td><td>${r.year}</td><td>${r.refrigerant==='R-22'?'<span class="badge br">R-22 ⚠</span>':r.refrigerant}</td><td>${r.eff} ${r.effUnit}</td><td>${r.condition}</td></tr>`).join('')}</tbody></table>
+${photoHTML('hvac')}
+
+<h2>Electrical Systems</h2>
+<h3>Transformer Assessment</h3>
+<table><thead><tr><th>Tag</th><th>Type</th><th>kVA</th><th>Year</th><th>Util%</th><th>Eff%</th><th>Ann Loss kWh</th><th>Cond</th></tr></thead>
+<tbody>${xfmrHTML}</tbody></table>
+
+<h3>Power Quality Summary</h3>
+<table><tbody>
+${appState.pq.meterPF?`<tr><td>Power Factor</td><td style="font-family:monospace;">${appState.pq.meterPF}</td></tr>`:''}
+${appState.pq.billPenalty?`<tr><td>Monthly PF Penalty</td><td>$${appState.pq.billPenalty}</td></tr>`:''}
+${appState.pq.thdIAvg?`<tr><td>THD-I (avg)</td><td>${appState.pq.thdIAvg}%</td></tr>`:''}
+${appState.pq.kFactor?`<tr><td>K-Factor</td><td>${appState.pq.kFactor}</td></tr>`:''}
+${appState.pq.neutralOverloaded==='Yes'?`<tr><td>Neutral</td><td><span class="badge br">OVERLOADED ${appState.pq.neutralCurrent}A</span></td></tr>`:''}
+${appState.pq.sagsCount?`<tr><td>Voltage Sags</td><td>${appState.pq.sagsCount} events</td></tr>`:''}
+</tbody></table>
+
+<h3>Load Inventory</h3>
+<table><thead><tr><th>Load</th><th>Category</th><th>NP kW</th><th>Meas kW</th><th>Mode</th><th>Ann kWh</th></tr></thead>
+<tbody>${appState.loads.map(l=>{
+  const annH=(parseFloat(l.hpd)||0)*(parseFloat(l.dpw)||0)*(parseFloat(l.wpy)||0);
+  const annKWH=Math.round((parseFloat(l.measKW)||0)*annH);
+  return `<tr><td>${l.name}</td><td>${l.category}</td><td>${l.npKW}</td><td>${l.measKW}</td><td>${l.mode}</td><td style="font-family:monospace;">${fmt(annKWH)}</td></tr>`;
+}).join('')}</tbody></table>
+${photoHTML('electrical')}
+
+<h2>ECM Recommendations</h2>
+<table><thead><tr><th>ID</th><th>System</th><th>Measure</th><th>Est. Savings $/yr</th><th>Cost Range</th><th>Payback</th><th>Priority</th></tr></thead>
+<tbody>${ecmTableHTML}</tbody>
+<tfoot><tr><td colspan="3"><b>TOTAL ESTIMATED SAVINGS</b></td><td colspan="4"><b>$${fmt(totalECMSavings)}/yr</b></td></tr></tfoot>
+</table>
+
+<div class="footer">
+  Prepared by ${s.auditorName||'—'} | ${s.companyName||'—'} | ${p.auditDate||'—'}<br>
+  ASHRAE Level 1 Walk-Through Energy Audit
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
+
+// ========== CSV DOWNLOAD ==========
+function downloadCSV() {
+  readBindings();
+  const rows = [];
+  const add = (...cols) => rows.push(cols.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(','));
+  const blank = () => rows.push('');
+  const rate = parseFloat(appState.utility.elecRate)||0.10;
+
+  add('=== 1. PROJECT INFO ===');
+  add('Building',appState.project.buildingName); add('Address',appState.project.address+' '+appState.project.city+' '+appState.project.state);
+  add('Occupancy',appState.project.occupancyType); add('Area',appState.project.grossArea,appState.project.areaUnit);
+  add('Year Built',appState.project.yearBuilt); add('Floors',appState.project.floors);
+  add('Auditor',appState.settings.auditorName); add('Company',appState.settings.companyName);
+  add('Climate Zone',appState.settings.climateZone); add('Audit Date',appState.project.auditDate);
+  blank();
+
+  add('=== 2. UTILITY BILLS ===');
+  add('Month','kWh','Elec Cost','Peak kW','Gas therms','Gas Cost','Notes');
+  appState.utility.rows.forEach(r => add(r.month,r.kwh,r.ecost,r.pkw,r.gas,r.gcost,r.notes));
+  blank();
+
+  add('=== 3. LIGHTING INVENTORY ===');
+  add('Space','Area','Unit','Fixture','Count','W/Fix','Control','Hr/Day','Day/Yr','%LED','Condition');
+  appState.lighting.rows.forEach(r => add(r.space,r.area,r.areaUnit,r.fixture,r.count,r.wpf,r.control,r.hpd,r.dpy,r.pctLed,r.condition));
+  blank();
+
+  add('=== 4. HVAC INVENTORY ===');
+  add('Name','Type','Capacity','Unit','Year','Condition','Refrigerant','Efficiency','Eff Unit','Controls','Economizer');
+  appState.hvac.rows.forEach(r => add(r.name,r.type,r.cap,r.capUnit,r.year,r.condition,r.refrigerant,r.eff,r.effUnit,r.controls,r.economizer));
+  blank();
+
+  add('=== 5. ECM SUMMARY ===');
+  add('ID','System','Title','Savings Range','Complexity','Selected');
+  ECM_LIB.forEach(e => add(e.id,e.sys,e.title,e.range,e.complexity,appState.ecmSelections[e.id]?'Yes':'No'));
+  blank();
+
+  add('=== 6. CALCULATIONS ===');
+  const eui = calcEUI();
+  add('EUI kBtu/ft²·yr',eui?eui.toFixed(1):'—');
+  add('Total kWh', appState.utility.rows.reduce((s,r)=>s+(parseFloat(r.kwh)||0),0));
+  add('Total therms', appState.utility.rows.reduce((s,r)=>s+(parseFloat(r.gas)||0),0));
+  blank();
+
+  add('=== 7. TRANSFORMER ASSESSMENT ===');
+  add('Tag','Type','Rated kVA','Year','Iron Loss W','Copper Loss W','Meas kW','Meas kVA','Meas PF','Condition');
+  appState.electrical.transformers.forEach(t => add(t.tag,t.type,t.ratedKVA,t.year,t.ironLoss,t.copperLoss,t.measKW,t.measKVA,t.measPF,t.condition));
+  blank();
+
+  add('=== 8. LOAD INVENTORY ===');
+  add('Load','Category','NP kW','Meas kW','Meas PF','Mode','Hr/Day','Day/Wk','Wk/Yr','Control','Condition');
+  appState.loads.forEach(l => add(l.name,l.category,l.npKW,l.measKW,l.measPF,l.mode,l.hpd,l.dpw,l.wpy,l.control,l.condition));
+  blank();
+
+  add('=== 9. DEMAND PROFILE ===');
+  add('','0-6h','6-9h','9-12h','12-17h','17-21h','21-24h');
+  const d = appState.demand;
+  add('Weekday kW',d.wd0,d.wd1,d.wd2,d.wd3,d.wd4,d.wd5);
+  add('Weekend kW',d.we0,d.we1,d.we2,d.we3,d.we4,d.we5);
+  blank();
+
+  add('=== 10. POWER QUALITY ===');
+  add('PF Measured',appState.pq.meterPF||appState.pq.logTruePF);
+  add('PF Penalty $/mo',appState.pq.billPenalty);
+  add('THD-I Avg %',appState.pq.thdIAvg);
+  add('K-Factor',appState.pq.kFactor);
+  add('Voltage Sags',appState.pq.sagsCount);
+  add('Neutral Current A',appState.pq.neutralCurrent);
+
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'AuditFlow_' + (appState.project.buildingName||'data').replace(/\s/g,'_') + '.csv';
+  a.click();
+}
+
+// ========== HELPERS ==========
+function fmt(n) {
+  if (n === '' || n === undefined || n === null || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+// ========== INIT ON LOAD ==========
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
