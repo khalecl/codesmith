@@ -293,701 +293,700 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 </aside>
 
 <!-- MAIN -->
-<div id="main-wrap">
-  <header id="topbar">
-    <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
-    <span class="building-name" id="topbar-building">No Project</span>
-    <div class="spacer"></div>
-    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="theme-label">Dark</span></button>
-  </header>
-  <main id="content">
+  <div id="main-wrap">
+    <header id="topbar">
+      <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+      <span class="building-name" id="topbar-building">No Project</span>
+      <div class="spacer"></div>
+      <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="theme-label">Dark</span></button>
+    </header>
+    <main id="content">
 
-<!-- ============ SECTION 1: DASHBOARD ============ -->
-<div class="section" id="sec-dashboard">
-  <div class="card card-accent">
-    <div class="card-header"><div class="card-title">Project Summary</div><div id="dash-status" class="badge badge-gray">NOT STARTED</div></div>
-    <div id="dash-summary" style="font-size:.85rem;color:var(--text-secondary);">Load or create a project to begin.</div>
-  </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">Energy Use Intensity</div></div>
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-      <div class="traffic-light" id="dash-tl">
-        <div class="tl-dot tl-green" id="tl-g"></div>
-        <div class="tl-dot tl-yellow" id="tl-y"></div>
-        <div class="tl-dot tl-red" id="tl-r"></div>
+    <!-- ============ SECTION 1: DASHBOARD ============ -->
+    <div class="section" id="sec-dashboard">
+      <div class="card card-accent">
+        <div class="card-header"><div class="card-title">Project Summary</div><div id="dash-status" class="badge badge-gray">NOT STARTED</div></div>
+        <div id="dash-summary" style="font-size:.85rem;color:var(--text-secondary);">Load or create a project to begin.</div>
       </div>
-      <div id="dash-eui" style="font-family:var(--mono);font-size:1.8rem;font-weight:700;color:var(--accent);">— kBtu/ft²</div>
-      <div id="dash-eui-label" style="font-size:.8rem;color:var(--text-secondary);"></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">Section Completion</div></div>
-    <div class="tile-grid" id="dash-tiles"></div>
-  </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">Pre-Visit Checklist</div></div>
-    <div class="checklist" id="dash-checklist"></div>
-  </div>
-  <div style="margin-top:12px;">
-    <button class="btn-primary" onclick="loadDemo()" style="padding:10px 24px;font-size:.9rem;">⚡ Load Demo Project</button>
-  </div>
-</div>
-
-<!-- ============ SECTION 2: SETTINGS ============ -->
-<div class="section" id="sec-settings">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">AUDITOR SETTINGS</div>
-    <div class="form-row">
-      <div class="fg"><label>Auditor Name</label><input type="text" data-bind="settings.auditorName"></div>
-      <div class="fg"><label>Company Name</label><input type="text" data-bind="settings.companyName"></div>
-    </div>
-      <div class="fg"><label>Company Logo (URL or Upload)</label>
-        <div class="fg-inline">
-          <input type="text" data-bind="settings.companyLogoURL" placeholder="https://example.com/logo.png" onchange="updateCompanyLogo()">
-          <input type="file" accept="image/*" onchange="handleLogoUpload(event)" style="max-width:200px;">
-        </div>
-        <div id="logo-preview" style="margin-top:8px;"></div>
-      </div>
-    <div class="form-row">
-      <div class="fg"><label>Climate Zone</label>
-        <select data-bind="settings.climateZone" onchange="save()">
-          <option value="0A">0A - Extremely Hot Humid</option><option value="0B">0B - Extremely Hot Dry</option>
-          <option value="1A">1A - Very Hot Humid</option><option value="1B">1B - Very Hot Dry</option>
-          <option value="2A" selected>2A - Hot Humid</option><option value="2B">2B - Hot Dry</option>
-          <option value="3A">3A - Warm Humid</option><option value="3B">3B - Warm Dry</option><option value="3C">3C - Warm Marine</option>
-          <option value="4A">4A - Mixed Humid</option><option value="4B">4B - Mixed Dry</option><option value="4C">4C - Mixed Marine</option>
-          <option value="5A">5A - Cool Humid</option><option value="5B">5B - Cool Dry</option><option value="5C">5C - Cool Marine</option>
-          <option value="6A">6A - Cold Humid</option><option value="6B">6B - Cold Dry</option>
-          <option value="7">7 - Very Cold</option><option value="8">8 - Subarctic/Arctic</option>
-        </select>
-      </div>
-      <div class="fg"><label>Units</label>
-        <select data-bind="settings.units" onchange="save()">
-          <option value="IP">IP (ft², kBtu, °F)</option>
-          <option value="SI">SI (m², kWh, °C)</option>
-        </select>
-      </div>
-      <div class="form-row">
-      <div class="fg"><label>ASHRAE Audit Level</label>
-        <select data-bind="settings.ashraeLevel" onchange="save()">
-          <option value="1">Level 1 — Walk-Through Analysis</option>
-          <option value="2">Level 2 — Energy Survey & Analysis</option>
-          <option value="3">Level 3 — Detailed Analysis / Investment-Grade</option>
-        </select>
-      </div>
-      <div class="fg"><label>AI Inference API Key (Gemini)</label>
-        <input type="text" data-bind="settings.aiApiKey" placeholder="AIzaSy..." onchange="save()">
-      </div>
-    </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ SECTION 3: PROJECT SETUP ============ -->
-<div class="section" id="sec-project">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">PROJECT INFORMATION</div>
-    <div class="form-row">
-      <div class="fg"><label>Building Name</label><input type="text" data-bind="project.buildingName" onchange="updateTopbar()"></div>
-      <div class="fg"><label>Address</label><input type="text" data-bind="project.address"></div>
-    </div>
-    <div class="form-row form-row-4">
-      <div class="fg"><label>City</label><input type="text" data-bind="project.city"></div>
-      <div class="fg"><label>State</label><input type="text" data-bind="project.state"></div>
-      <div class="fg"><label>Country</label><input type="text" data-bind="project.country" value="USA"></div>
-      <div class="fg"><label>Year Built</label><input type="number" data-bind="project.yearBuilt"></div>
-    </div>
-    <div class="form-row form-row-3">
-      <div class="fg"><label>Floors</label><input type="number" data-bind="project.floors"></div>
-      <div class="fg"><label>Gross Area</label>
-        <div class="unit-group">
-          <input type="number" data-bind="project.grossArea">
-          <select data-bind="project.areaUnit"><option value="ft²">ft²</option><option value="m²">m²</option></select>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Energy Use Intensity</div></div>
+        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+          <div class="traffic-light" id="dash-tl">
+            <div class="tl-dot tl-green" id="tl-g"></div>
+            <div class="tl-dot tl-yellow" id="tl-y"></div>
+            <div class="tl-dot tl-red" id="tl-r"></div>
+          </div>
+          <div id="dash-eui" style="font-family:var(--mono);font-size:1.8rem;font-weight:700;color:var(--accent);">— kBtu/ft²</div>
+          <div id="dash-eui-label" style="font-size:.8rem;color:var(--text-secondary);"></div>
         </div>
       </div>
-      <div class="fg"><label>Occupancy Type</label>
-        <select data-bind="project.occupancyType">
-          <option value="Office Large">Office Large</option><option value="Office Medium">Office Medium</option><option value="Office Small">Office Small</option>
-          <option value="Retail">Retail</option><option value="Hotel">Hotel</option><option value="Hotel Small">Hotel Small</option><option value="Motel">Motel</option>
-          <option value="School">School</option><option value="University">University</option>
-          <option value="Healthcare Clinic">Healthcare Clinic</option><option value="Hospital">Hospital</option>
-          <option value="Warehouse">Warehouse</option><option value="Factory Small">Factory Small</option><option value="Factory Medium">Factory Medium</option><option value="Factory Large">Factory Large</option>
-          <option value="Restaurant">Restaurant</option><option value="Supermarket">Supermarket</option>
-          <option value="Data Center">Data Center</option><option value="Mixed Use">Mixed Use</option>
-        </select>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Section Completion</div></div>
+        <div class="tile-grid" id="dash-tiles"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Pre-Visit Checklist</div></div>
+        <div class="checklist" id="dash-checklist"></div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn-primary" onclick="loadDemo()" style="padding:10px 24px;font-size:.9rem;">⚡ Load Demo Project</button>
       </div>
     </div>
-    <div class="form-row form-row-3">
-      <div class="fg"><label>Facility Contact</label><input type="text" data-bind="project.contact"></div>
-      <div class="fg"><label>Phone</label><input type="tel" data-bind="project.phone"></div>
-      <div class="fg"><label>Audit Date</label><input type="date" data-bind="project.auditDate"></div>
-    </div>
-    </div>
-  <div class="card" style="border-left:3px solid var(--accent);margin-top:16px;">
-    <div class="card-title" style="margin-bottom:14px;">CLIENT INFORMATION</div>
-    <div class="form-row">
-      <div class="fg"><label>Client Company Name</label><input type="text" data-bind="project.clientCompany"></div>
-      <div class="fg"><label>Client Contact Person</label><input type="text" data-bind="project.clientContact"></div>
-    </div>
-    <div class="form-row form-row-3">
-      <div class="fg"><label>Client Email</label><input type="email" data-bind="project.clientEmail"></div>
-      <div class="fg"><label>Client Phone</label><input type="tel" data-bind="project.clientPhone"></div>
-      <div class="fg"><label>Industry Sector</label><select data-bind="project.clientSector">
-        <option>Commercial</option><option>Hospitality</option><option>Healthcare</option><option>Education</option>
-        <option>Manufacturing</option><option>Food & Beverage</option><option>Retail</option><option>Government</option><option>Other</option>
-      </select></div>
-    </div>
-    <div class="fg"><label>Client Logo (URL or Upload)</label>
-      <div class="fg-inline">
-        <input type="text" data-bind="project.clientLogoURL" placeholder="https://example.com/logo.png" onchange="updateClientLogo()">
-        <input type="file" accept="image/*" onchange="handleClientLogoUpload(event)" style="max-width:200px;">
-      </div>
-      <div id="client-logo-preview" style="margin-top:8px;"></div>
-    </div>
-  </div>
-  </div>
-</div>
 
-<!-- ============ SECTION 4: UTILITY BILLS ============ -->
-<div class="section" id="sec-utility">
-  <div class="card card-accent">
-    <div class="card-header">
-      <div class="card-title">UTILITY BILLS</div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn-sm btn-secondary" onclick="addUtilityRows(12)">+12 Rows</button>
-        <button class="btn-sm btn-secondary" onclick="addUtilityRows(1)">+1 Row</button>
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:12px;">
-      <div class="fg"><label>Elec Tariff ($/kWh)</label><input type="number" step="0.01" data-bind="utility.elecRate" value="0.10" onchange="calcUtility()"></div>
-      <div class="fg"><label>Gas Rate ($/therm)</label><input type="number" step="0.01" data-bind="utility.gasRate" value="1.20" onchange="calcUtility()"></div>
-    </div>
-    <div class="table-wrap"><table id="utility-table">
-      <thead><tr><th>#</th><th>Month/Year</th><th>kWh</th><th>Elec Cost $</th><th>Peak kW</th><th>Gas (therms)</th><th>Gas Cost $</th><th>Notes</th><th></th></tr></thead>
-      <tbody id="utility-body"></tbody>
-      <tfoot><tr><td></td><td><b>TOTALS</b></td><td id="ut-kwh">0</td><td id="ut-ecost">0</td><td id="ut-pkw">—</td><td id="ut-gas">0</td><td id="ut-gcost">0</td><td></td><td></td></tr></tfoot>
-    </table></div>
-  </div>
-  <div class="card">
-    <div class="card-title" style="margin-bottom:10px;">EUI CALCULATION</div>
-    <div class="metric-row" id="eui-metrics"></div>
-    <div class="chart-box" style="max-height:200px;margin-top:16px;"><canvas id="eui-benchmark-chart"></canvas></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 5: ENVELOPE ============ -->
-<div class="section" id="sec-envelope">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">BUILDING ENVELOPE</div>
-    <div class="form-row form-row-3">
-      <div class="fg"><label>Wall Construction</label><select data-bind="envelope.wallConst"><option>Steel Frame</option><option>CMU Block</option><option>Concrete Tilt-Up</option><option>Brick Veneer</option><option>Wood Frame</option><option>Curtain Wall</option><option>Other</option></select></div>
-      <div class="fg"><label>Wall Insulation</label><select data-bind="envelope.wallIns"><option>None</option><option>Fiberglass Batts</option><option>Rigid Foam Board</option><option>Spray Foam</option><option>Blown-In</option><option>Unknown</option></select></div>
-      <div class="fg"><label>Roof Type</label><select data-bind="envelope.roofType"><option>Built-Up</option><option>Single-Ply Membrane</option><option>Metal Standing Seam</option><option>Concrete Deck</option><option>Shingle</option><option>Other</option></select></div>
-    </div>
-    <div class="form-row form-row-3">
-      <div class="fg"><label>Roof Insulation</label><select data-bind="envelope.roofIns"><option>None</option><option>Rigid Board Above Deck</option><option>Batts Below Deck</option><option>Spray Foam</option><option>Unknown</option></select></div>
-      <div class="fg"><label>Roof Color</label><select data-bind="envelope.roofColor"><option>Dark</option><option>Medium</option><option>Light/White</option><option>Reflective/Cool Roof</option></select></div>
-      <div class="fg"><label>Window Type</label><select data-bind="envelope.windowType"><option>Single Clear</option><option>Single Tinted</option><option>Double Clear</option><option>Double Low-E</option><option>Triple Low-E</option><option>Other</option></select></div>
-    </div>
-    <div class="form-row form-row-4">
-      <div class="fg"><label>Window Framing</label><select data-bind="envelope.windowFrame"><option>Aluminum No Break</option><option>Aluminum Thermal Break</option><option>Vinyl</option><option>Wood</option><option>Fiberglass</option></select></div>
-      <div class="fg"><label>Window-to-Wall Ratio %</label><input type="number" data-bind="envelope.wwr" min="0" max="100"></div>
-      <div class="fg"><label>Infiltration Level</label><select data-bind="envelope.infiltration"><option>Tight</option><option>Average</option><option>Leaky</option><option>Unknown</option></select></div>
-      <div class="fg"><label>Overall Condition</label><select data-bind="envelope.condition"><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option></select></div>
-    </div>
-    <div class="card" style="background:var(--accent-light);margin-top:10px;">
-      <div class="card-title" style="font-size:.8rem;">ASHRAE 90.1-2022 Minimums — Zone <span id="env-zone"></span></div>
-      <div id="env-ashrae" style="font-family:var(--mono);font-size:.82rem;margin-top:6px;"></div>
-    </div>
-    <div class="flag-group" style="margin-top:14px;">
-      <button class="flag-btn" data-flag="envelope.airSealing" onclick="toggleFlag(this)">🔧 Air Sealing</button>
-      <button class="flag-btn" data-flag="envelope.coolRoof" onclick="toggleFlag(this)">☀️ Cool Roof</button>
-      <button class="flag-btn" data-flag="envelope.addInsulation" onclick="toggleFlag(this)">🧱 Add Insulation</button>
-      <button class="flag-btn" data-flag="envelope.windowUpgrade" onclick="toggleFlag(this)">🪟 Window Upgrade</button>
-      <button class="flag-btn" data-flag="envelope.shading" onclick="toggleFlag(this)">🏗 Shading</button>
-    </div>
-    <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea data-bind="envelope.notes" rows="3"></textarea></div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('envelope')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-envelope"></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 6: LIGHTING ============ -->
-<div class="section" id="sec-lighting">
-  <div class="card card-accent">
-    <div class="card-header"><div class="card-title">INTERIOR LIGHTING INVENTORY</div>
-      <button class="btn-sm btn-primary" onclick="addLightingRow()">+ Add Row</button>
-    </div>
-    <div class="table-wrap"><table id="lighting-table">
-      <thead><tr><th>Space</th><th>Area</th><th>Unit</th><th>Fixture</th><th>Count</th><th>W/Fix</th><th>Control</th><th>Hr/Day</th><th>Day/Yr</th><th>%LED</th><th>Cond</th><th>LPD</th><th>Bench</th><th></th></tr></thead>
-      <tbody id="lighting-body"></tbody>
-    </table></div>
-    <div class="flag-group">
-      <button class="flag-btn" data-flag="lighting.ledRetrofit" onclick="toggleFlag(this)">💡 LED Retrofit</button>
-      <button class="flag-btn" data-flag="lighting.occSensors" onclick="toggleFlag(this)">👁 Occ Sensors</button>
-      <button class="flag-btn" data-flag="lighting.daylighting" onclick="toggleFlag(this)">☀️ Daylighting</button>
-      <button class="flag-btn" data-flag="lighting.reduceHours" onclick="toggleFlag(this)">⏰ Reduce Hours</button>
-      <button class="flag-btn" data-flag="lighting.exteriorControls" onclick="toggleFlag(this)">🔦 Exterior Controls</button>
-    </div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('lighting')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-lighting"></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 7: HVAC ============ -->
-<div class="section" id="sec-hvac">
-  <div class="card card-accent">
-    <div class="card-header"><div class="card-title">HVAC SYSTEMS</div>
-      <button class="btn-sm btn-primary" onclick="addHVACRow()">+ Add System</button>
-    </div>
-    <div class="table-wrap"><table id="hvac-table">
-      <thead><tr><th>Name</th><th>Type</th><th>Cap</th><th>Unit</th><th>Year</th><th>Cond</th><th>Refrig</th><th>Eff</th><th>Eff Unit</th><th>Controls</th><th>Econ</th><th>Notes</th><th></th></tr></thead>
-      <tbody id="hvac-body"></tbody>
-    </table></div>
-    <div class="flag-group">
-      <button class="flag-btn" data-flag="hvac.upgradeControls" onclick="toggleFlag(this)">🎛 Upgrade Controls</button>
-      <button class="flag-btn" data-flag="hvac.economizer" onclick="toggleFlag(this)">🌬 Economizer</button>
-      <button class="flag-btn" data-flag="hvac.dcv" onclick="toggleFlag(this)">🫁 DCV</button>
-      <button class="flag-btn" data-flag="hvac.replaceOld" onclick="toggleFlag(this)">♻️ Replace Old</button>
-      <button class="flag-btn" data-flag="hvac.vfd" onclick="toggleFlag(this)">⚡ VFD</button>
-      <button class="flag-btn" data-flag="hvac.ductSeal" onclick="toggleFlag(this)">🔧 Duct Sealing</button>
-      <button class="flag-btn" data-flag="hvac.refrigerant" onclick="toggleFlag(this)">❄️ Refrigerant</button>
-      <button class="flag-btn" data-flag="hvac.scheduling" onclick="toggleFlag(this)">📅 Scheduling</button>
-      <button class="flag-btn" data-flag="hvac.erv" onclick="toggleFlag(this)">🔄 ERV</button>
-    </div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('hvac')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-hvac"></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 8: DHW ============ -->
-<div class="section" id="sec-dhw">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">DOMESTIC HOT WATER</div>
-    <div class="form-row form-row-3">
-      <div class="fg"><label>Heater Type</label><select data-bind="dhw.type"><option>Gas Storage</option><option>Gas Tankless</option><option>Electric Storage</option><option>Electric Tankless</option><option>Heat Pump WH</option><option>Boiler/Indirect</option><option>Solar Thermal</option><option>None</option></select></div>
-      <div class="fg"><label>Capacity</label><div class="unit-group"><input type="number" data-bind="dhw.capacity"><select data-bind="dhw.capacityUnit"><option>gallons</option><option>liters</option></select></div></div>
-      <div class="fg"><label>Input Rating</label><div class="unit-group"><input type="number" data-bind="dhw.inputRating"><select data-bind="dhw.inputUnit"><option>kBtu/h</option><option>kW</option></select></div></div>
-    </div>
-    <div class="form-row form-row-4">
-      <div class="fg"><label>Year</label><input type="number" data-bind="dhw.year"></div>
-      <div class="fg"><label>Efficiency</label><div class="unit-group"><input type="number" step="0.01" data-bind="dhw.efficiency"><select data-bind="dhw.effUnit"><option>UEF</option><option>EF</option><option>Et%</option></select></div></div>
-      <div class="fg"><label>Piping Insulated</label><select data-bind="dhw.pipingInsulated"><option>Yes</option><option>No</option><option>Partial</option></select></div>
-      <div class="fg"><label>Recirculation</label><select data-bind="dhw.recirculation"><option>Yes</option><option>No</option></select></div>
-    </div>
-    <div class="form-row">
-      <div class="fg"><label>Recirc Pump Controls</label><select data-bind="dhw.recircControls"><option>Continuous</option><option>Timer</option><option>Demand/Aquastat</option><option>None</option></select></div>
-      <div class="fg"><label>Est. Daily Use (gallons)</label><input type="number" data-bind="dhw.dailyUse"></div>
-    </div>
-    <div class="fg"><label>Notes</label><textarea data-bind="dhw.notes" rows="3"></textarea></div>
-    <div class="flag-group">
-      <button class="flag-btn" data-flag="dhw.insulatePipes" onclick="toggleFlag(this)">🔧 Insulate Pipes</button>
-      <button class="flag-btn" data-flag="dhw.tankless" onclick="toggleFlag(this)">🔥 Upgrade Tankless</button>
-      <button class="flag-btn" data-flag="dhw.hpwh" onclick="toggleFlag(this)">♨️ Upgrade HPWH</button>
-      <button class="flag-btn" data-flag="dhw.recircTimer" onclick="toggleFlag(this)">⏰ Recirc Timer</button>
-      <button class="flag-btn" data-flag="dhw.reduceTemp" onclick="toggleFlag(this)">🌡 Reduce Temp</button>
-    </div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('dhw')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-dhw"></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 9: PLUG LOADS ============ -->
-<div class="section" id="sec-plugloads">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">PLUG & PROCESS LOADS</div>
-    <div class="table-wrap"><table id="plug-table">
-      <thead><tr><th>Equipment</th><th>Count</th><th>Avg W</th><th>Hr/Day</th><th>Days/Yr</th><th>Power Mgmt</th><th>Annual kWh</th></tr></thead>
-      <tbody id="plug-body"></tbody>
-      <tfoot><tr><td colspan="6"><b>TOTAL</b></td><td id="plug-total" style="font-family:var(--mono);">0</td></tr></tfoot>
-    </table></div>
-    <div class="flag-group">
-      <button class="flag-btn" data-flag="plugloads.powerMgmt" onclick="toggleFlag(this)">💻 Power Management</button>
-      <button class="flag-btn" data-flag="plugloads.energyStar" onclick="toggleFlag(this)">⭐ ENERGY STAR</button>
-      <button class="flag-btn" data-flag="plugloads.smartStrips" onclick="toggleFlag(this)">🔌 Smart Strips</button>
-      <button class="flag-btn" data-flag="plugloads.vendingMisers" onclick="toggleFlag(this)">🥤 Vending Misers</button>
-      <button class="flag-btn" data-flag="plugloads.removeUnused" onclick="toggleFlag(this)">🗑 Remove Unused</button>
-    </div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('plugloads')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-plugloads"></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 10: OTHER SYSTEMS ============ -->
-<div class="section" id="sec-other">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">OTHER SYSTEMS</div>
-    <div class="card" style="border-left:3px solid var(--accent);">
-      <div class="card-title" style="font-size:.82rem;">ELEVATORS</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Count</label><input type="number" data-bind="other.elevCount"></div>
-        <div class="fg"><label>Type</label><select data-bind="other.elevType"><option>Hydraulic</option><option>Traction</option><option>MRL</option></select></div>
-        <div class="fg"><label>Age (years)</label><input type="number" data-bind="other.elevAge"></div>
-        <div class="fg"><label>Regen Drive</label><select data-bind="other.elevRegen"><option>No</option><option>Yes</option></select></div>
-      </div>
-    </div>
-    <div class="card" style="border-left:3px solid var(--accent);">
-      <div class="card-title" style="font-size:.82rem;">DATA CENTER / SERVER ROOM</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Present</label><select data-bind="other.dcPresent"><option>No</option><option>Yes</option></select></div>
-        <div class="fg"><label>Area (ft²)</label><input type="number" data-bind="other.dcArea"></div>
-        <div class="fg"><label>IT Power (kW)</label><input type="number" data-bind="other.dcITkW"></div>
-        <div class="fg"><label>PUE</label><input type="number" step="0.01" data-bind="other.dcPUE"></div>
-      </div>
-    </div>
-    <div class="card" style="border-left:3px solid var(--accent);">
-      <div class="card-title" style="font-size:.82rem;">KITCHEN / FOOD SERVICE</div>
-      <div class="form-row form-row-3">
-        <div class="fg"><label>Present</label><select data-bind="other.kitchenPresent"><option>No</option><option>Yes</option></select></div>
-        <div class="fg"><label>ENERGY STAR Appliances</label><select data-bind="other.kitchenES"><option>No</option><option>Partial</option><option>Yes</option></select></div>
-        <div class="fg"><label>Hood Controls</label><select data-bind="other.kitchenHood"><option>No</option><option>Yes</option></select></div>
-      </div>
-    </div>
-    <div class="card" style="border-left:3px solid var(--accent);">
-      <div class="card-title" style="font-size:.82rem;">PARKING / EV / RENEWABLES</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Parking Present</label><select data-bind="other.parkingPresent"><option>No</option><option>Yes</option></select></div>
-        <div class="fg"><label>Parking Lighting</label><select data-bind="other.parkingLighting"><option>HID</option><option>LED</option><option>Fluorescent</option></select></div>
-        <div class="fg"><label>EV Charging</label><select data-bind="other.evCharging"><option>No</option><option>Yes</option></select></div>
-        <div class="fg"><label>Solar PV (kW)</label><input type="number" data-bind="other.solarPV"></div>
-      </div>
-    </div>
-    <div class="fg"><label>Notes</label><textarea data-bind="other.notes" rows="3"></textarea></div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('other')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-other"></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 11: ELECTRICAL SYSTEMS ============ -->
-<div class="section" id="sec-electrical">
-  <div class="subtabs">
-    <button class="subtab active" onclick="switchSubtab(this,'elec-supply')">Supply & Transformers</button>
-    <button class="subtab" onclick="switchSubtab(this,'elec-pq')">Power Quality</button>
-    <button class="subtab" onclick="switchSubtab(this,'elec-loads')">Loads</button>
-    <button class="subtab" onclick="switchSubtab(this,'elec-demand')">Demand Profile</button>
-  </div>
-
-  <!-- SUPPLY -->
-  <div class="subpanel active" id="elec-supply">
-    <div class="card card-accent">
-      <div class="card-title" style="margin-bottom:14px;">ELECTRICAL SUPPLY</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Nominal Voltage</label><div class="unit-group"><input type="number" data-bind="electrical.nomVoltage"><select data-bind="electrical.voltUnit"><option>V</option><option>kV</option></select></div></div>
-        <div class="fg"><label>Voltage Level</label><select data-bind="electrical.voltLevel"><option>LV</option><option>MV</option><option>HV</option></select></div>
-        <div class="fg"><label>Supply Type</label><select data-bind="electrical.supplyType"><option>Utility Grid</option><option>Grid + Generator</option><option>Grid + Solar</option><option>Microgrid</option></select></div>
-        <div class="fg"><label>Phases</label><select data-bind="electrical.phases"><option>3-Phase</option><option>Single-Phase</option></select></div>
-      </div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Frequency (Hz)</label><input type="number" data-bind="electrical.frequency" value="60"></div>
-        <div class="fg"><label>Measured V L1</label><input type="number" step="0.1" data-bind="electrical.vL1" onchange="calcVoltImbalance()"></div>
-        <div class="fg"><label>Measured V L2</label><input type="number" step="0.1" data-bind="electrical.vL2" onchange="calcVoltImbalance()"></div>
-        <div class="fg"><label>Measured V L3</label><input type="number" step="0.1" data-bind="electrical.vL3" onchange="calcVoltImbalance()"></div>
-      </div>
-      <div id="volt-imbalance-badge" style="margin-bottom:10px;"></div>
-    </div>
-    <div class="card card-accent">
-      <div class="card-header"><div class="card-title">TRANSFORMERS</div>
-        <button class="btn-sm btn-primary" onclick="addTransformer()">+ Add Transformer</button>
-      </div>
-      <div id="transformer-cards"></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title">MAIN PANELS</div>
-        <button class="btn-sm btn-primary" onclick="addPanel()">+ Add Panel</button>
-      </div>
-      <div class="table-wrap"><table id="panel-table">
-        <thead><tr><th>Tag</th><th>Type</th><th>Rated A</th><th>Voltage</th><th>Year</th><th>Condition</th><th>Metering</th><th></th></tr></thead>
-        <tbody id="panel-body"></tbody>
-      </table></div>
-    </div>
-    <button class="btn-sm btn-secondary" onclick="openPhotoModal('electrical')" style="margin-top:8px;">📷 Add Photo</button>
-    <div class="photo-grid" id="photos-electrical"></div>
-  </div>
-
-  <!-- POWER QUALITY -->
-  <div class="subpanel" id="elec-pq">
-    <div class="card card-accent">
-      <div class="card-title" style="margin-bottom:10px;">DATA SOURCE</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcBill" onchange="togglePQSection()"> Utility Bill</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcMeter" onchange="togglePQSection()"> Panel Meter</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcLogger" onchange="togglePQSection()"> PQ Logger</label>
-      </div>
-    </div>
-    <div class="card" id="pq-bill-section" style="display:none;">
-      <div class="card-title" style="margin-bottom:10px;">UTILITY BILL — POWER QUALITY</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Peak Demand (kW)</label><input type="number" data-bind="pq.billPeakKW"></div>
-        <div class="fg"><label>PF Penalty on Bill</label><select data-bind="pq.billPFPenalty"><option>No</option><option>Yes</option></select></div>
-        <div class="fg"><label>Penalty $/month</label><input type="number" data-bind="pq.billPenalty"></div>
-        <div class="fg"><label>Penalty Threshold PF</label><input type="number" step="0.01" data-bind="pq.billPFThreshold"></div>
-      </div>
-    </div>
-    <div class="card" id="pq-meter-section" style="display:none;">
-      <div class="card-title" style="margin-bottom:10px;">PANEL METER READINGS</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>Date/Time</label><input type="datetime-local" data-bind="pq.meterDate"></div>
-        <div class="fg"><label>kW</label><input type="number" step="0.1" data-bind="pq.meterKW"></div>
-        <div class="fg"><label>kVAR</label><input type="number" step="0.1" data-bind="pq.meterKVAR"></div>
-        <div class="fg"><label>kVA</label><input type="number" step="0.1" data-bind="pq.meterKVA"></div>
-      </div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>PF</label><input type="number" step="0.01" data-bind="pq.meterPF"></div>
-        <div class="fg"><label>V L1</label><input type="number" step="0.1" data-bind="pq.meterVL1"></div>
-        <div class="fg"><label>V L2</label><input type="number" step="0.1" data-bind="pq.meterVL2"></div>
-        <div class="fg"><label>V L3</label><input type="number" step="0.1" data-bind="pq.meterVL3"></div>
-      </div>
-      <div class="form-row form-row-3">
-        <div class="fg"><label>I L1 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL1"></div>
-        <div class="fg"><label>I L2 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL2"></div>
-        <div class="fg"><label>I L3 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL3"></div>
-      </div>
-    </div>
-    <div class="card" id="pq-logger-section" style="display:none;">
-      <div class="card-title" style="margin-bottom:10px;">PQ LOGGER DATA</div>
-      <div class="form-row form-row-3">
-        <div class="fg"><label>Logger Model</label><input type="text" data-bind="pq.loggerModel"></div>
-        <div class="fg"><label>Logging Period</label><input type="text" data-bind="pq.loggerPeriod" placeholder="e.g. 7 days"></div>
-        <div class="fg"><label>Measurement Point</label><input type="text" data-bind="pq.loggerPoint" placeholder="e.g. Main MSB"></div>
-      </div>
-      <div class="card" style="border-left:3px solid var(--accent);">
-        <div class="card-title" style="font-size:.8rem;">VOLTAGE</div>
-        <div class="form-row form-row-4">
-          <div class="fg"><label>Avg V</label><input type="number" step="0.1" data-bind="pq.logAvgV"></div>
-          <div class="fg"><label>Min V</label><input type="number" step="0.1" data-bind="pq.logMinV"></div>
-          <div class="fg"><label>Max V</label><input type="number" step="0.1" data-bind="pq.logMaxV"></div>
-          <div class="fg"><label>Imbalance %</label><input type="number" step="0.01" data-bind="pq.logVImbal"></div>
+    <!-- ============ SECTION 2: SETTINGS ============ -->
+    <div class="section" id="sec-settings">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">AUDITOR SETTINGS</div>
+        <div class="form-row">
+          <div class="fg"><label>Auditor Name</label><input type="text" data-bind="settings.auditorName"></div>
+          <div class="fg"><label>Company Name</label><input type="text" data-bind="settings.companyName"></div>
+        </div>
+          <div class="fg"><label>Company Logo (URL or Upload)</label>
+            <div class="fg-inline">
+              <input type="text" data-bind="settings.companyLogoURL" placeholder="https://example.com/logo.png" onchange="updateCompanyLogo()">
+              <input type="file" accept="image/*" onchange="handleLogoUpload(event)" style="max-width:200px;">
+            </div>
+            <div id="logo-preview" style="margin-top:8px;"></div>
+          </div>
+        <div class="form-row">
+          <div class="fg"><label>Climate Zone</label>
+            <select data-bind="settings.climateZone" onchange="save()">
+              <option value="0A">0A - Extremely Hot Humid</option><option value="0B">0B - Extremely Hot Dry</option>
+              <option value="1A">1A - Very Hot Humid</option><option value="1B">1B - Very Hot Dry</option>
+              <option value="2A" selected>2A - Hot Humid</option><option value="2B">2B - Hot Dry</option>
+              <option value="3A">3A - Warm Humid</option><option value="3B">3B - Warm Dry</option><option value="3C">3C - Warm Marine</option>
+              <option value="4A">4A - Mixed Humid</option><option value="4B">4B - Mixed Dry</option><option value="4C">4C - Mixed Marine</option>
+              <option value="5A">5A - Cool Humid</option><option value="5B">5B - Cool Dry</option><option value="5C">5C - Cool Marine</option>
+              <option value="6A">6A - Cold Humid</option><option value="6B">6B - Cold Dry</option>
+              <option value="7">7 - Very Cold</option><option value="8">8 - Subarctic/Arctic</option>
+            </select>
+          </div>
+          <div class="fg"><label>Units</label>
+            <select data-bind="settings.units" onchange="save()">
+              <option value="IP">IP (ft², kBtu, °F)</option>
+              <option value="SI">SI (m², kWh, °C)</option>
+            </select>
+          </div>
+          <div class="form-row">
+          <div class="fg"><label>ASHRAE Audit Level</label>
+            <select data-bind="settings.ashraeLevel" onchange="save()">
+              <option value="1">Level 1 — Walk-Through Analysis</option>
+              <option value="2">Level 2 — Energy Survey & Analysis</option>
+              <option value="3">Level 3 — Detailed Analysis / Investment-Grade</option>
+            </select>
+          </div>
+          <div class="fg"><label>AI Inference API Key (Gemini)</label>
+            <input type="text" data-bind="settings.aiApiKey" placeholder="AIzaSy..." onchange="save()">
+          </div>
+        </div>
         </div>
       </div>
-      <div class="card" style="border-left:3px solid var(--accent);">
-        <div class="card-title" style="font-size:.8rem;">POWER</div>
-        <div class="form-row form-row-4">
-          <div class="fg"><label>Avg kW</label><input type="number" step="0.1" data-bind="pq.logAvgKW"></div>
-          <div class="fg"><label>Peak kW</label><input type="number" step="0.1" data-bind="pq.logPeakKW"></div>
-          <div class="fg"><label>Min kW</label><input type="number" step="0.1" data-bind="pq.logMinKW"></div>
-          <div class="fg"><label>Avg kVAR</label><input type="number" step="0.1" data-bind="pq.logAvgKVAR"></div>
+    </div>
+
+    <!-- ============ SECTION 3: PROJECT SETUP ============ -->
+    <div class="section" id="sec-project">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">PROJECT INFORMATION</div>
+        <div class="form-row">
+          <div class="fg"><label>Building Name</label><input type="text" data-bind="project.buildingName" onchange="updateTopbar()"></div>
+          <div class="fg"><label>Address</label><input type="text" data-bind="project.address"></div>
         </div>
         <div class="form-row form-row-4">
-          <div class="fg"><label>Avg kVA</label><input type="number" step="0.1" data-bind="pq.logAvgKVA"></div>
-          <div class="fg"><label>Displacement PF</label><input type="number" step="0.01" data-bind="pq.logDPF"></div>
-          <div class="fg"><label>Min PF</label><input type="number" step="0.01" data-bind="pq.logMinPF"></div>
-          <div class="fg"><label>True PF</label><input type="number" step="0.01" data-bind="pq.logTruePF"></div>
-        </div>
-      </div>
-      <div class="card" style="border-left:3px solid var(--accent);">
-        <div class="card-title" style="font-size:.8rem;">HARMONICS</div>
-        <div class="form-row form-row-4">
-          <div class="fg"><label>THD-V L1 %</label><input type="number" step="0.1" data-bind="pq.thdVL1"></div>
-          <div class="fg"><label>THD-V L2 %</label><input type="number" step="0.1" data-bind="pq.thdVL2"></div>
-          <div class="fg"><label>THD-V L3 %</label><input type="number" step="0.1" data-bind="pq.thdVL3"></div>
-          <div class="fg"><label>THD-V Avg %</label><input type="number" step="0.1" data-bind="pq.thdVAvg"></div>
-        </div>
-        <div class="form-row form-row-4">
-          <div class="fg"><label>THD-I L1 %</label><input type="number" step="0.1" data-bind="pq.thdIL1"></div>
-          <div class="fg"><label>THD-I L2 %</label><input type="number" step="0.1" data-bind="pq.thdIL2"></div>
-          <div class="fg"><label>THD-I L3 %</label><input type="number" step="0.1" data-bind="pq.thdIL3"></div>
-          <div class="fg"><label>THD-I Avg %</label><input type="number" step="0.1" data-bind="pq.thdIAvg"></div>
-        </div>
-        <div class="card-title" style="font-size:.75rem;margin:10px 0 6px;">INDIVIDUAL HARMONICS (% fundamental)</div>
-        <div class="table-wrap"><table>
-          <thead><tr><th>Order</th><th>H3</th><th>H5</th><th>H7</th><th>H9</th><th>H11</th><th>H13</th><th>H17</th><th>H19</th><th>H23</th><th>H25</th></tr></thead>
-          <tbody>
-            <tr><td>Voltage %</td>
-              <td><input type="number" step="0.1" data-bind="pq.hV3" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV5" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV7" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV9" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV11" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV13" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV17" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV19" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV23" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hV25" style="width:55px;"></td>
-            </tr>
-            <tr><td>Current %</td>
-              <td><input type="number" step="0.1" data-bind="pq.hI3" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI5" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI7" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI9" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI11" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI13" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI17" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI19" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI23" style="width:55px;"></td>
-              <td><input type="number" step="0.1" data-bind="pq.hI25" style="width:55px;"></td>
-            </tr>
-          </tbody>
-        </table></div>
-        <div class="form-row form-row-3" style="margin-top:10px;">
-          <div class="fg"><label>IEEE 519 Compliance</label><select data-bind="pq.ieee519"><option>Compliant</option><option>Non-Compliant</option><option>Not Assessed</option></select></div>
-          <div class="fg"><label>Dominant Source</label><input type="text" data-bind="pq.harmonicSource" placeholder="e.g. VFDs, UPS"></div>
-          <div class="fg"><label>K-Factor</label><input type="number" step="0.1" data-bind="pq.kFactor"></div>
-        </div>
-      </div>
-      <div class="card" style="border-left:3px solid var(--accent);">
-        <div class="card-title" style="font-size:.8rem;">VOLTAGE EVENTS</div>
-        <div class="form-row form-row-4">
-          <div class="fg"><label>Sags Count</label><input type="number" data-bind="pq.sagsCount"></div>
-          <div class="fg"><label>Worst Mag %</label><input type="number" step="0.1" data-bind="pq.sagsWorstMag"></div>
-          <div class="fg"><label>Worst Duration ms</label><input type="number" data-bind="pq.sagsWorstDur"></div>
-          <div class="fg"><label>Swells Count</label><input type="number" data-bind="pq.swellsCount"></div>
-        </div>
-        <div class="form-row form-row-4">
-          <div class="fg"><label>Swell Worst %</label><input type="number" step="0.1" data-bind="pq.swellsWorstMag"></div>
-          <div class="fg"><label>Swell Worst ms</label><input type="number" data-bind="pq.swellsWorstDur"></div>
-          <div class="fg"><label>Interruptions</label><input type="number" data-bind="pq.interruptCount"></div>
-          <div class="fg"><label>Interrupt Duration</label><input type="number" data-bind="pq.interruptDur"></div>
+          <div class="fg"><label>City</label><input type="text" data-bind="project.city"></div>
+          <div class="fg"><label>State</label><input type="text" data-bind="project.state"></div>
+          <div class="fg"><label>Country</label><input type="text" data-bind="project.country" value="USA"></div>
+          <div class="fg"><label>Year Built</label><input type="number" data-bind="project.yearBuilt"></div>
         </div>
         <div class="form-row form-row-3">
-          <div class="fg"><label>Transients Count</label><input type="number" data-bind="pq.transientCount"></div>
-          <div class="fg"><label>Worst Transient V</label><input type="number" data-bind="pq.transientWorst"></div>
-          <div class="fg"><label>Neutral Current A</label><input type="number" data-bind="pq.neutralCurrent"></div>
+          <div class="fg"><label>Floors</label><input type="number" data-bind="project.floors"></div>
+          <div class="fg"><label>Gross Area</label>
+            <div class="unit-group">
+              <input type="number" data-bind="project.grossArea">
+              <select data-bind="project.areaUnit"><option value="ft²">ft²</option><option value="m²">m²</option></select>
+            </div>
+          </div>
+          <div class="fg"><label>Occupancy Type</label>
+            <select data-bind="project.occupancyType">
+              <option value="Office Large">Office Large</option><option value="Office Medium">Office Medium</option><option value="Office Small">Office Small</option>
+              <option value="Retail">Retail</option><option value="Hotel">Hotel</option><option value="Hotel Small">Hotel Small</option><option value="Motel">Motel</option>
+              <option value="School">School</option><option value="University">University</option>
+              <option value="Healthcare Clinic">Healthcare Clinic</option><option value="Hospital">Hospital</option>
+              <option value="Warehouse">Warehouse</option><option value="Factory Small">Factory Small</option><option value="Factory Medium">Factory Medium</option><option value="Factory Large">Factory Large</option>
+              <option value="Restaurant">Restaurant</option><option value="Supermarket">Supermarket</option>
+              <option value="Data Center">Data Center</option><option value="Mixed Use">Mixed Use</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Facility Contact</label><input type="text" data-bind="project.contact"></div>
+          <div class="fg"><label>Phone</label><input type="tel" data-bind="project.phone"></div>
+          <div class="fg"><label>Audit Date</label><input type="date" data-bind="project.auditDate"></div>
+        </div>
+        </div>
+      <div class="card" style="border-left:3px solid var(--accent);margin-top:16px;">
+        <div class="card-title" style="margin-bottom:14px;">CLIENT INFORMATION</div>
+        <div class="form-row">
+          <div class="fg"><label>Client Company Name</label><input type="text" data-bind="project.clientCompany"></div>
+          <div class="fg"><label>Client Contact Person</label><input type="text" data-bind="project.clientContact"></div>
+        </div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Client Email</label><input type="email" data-bind="project.clientEmail"></div>
+          <div class="fg"><label>Client Phone</label><input type="tel" data-bind="project.clientPhone"></div>
+          <div class="fg"><label>Industry Sector</label><select data-bind="project.clientSector">
+            <option>Commercial</option><option>Hospitality</option><option>Healthcare</option><option>Education</option>
+            <option>Manufacturing</option><option>Food & Beverage</option><option>Retail</option><option>Government</option><option>Other</option>
+          </select></div>
+        </div>
+        <div class="fg"><label>Client Logo (URL or Upload)</label>
+          <div class="fg-inline">
+            <input type="text" data-bind="project.clientLogoURL" placeholder="https://example.com/logo.png" onchange="updateClientLogo()">
+            <input type="file" accept="image/*" onchange="handleClientLogoUpload(event)" style="max-width:200px;">
+          </div>
+          <div id="client-logo-preview" style="margin-top:8px;"></div>
+        </div>
+      </div>
+      </div>
+
+    <!-- ============ SECTION 4: UTILITY BILLS ============ -->
+    <div class="section" id="sec-utility">
+      <div class="card card-accent">
+        <div class="card-header">
+          <div class="card-title">UTILITY BILLS</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-sm btn-secondary" onclick="addUtilityRows(12)">+12 Rows</button>
+            <button class="btn-sm btn-secondary" onclick="addUtilityRows(1)">+1 Row</button>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:12px;">
+          <div class="fg"><label>Elec Tariff ($/kWh)</label><input type="number" step="0.01" data-bind="utility.elecRate" value="0.10" onchange="calcUtility()"></div>
+          <div class="fg"><label>Gas Rate ($/therm)</label><input type="number" step="0.01" data-bind="utility.gasRate" value="1.20" onchange="calcUtility()"></div>
+        </div>
+        <div class="table-wrap"><table id="utility-table">
+          <thead><tr><th>#</th><th>Month/Year</th><th>kWh</th><th>Elec Cost $</th><th>Peak kW</th><th>Gas (therms)</th><th>Gas Cost $</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="utility-body"></tbody>
+          <tfoot><tr><td></td><td><b>TOTALS</b></td><td id="ut-kwh">0</td><td id="ut-ecost">0</td><td id="ut-pkw">—</td><td id="ut-gas">0</td><td id="ut-gcost">0</td><td></td><td></td></tr></tfoot>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px;">EUI CALCULATION</div>
+        <div class="metric-row" id="eui-metrics"></div>
+        <div class="chart-box" style="max-height:200px;margin-top:16px;"><canvas id="eui-benchmark-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 5: ENVELOPE ============ -->
+    <div class="section" id="sec-envelope">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">BUILDING ENVELOPE</div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Wall Construction</label><select data-bind="envelope.wallConst"><option>Steel Frame</option><option>CMU Block</option><option>Concrete Tilt-Up</option><option>Brick Veneer</option><option>Wood Frame</option><option>Curtain Wall</option><option>Other</option></select></div>
+          <div class="fg"><label>Wall Insulation</label><select data-bind="envelope.wallIns"><option>None</option><option>Fiberglass Batts</option><option>Rigid Foam Board</option><option>Spray Foam</option><option>Blown-In</option><option>Unknown</option></select></div>
+          <div class="fg"><label>Roof Type</label><select data-bind="envelope.roofType"><option>Built-Up</option><option>Single-Ply Membrane</option><option>Metal Standing Seam</option><option>Concrete Deck</option><option>Shingle</option><option>Other</option></select></div>
+        </div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Roof Insulation</label><select data-bind="envelope.roofIns"><option>None</option><option>Rigid Board Above Deck</option><option>Batts Below Deck</option><option>Spray Foam</option><option>Unknown</option></select></div>
+          <div class="fg"><label>Roof Color</label><select data-bind="envelope.roofColor"><option>Dark</option><option>Medium</option><option>Light/White</option><option>Reflective/Cool Roof</option></select></div>
+          <div class="fg"><label>Window Type</label><select data-bind="envelope.windowType"><option>Single Clear</option><option>Single Tinted</option><option>Double Clear</option><option>Double Low-E</option><option>Triple Low-E</option><option>Other</option></select></div>
+        </div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Window Framing</label><select data-bind="envelope.windowFrame"><option>Aluminum No Break</option><option>Aluminum Thermal Break</option><option>Vinyl</option><option>Wood</option><option>Fiberglass</option></select></div>
+          <div class="fg"><label>Window-to-Wall Ratio %</label><input type="number" data-bind="envelope.wwr" min="0" max="100"></div>
+          <div class="fg"><label>Infiltration Level</label><select data-bind="envelope.infiltration"><option>Tight</option><option>Average</option><option>Leaky</option><option>Unknown</option></select></div>
+          <div class="fg"><label>Overall Condition</label><select data-bind="envelope.condition"><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option></select></div>
+        </div>
+        <div class="card" style="background:var(--accent-light);margin-top:10px;">
+          <div class="card-title" style="font-size:.8rem;">ASHRAE 90.1-2022 Minimums — Zone <span id="env-zone"></span></div>
+          <div id="env-ashrae" style="font-family:var(--mono);font-size:.82rem;margin-top:6px;"></div>
+        </div>
+        <div class="flag-group" style="margin-top:14px;">
+          <button class="flag-btn" data-flag="envelope.airSealing" onclick="toggleFlag(this)">🔧 Air Sealing</button>
+          <button class="flag-btn" data-flag="envelope.coolRoof" onclick="toggleFlag(this)">☀️ Cool Roof</button>
+          <button class="flag-btn" data-flag="envelope.addInsulation" onclick="toggleFlag(this)">🧱 Add Insulation</button>
+          <button class="flag-btn" data-flag="envelope.windowUpgrade" onclick="toggleFlag(this)">🪟 Window Upgrade</button>
+          <button class="flag-btn" data-flag="envelope.shading" onclick="toggleFlag(this)">🏗 Shading</button>
+        </div>
+        <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea data-bind="envelope.notes" rows="3"></textarea></div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('envelope')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-envelope"></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 6: LIGHTING ============ -->
+    <div class="section" id="sec-lighting">
+      <div class="card card-accent">
+        <div class="card-header"><div class="card-title">INTERIOR LIGHTING INVENTORY</div>
+          <button class="btn-sm btn-primary" onclick="addLightingRow()">+ Add Row</button>
+        </div>
+        <div class="table-wrap"><table id="lighting-table">
+          <thead><tr><th>Space</th><th>Area</th><th>Unit</th><th>Fixture</th><th>Count</th><th>W/Fix</th><th>Control</th><th>Hr/Day</th><th>Day/Yr</th><th>%LED</th><th>Cond</th><th>LPD</th><th>Bench</th><th></th></tr></thead>
+          <tbody id="lighting-body"></tbody>
+        </table></div>
+        <div class="flag-group">
+          <button class="flag-btn" data-flag="lighting.ledRetrofit" onclick="toggleFlag(this)">💡 LED Retrofit</button>
+          <button class="flag-btn" data-flag="lighting.occSensors" onclick="toggleFlag(this)">👁 Occ Sensors</button>
+          <button class="flag-btn" data-flag="lighting.daylighting" onclick="toggleFlag(this)">☀️ Daylighting</button>
+          <button class="flag-btn" data-flag="lighting.reduceHours" onclick="toggleFlag(this)">⏰ Reduce Hours</button>
+          <button class="flag-btn" data-flag="lighting.exteriorControls" onclick="toggleFlag(this)">🔦 Exterior Controls</button>
+        </div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('lighting')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-lighting"></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 7: HVAC ============ -->
+    <div class="section" id="sec-hvac">
+      <div class="card card-accent">
+        <div class="card-header"><div class="card-title">HVAC SYSTEMS</div>
+          <button class="btn-sm btn-primary" onclick="addHVACRow()">+ Add System</button>
+        </div>
+        <div class="table-wrap"><table id="hvac-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Cap</th><th>Unit</th><th>Year</th><th>Cond</th><th>Refrig</th><th>Eff</th><th>Eff Unit</th><th>Controls</th><th>Econ</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="hvac-body"></tbody>
+        </table></div>
+        <div class="flag-group">
+          <button class="flag-btn" data-flag="hvac.upgradeControls" onclick="toggleFlag(this)">🎛 Upgrade Controls</button>
+          <button class="flag-btn" data-flag="hvac.economizer" onclick="toggleFlag(this)">🌬 Economizer</button>
+          <button class="flag-btn" data-flag="hvac.dcv" onclick="toggleFlag(this)">🫁 DCV</button>
+          <button class="flag-btn" data-flag="hvac.replaceOld" onclick="toggleFlag(this)">♻️ Replace Old</button>
+          <button class="flag-btn" data-flag="hvac.vfd" onclick="toggleFlag(this)">⚡ VFD</button>
+          <button class="flag-btn" data-flag="hvac.ductSeal" onclick="toggleFlag(this)">🔧 Duct Sealing</button>
+          <button class="flag-btn" data-flag="hvac.refrigerant" onclick="toggleFlag(this)">❄️ Refrigerant</button>
+          <button class="flag-btn" data-flag="hvac.scheduling" onclick="toggleFlag(this)">📅 Scheduling</button>
+          <button class="flag-btn" data-flag="hvac.erv" onclick="toggleFlag(this)">🔄 ERV</button>
+        </div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('hvac')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-hvac"></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 8: DHW ============ -->
+    <div class="section" id="sec-dhw">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">DOMESTIC HOT WATER</div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Heater Type</label><select data-bind="dhw.type"><option>Gas Storage</option><option>Gas Tankless</option><option>Electric Storage</option><option>Electric Tankless</option><option>Heat Pump WH</option><option>Boiler/Indirect</option><option>Solar Thermal</option><option>None</option></select></div>
+          <div class="fg"><label>Capacity</label><div class="unit-group"><input type="number" data-bind="dhw.capacity"><select data-bind="dhw.capacityUnit"><option>gallons</option><option>liters</option></select></div></div>
+          <div class="fg"><label>Input Rating</label><div class="unit-group"><input type="number" data-bind="dhw.inputRating"><select data-bind="dhw.inputUnit"><option>kBtu/h</option><option>kW</option></select></div></div>
+        </div>
+        <div class="form-row form-row-4">
+          <div class="fg"><label>Year</label><input type="number" data-bind="dhw.year"></div>
+          <div class="fg"><label>Efficiency</label><div class="unit-group"><input type="number" step="0.01" data-bind="dhw.efficiency"><select data-bind="dhw.effUnit"><option>UEF</option><option>EF</option><option>Et%</option></select></div></div>
+          <div class="fg"><label>Piping Insulated</label><select data-bind="dhw.pipingInsulated"><option>Yes</option><option>No</option><option>Partial</option></select></div>
+          <div class="fg"><label>Recirculation</label><select data-bind="dhw.recirculation"><option>Yes</option><option>No</option></select></div>
         </div>
         <div class="form-row">
-          <div class="fg"><label>Neutral Overloaded</label><select data-bind="pq.neutralOverloaded"><option>No</option><option>Yes</option></select></div>
-          <div class="fg"><label>Pst (Flicker)</label><input type="number" step="0.01" data-bind="pq.pst"></div>
-          <div class="fg"><label>Plt (Flicker)</label><input type="number" step="0.01" data-bind="pq.plt"></div>
+          <div class="fg"><label>Recirc Pump Controls</label><select data-bind="dhw.recircControls"><option>Continuous</option><option>Timer</option><option>Demand/Aquastat</option><option>None</option></select></div>
+          <div class="fg"><label>Est. Daily Use (gallons)</label><input type="number" data-bind="dhw.dailyUse"></div>
+        </div>
+        <div class="fg"><label>Notes</label><textarea data-bind="dhw.notes" rows="3"></textarea></div>
+        <div class="flag-group">
+          <button class="flag-btn" data-flag="dhw.insulatePipes" onclick="toggleFlag(this)">🔧 Insulate Pipes</button>
+          <button class="flag-btn" data-flag="dhw.tankless" onclick="toggleFlag(this)">🔥 Upgrade Tankless</button>
+          <button class="flag-btn" data-flag="dhw.hpwh" onclick="toggleFlag(this)">♨️ Upgrade HPWH</button>
+          <button class="flag-btn" data-flag="dhw.recircTimer" onclick="toggleFlag(this)">⏰ Recirc Timer</button>
+          <button class="flag-btn" data-flag="dhw.reduceTemp" onclick="toggleFlag(this)">🌡 Reduce Temp</button>
+        </div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('dhw')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-dhw"></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 9: PLUG LOADS ============ -->
+    <div class="section" id="sec-plugloads">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">PLUG & PROCESS LOADS</div>
+        <div class="table-wrap"><table id="plug-table">
+          <thead><tr><th>Equipment</th><th>Count</th><th>Avg W</th><th>Hr/Day</th><th>Days/Yr</th><th>Power Mgmt</th><th>Annual kWh</th></tr></thead>
+          <tbody id="plug-body"></tbody>
+          <tfoot><tr><td colspan="6"><b>TOTAL</b></td><td id="plug-total" style="font-family:var(--mono);">0</td></tr></tfoot>
+        </table></div>
+        <div class="flag-group">
+          <button class="flag-btn" data-flag="plugloads.powerMgmt" onclick="toggleFlag(this)">💻 Power Management</button>
+          <button class="flag-btn" data-flag="plugloads.energyStar" onclick="toggleFlag(this)">⭐ ENERGY STAR</button>
+          <button class="flag-btn" data-flag="plugloads.smartStrips" onclick="toggleFlag(this)">🔌 Smart Strips</button>
+          <button class="flag-btn" data-flag="plugloads.vendingMisers" onclick="toggleFlag(this)">🥤 Vending Misers</button>
+          <button class="flag-btn" data-flag="plugloads.removeUnused" onclick="toggleFlag(this)">🗑 Remove Unused</button>
+        </div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('plugloads')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-plugloads"></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 10: OTHER SYSTEMS ============ -->
+    <div class="section" id="sec-other">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">OTHER SYSTEMS</div>
+        <div class="card" style="border-left:3px solid var(--accent);">
+          <div class="card-title" style="font-size:.82rem;">ELEVATORS</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Count</label><input type="number" data-bind="other.elevCount"></div>
+            <div class="fg"><label>Type</label><select data-bind="other.elevType"><option>Hydraulic</option><option>Traction</option><option>MRL</option></select></div>
+            <div class="fg"><label>Age (years)</label><input type="number" data-bind="other.elevAge"></div>
+            <div class="fg"><label>Regen Drive</label><select data-bind="other.elevRegen"><option>No</option><option>Yes</option></select></div>
+          </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--accent);">
+          <div class="card-title" style="font-size:.82rem;">DATA CENTER / SERVER ROOM</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Present</label><select data-bind="other.dcPresent"><option>No</option><option>Yes</option></select></div>
+            <div class="fg"><label>Area (ft²)</label><input type="number" data-bind="other.dcArea"></div>
+            <div class="fg"><label>IT Power (kW)</label><input type="number" data-bind="other.dcITkW"></div>
+            <div class="fg"><label>PUE</label><input type="number" step="0.01" data-bind="other.dcPUE"></div>
+          </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--accent);">
+          <div class="card-title" style="font-size:.82rem;">KITCHEN / FOOD SERVICE</div>
+          <div class="form-row form-row-3">
+            <div class="fg"><label>Present</label><select data-bind="other.kitchenPresent"><option>No</option><option>Yes</option></select></div>
+            <div class="fg"><label>ENERGY STAR Appliances</label><select data-bind="other.kitchenES"><option>No</option><option>Partial</option><option>Yes</option></select></div>
+            <div class="fg"><label>Hood Controls</label><select data-bind="other.kitchenHood"><option>No</option><option>Yes</option></select></div>
+          </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--accent);">
+          <div class="card-title" style="font-size:.82rem;">PARKING / EV / RENEWABLES</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Parking Present</label><select data-bind="other.parkingPresent"><option>No</option><option>Yes</option></select></div>
+            <div class="fg"><label>Parking Lighting</label><select data-bind="other.parkingLighting"><option>HID</option><option>LED</option><option>Fluorescent</option></select></div>
+            <div class="fg"><label>EV Charging</label><select data-bind="other.evCharging"><option>No</option><option>Yes</option></select></div>
+            <div class="fg"><label>Solar PV (kW)</label><input type="number" data-bind="other.solarPV"></div>
+          </div>
+        </div>
+        <div class="fg"><label>Notes</label><textarea data-bind="other.notes" rows="3"></textarea></div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('other')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-other"></div>
+      </div>
+    </div>
+
+    <!-- ============ SECTION 11: ELECTRICAL SYSTEMS ============ -->
+    <div class="section" id="sec-electrical">
+      <div class="subtabs">
+        <button class="subtab active" onclick="switchSubtab(this,'elec-supply')">Supply & Transformers</button>
+        <button class="subtab" onclick="switchSubtab(this,'elec-pq')">Power Quality</button>
+        <button class="subtab" onclick="switchSubtab(this,'elec-loads')">Loads</button>
+        <button class="subtab" onclick="switchSubtab(this,'elec-demand')">Demand Profile</button>
+      </div>
+
+      <!-- SUPPLY -->
+      <div class="subpanel active" id="elec-supply">
+        <div class="card card-accent">
+          <div class="card-title" style="margin-bottom:14px;">ELECTRICAL SUPPLY</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Nominal Voltage</label><div class="unit-group"><input type="number" data-bind="electrical.nomVoltage"><select data-bind="electrical.voltUnit"><option>V</option><option>kV</option></select></div></div>
+            <div class="fg"><label>Voltage Level</label><select data-bind="electrical.voltLevel"><option>LV</option><option>MV</option><option>HV</option></select></div>
+            <div class="fg"><label>Supply Type</label><select data-bind="electrical.supplyType"><option>Utility Grid</option><option>Grid + Generator</option><option>Grid + Solar</option><option>Microgrid</option></select></div>
+            <div class="fg"><label>Phases</label><select data-bind="electrical.phases"><option>3-Phase</option><option>Single-Phase</option></select></div>
+          </div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Frequency (Hz)</label><input type="number" data-bind="electrical.frequency" value="60"></div>
+            <div class="fg"><label>Measured V L1</label><input type="number" step="0.1" data-bind="electrical.vL1" onchange="calcVoltImbalance()"></div>
+            <div class="fg"><label>Measured V L2</label><input type="number" step="0.1" data-bind="electrical.vL2" onchange="calcVoltImbalance()"></div>
+            <div class="fg"><label>Measured V L3</label><input type="number" step="0.1" data-bind="electrical.vL3" onchange="calcVoltImbalance()"></div>
+          </div>
+          <div id="volt-imbalance-badge" style="margin-bottom:10px;"></div>
+        </div>
+        <div class="card card-accent">
+          <div class="card-header"><div class="card-title">TRANSFORMERS</div>
+            <button class="btn-sm btn-primary" onclick="addTransformer()">+ Add Transformer</button>
+          </div>
+          <div id="transformer-cards"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">MAIN PANELS</div>
+            <button class="btn-sm btn-primary" onclick="addPanel()">+ Add Panel</button>
+          </div>
+          <div class="table-wrap"><table id="panel-table">
+            <thead><tr><th>Tag</th><th>Type</th><th>Rated A</th><th>Voltage</th><th>Year</th><th>Condition</th><th>Metering</th><th></th></tr></thead>
+            <tbody id="panel-body"></tbody>
+          </table></div>
+        </div>
+        <button class="btn-sm btn-secondary" onclick="openPhotoModal('electrical')" style="margin-top:8px;">📷 Add Photo</button>
+        <div class="photo-grid" id="photos-electrical"></div>
+      </div>
+
+      <!-- POWER QUALITY -->
+      <div class="subpanel" id="elec-pq">
+        <div class="card card-accent">
+          <div class="card-title" style="margin-bottom:10px;">DATA SOURCE</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcBill" onchange="togglePQSection()"> Utility Bill</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcMeter" onchange="togglePQSection()"> Panel Meter</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" data-bind="pq.srcLogger" onchange="togglePQSection()"> PQ Logger</label>
+          </div>
+        </div>
+        <div class="card" id="pq-bill-section" style="display:none;">
+          <div class="card-title" style="margin-bottom:10px;">UTILITY BILL — POWER QUALITY</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Peak Demand (kW)</label><input type="number" data-bind="pq.billPeakKW"></div>
+            <div class="fg"><label>PF Penalty on Bill</label><select data-bind="pq.billPFPenalty"><option>No</option><option>Yes</option></select></div>
+            <div class="fg"><label>Penalty $/month</label><input type="number" data-bind="pq.billPenalty"></div>
+            <div class="fg"><label>Penalty Threshold PF</label><input type="number" step="0.01" data-bind="pq.billPFThreshold"></div>
+          </div>
+        </div>
+        <div class="card" id="pq-meter-section" style="display:none;">
+          <div class="card-title" style="margin-bottom:10px;">PANEL METER READINGS</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>Date/Time</label><input type="datetime-local" data-bind="pq.meterDate"></div>
+            <div class="fg"><label>kW</label><input type="number" step="0.1" data-bind="pq.meterKW"></div>
+            <div class="fg"><label>kVAR</label><input type="number" step="0.1" data-bind="pq.meterKVAR"></div>
+            <div class="fg"><label>kVA</label><input type="number" step="0.1" data-bind="pq.meterKVA"></div>
+          </div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>PF</label><input type="number" step="0.01" data-bind="pq.meterPF"></div>
+            <div class="fg"><label>V L1</label><input type="number" step="0.1" data-bind="pq.meterVL1"></div>
+            <div class="fg"><label>V L2</label><input type="number" step="0.1" data-bind="pq.meterVL2"></div>
+            <div class="fg"><label>V L3</label><input type="number" step="0.1" data-bind="pq.meterVL3"></div>
+          </div>
+          <div class="form-row form-row-3">
+            <div class="fg"><label>I L1 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL1"></div>
+            <div class="fg"><label>I L2 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL2"></div>
+            <div class="fg"><label>I L3 (A)</label><input type="number" step="0.1" data-bind="pq.meterIL3"></div>
+          </div>
+        </div>
+        <div class="card" id="pq-logger-section" style="display:none;">
+          <div class="card-title" style="margin-bottom:10px;">PQ LOGGER DATA</div>
+          <div class="form-row form-row-3">
+            <div class="fg"><label>Logger Model</label><input type="text" data-bind="pq.loggerModel"></div>
+            <div class="fg"><label>Logging Period</label><input type="text" data-bind="pq.loggerPeriod" placeholder="e.g. 7 days"></div>
+            <div class="fg"><label>Measurement Point</label><input type="text" data-bind="pq.loggerPoint" placeholder="e.g. Main MSB"></div>
+          </div>
+          <div class="card" style="border-left:3px solid var(--accent);">
+            <div class="card-title" style="font-size:.8rem;">VOLTAGE</div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>Avg V</label><input type="number" step="0.1" data-bind="pq.logAvgV"></div>
+              <div class="fg"><label>Min V</label><input type="number" step="0.1" data-bind="pq.logMinV"></div>
+              <div class="fg"><label>Max V</label><input type="number" step="0.1" data-bind="pq.logMaxV"></div>
+              <div class="fg"><label>Imbalance %</label><input type="number" step="0.01" data-bind="pq.logVImbal"></div>
+            </div>
+          </div>
+          <div class="card" style="border-left:3px solid var(--accent);">
+            <div class="card-title" style="font-size:.8rem;">POWER</div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>Avg kW</label><input type="number" step="0.1" data-bind="pq.logAvgKW"></div>
+              <div class="fg"><label>Peak kW</label><input type="number" step="0.1" data-bind="pq.logPeakKW"></div>
+              <div class="fg"><label>Min kW</label><input type="number" step="0.1" data-bind="pq.logMinKW"></div>
+              <div class="fg"><label>Avg kVAR</label><input type="number" step="0.1" data-bind="pq.logAvgKVAR"></div>
+            </div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>Avg kVA</label><input type="number" step="0.1" data-bind="pq.logAvgKVA"></div>
+              <div class="fg"><label>Displacement PF</label><input type="number" step="0.01" data-bind="pq.logDPF"></div>
+              <div class="fg"><label>Min PF</label><input type="number" step="0.01" data-bind="pq.logMinPF"></div>
+              <div class="fg"><label>True PF</label><input type="number" step="0.01" data-bind="pq.logTruePF"></div>
+            </div>
+          </div>
+          <div class="card" style="border-left:3px solid var(--accent);">
+            <div class="card-title" style="font-size:.8rem;">HARMONICS</div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>THD-V L1 %</label><input type="number" step="0.1" data-bind="pq.thdVL1"></div>
+              <div class="fg"><label>THD-V L2 %</label><input type="number" step="0.1" data-bind="pq.thdVL2"></div>
+              <div class="fg"><label>THD-V L3 %</label><input type="number" step="0.1" data-bind="pq.thdVL3"></div>
+              <div class="fg"><label>THD-V Avg %</label><input type="number" step="0.1" data-bind="pq.thdVAvg"></div>
+            </div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>THD-I L1 %</label><input type="number" step="0.1" data-bind="pq.thdIL1"></div>
+              <div class="fg"><label>THD-I L2 %</label><input type="number" step="0.1" data-bind="pq.thdIL2"></div>
+              <div class="fg"><label>THD-I L3 %</label><input type="number" step="0.1" data-bind="pq.thdIL3"></div>
+              <div class="fg"><label>THD-I Avg %</label><input type="number" step="0.1" data-bind="pq.thdIAvg"></div>
+            </div>
+            <div class="card-title" style="font-size:.75rem;margin:10px 0 6px;">INDIVIDUAL HARMONICS (% fundamental)</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Order</th><th>H3</th><th>H5</th><th>H7</th><th>H9</th><th>H11</th><th>H13</th><th>H17</th><th>H19</th><th>H23</th><th>H25</th></tr></thead>
+              <tbody>
+                <tr><td>Voltage %</td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV3" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV5" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV7" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV9" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV11" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV13" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV17" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV19" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV23" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hV25" style="width:55px;"></td>
+                </tr>
+                <tr><td>Current %</td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI3" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI5" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI7" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI9" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI11" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI13" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI17" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI19" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI23" style="width:55px;"></td>
+                  <td><input type="number" step="0.1" data-bind="pq.hI25" style="width:55px;"></td>
+                </tr>
+              </tbody>
+            </table></div>
+            <div class="form-row form-row-3" style="margin-top:10px;">
+              <div class="fg"><label>IEEE 519 Compliance</label><select data-bind="pq.ieee519"><option>Compliant</option><option>Non-Compliant</option><option>Not Assessed</option></select></div>
+              <div class="fg"><label>Dominant Source</label><input type="text" data-bind="pq.harmonicSource" placeholder="e.g. VFDs, UPS"></div>
+              <div class="fg"><label>K-Factor</label><input type="number" step="0.1" data-bind="pq.kFactor"></div>
+            </div>
+          </div>
+          <div class="card" style="border-left:3px solid var(--accent);">
+            <div class="card-title" style="font-size:.8rem;">VOLTAGE EVENTS</div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>Sags Count</label><input type="number" data-bind="pq.sagsCount"></div>
+              <div class="fg"><label>Worst Mag %</label><input type="number" step="0.1" data-bind="pq.sagsWorstMag"></div>
+              <div class="fg"><label>Worst Duration ms</label><input type="number" data-bind="pq.sagsWorstDur"></div>
+              <div class="fg"><label>Swells Count</label><input type="number" data-bind="pq.swellsCount"></div>
+            </div>
+            <div class="form-row form-row-4">
+              <div class="fg"><label>Swell Worst %</label><input type="number" step="0.1" data-bind="pq.swellsWorstMag"></div>
+              <div class="fg"><label>Swell Worst ms</label><input type="number" data-bind="pq.swellsWorstDur"></div>
+              <div class="fg"><label>Interruptions</label><input type="number" data-bind="pq.interruptCount"></div>
+              <div class="fg"><label>Interrupt Duration</label><input type="number" data-bind="pq.interruptDur"></div>
+            </div>
+            <div class="form-row form-row-3">
+              <div class="fg"><label>Transients Count</label><input type="number" data-bind="pq.transientCount"></div>
+              <div class="fg"><label>Worst Transient V</label><input type="number" data-bind="pq.transientWorst"></div>
+              <div class="fg"><label>Neutral Current A</label><input type="number" data-bind="pq.neutralCurrent"></div>
+            </div>
+            <div class="form-row">
+              <div class="fg"><label>Neutral Overloaded</label><select data-bind="pq.neutralOverloaded"><option>No</option><option>Yes</option></select></div>
+              <div class="fg"><label>Pst (Flicker)</label><input type="number" step="0.01" data-bind="pq.pst"></div>
+              <div class="fg"><label>Plt (Flicker)</label><input type="number" step="0.01" data-bind="pq.plt"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:10px;">PFC EQUIPMENT</div>
+          <div class="form-row form-row-4">
+            <div class="fg"><label>PFC Installed</label><select data-bind="pq.pfcInstalled"><option>No</option><option>Yes</option></select></div>
+            <div class="fg"><label>PFC Type</label><select data-bind="pq.pfcType"><option>Fixed Capacitor</option><option>Auto-Switched</option><option>Active Filter</option><option>Hybrid</option></select></div>
+            <div class="fg"><label>Rated kVAR</label><input type="number" data-bind="pq.pfcKVAR"></div>
+            <div class="fg"><label>PFC Condition</label><select data-bind="pq.pfcCondition"><option>Good</option><option>Fair</option><option>Poor</option><option>Failed</option></select></div>
+          </div>
+          <div id="pq-calcs" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <!-- LOADS -->
+      <div class="subpanel" id="elec-loads">
+        <div class="card card-accent">
+          <div class="card-header"><div class="card-title">LOAD INVENTORY</div>
+            <button class="btn-sm btn-primary" onclick="addLoadRow()">+ Add Load</button>
+          </div>
+          <div class="table-wrap" style="max-height:500px;overflow-y:auto;"><table id="load-table">
+            <thead><tr><th>Load</th><th>Category</th><th>NP kW</th><th>Meas kW</th><th>Meas PF</th><th>Mode</th><th>Hr/D</th><th>D/Wk</th><th>Wk/Yr</th><th>Control</th><th>Util%</th><th>Ann kWh</th><th>Ann $</th><th></th></tr></thead>
+            <tbody id="load-body"></tbody>
+          </table></div>
+        </div>
+        <div class="flag-group">
+          <button class="flag-btn" data-flag="electrical.apfc" onclick="toggleFlag(this)">⚡ APFC Bank</button>
+          <button class="flag-btn" data-flag="electrical.rightSizeXfmr" onclick="toggleFlag(this)">📐 Right-size Xfmr</button>
+          <button class="flag-btn" data-flag="electrical.vfdMotors" onclick="toggleFlag(this)">🔄 VFDs on Motors</button>
+          <button class="flag-btn" data-flag="electrical.ie3Motors" onclick="toggleFlag(this)">🏭 IE3/IE4 Motors</button>
+          <button class="flag-btn" data-flag="electrical.loadScheduling" onclick="toggleFlag(this)">📅 Load Scheduling</button>
+          <button class="flag-btn" data-flag="electrical.deenergize" onclick="toggleFlag(this)">🔌 De-energize Decom</button>
+          <button class="flag-btn" data-flag="electrical.submetering" onclick="toggleFlag(this)">📊 Sub-metering</button>
+          <button class="flag-btn" data-flag="electrical.voltImbalFix" onclick="toggleFlag(this)">⚖️ V Imbalance Fix</button>
+          <button class="flag-btn" data-flag="electrical.harmonicFilter" onclick="toggleFlag(this)">〰️ Harmonic Filter</button>
+          <button class="flag-btn" data-flag="electrical.reduceBaseLoad" onclick="toggleFlag(this)">🌙 Reduce Base Load</button>
+        </div>
+      </div>
+
+      <!-- DEMAND PROFILE -->
+      <div class="subpanel" id="elec-demand">
+        <div class="card card-accent">
+          <div class="card-title" style="margin-bottom:14px;">DEMAND PROFILE</div>
+          <div class="table-wrap"><table id="demand-table">
+            <thead><tr><th></th><th>0–6h</th><th>6–9h</th><th>9–12h</th><th>12–17h</th><th>17–21h</th><th>21–24h</th></tr></thead>
+            <tbody>
+              <tr><td><b>Weekday kW</b></td>
+                <td><input type="number" data-bind="demand.wd0" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.wd1" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.wd2" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.wd3" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.wd4" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.wd5" onchange="calcDemand()"></td>
+              </tr>
+              <tr><td><b>Weekend kW</b></td>
+                <td><input type="number" data-bind="demand.we0" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.we1" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.we2" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.we3" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.we4" onchange="calcDemand()"></td>
+                <td><input type="number" data-bind="demand.we5" onchange="calcDemand()"></td>
+              </tr>
+            </tbody>
+          </table></div>
+          <div class="metric-row" id="demand-metrics" style="margin-top:14px;"></div>
         </div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title" style="margin-bottom:10px;">PFC EQUIPMENT</div>
-      <div class="form-row form-row-4">
-        <div class="fg"><label>PFC Installed</label><select data-bind="pq.pfcInstalled"><option>No</option><option>Yes</option></select></div>
-        <div class="fg"><label>PFC Type</label><select data-bind="pq.pfcType"><option>Fixed Capacitor</option><option>Auto-Switched</option><option>Active Filter</option><option>Hybrid</option></select></div>
-        <div class="fg"><label>Rated kVAR</label><input type="number" data-bind="pq.pfcKVAR"></div>
-        <div class="fg"><label>PFC Condition</label><select data-bind="pq.pfcCondition"><option>Good</option><option>Fair</option><option>Poor</option><option>Failed</option></select></div>
+
+    <!-- ============ SECTION 12: ANALYSIS ============ -->
+    <div class="section" id="sec-analysis">
+      <div class="card card-accent"><div class="card-title">ANALYSIS & CHARTS</div><div class="card-subtitle">Auto-generated from entered data</div></div>
+      <div class="chart-row">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">UTILITY TREND</div><div class="chart-box"><canvas id="chart-utility"></canvas></div></div>
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">EUI BENCHMARK</div><div class="chart-box"><canvas id="chart-eui"></canvas></div></div>
       </div>
-      <div id="pq-calcs" style="margin-top:10px;"></div>
-    </div>
-  </div>
-
-  <!-- LOADS -->
-  <div class="subpanel" id="elec-loads">
-    <div class="card card-accent">
-      <div class="card-header"><div class="card-title">LOAD INVENTORY</div>
-        <button class="btn-sm btn-primary" onclick="addLoadRow()">+ Add Load</button>
+      <div class="chart-row">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">END-USE BREAKDOWN</div><div class="chart-box"><canvas id="chart-enduse"></canvas></div></div>
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">LIGHTING LPD BY SPACE</div><div class="chart-box"><canvas id="chart-lpd"></canvas></div></div>
       </div>
-      <div class="table-wrap" style="max-height:500px;overflow-y:auto;"><table id="load-table">
-        <thead><tr><th>Load</th><th>Category</th><th>NP kW</th><th>Meas kW</th><th>Meas PF</th><th>Mode</th><th>Hr/D</th><th>D/Wk</th><th>Wk/Yr</th><th>Control</th><th>Util%</th><th>Ann kWh</th><th>Ann $</th><th></th></tr></thead>
-        <tbody id="load-body"></tbody>
-      </table></div>
+      <div class="chart-row">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">ECM SAVINGS SUMMARY</div><div class="chart-box"><canvas id="chart-ecm"></canvas></div></div>
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">DEMAND PROFILE</div><div class="chart-box"><canvas id="chart-demand"></canvas></div></div>
+      </div>
+      <div class="chart-row">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER UTILIZATION</div><div class="chart-box"><canvas id="chart-xfmr"></canvas></div></div>
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">POWER FACTOR</div><div class="chart-box"><canvas id="chart-pf"></canvas></div></div>
+      </div>
+      <div class="chart-row">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">LOAD BY CATEGORY</div><div class="chart-box"><canvas id="chart-loadcat"></canvas></div></div>
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">OPERATING MODE</div><div class="chart-box"><canvas id="chart-opmode"></canvas></div></div>
+      </div>
+      <div class="chart-row" id="pq-charts-row" style="display:none;">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">HARMONIC SPECTRUM</div><div class="chart-box"><canvas id="chart-harmonics"></canvas></div></div>
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">VOLTAGE EVENTS</div><div class="chart-box"><canvas id="chart-voltevents"></canvas></div></div>
+      </div>
+      <div class="chart-row">
+        <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER LOSSES</div><div class="chart-box"><canvas id="chart-xfmrloss"></canvas></div></div>
+      </div>
     </div>
-    <div class="flag-group">
-      <button class="flag-btn" data-flag="electrical.apfc" onclick="toggleFlag(this)">⚡ APFC Bank</button>
-      <button class="flag-btn" data-flag="electrical.rightSizeXfmr" onclick="toggleFlag(this)">📐 Right-size Xfmr</button>
-      <button class="flag-btn" data-flag="electrical.vfdMotors" onclick="toggleFlag(this)">🔄 VFDs on Motors</button>
-      <button class="flag-btn" data-flag="electrical.ie3Motors" onclick="toggleFlag(this)">🏭 IE3/IE4 Motors</button>
-      <button class="flag-btn" data-flag="electrical.loadScheduling" onclick="toggleFlag(this)">📅 Load Scheduling</button>
-      <button class="flag-btn" data-flag="electrical.deenergize" onclick="toggleFlag(this)">🔌 De-energize Decom</button>
-      <button class="flag-btn" data-flag="electrical.submetering" onclick="toggleFlag(this)">📊 Sub-metering</button>
-      <button class="flag-btn" data-flag="electrical.voltImbalFix" onclick="toggleFlag(this)">⚖️ V Imbalance Fix</button>
-      <button class="flag-btn" data-flag="electrical.harmonicFilter" onclick="toggleFlag(this)">〰️ Harmonic Filter</button>
-      <button class="flag-btn" data-flag="electrical.reduceBaseLoad" onclick="toggleFlag(this)">🌙 Reduce Base Load</button>
-    </div>
-  </div>
 
-  <!-- DEMAND PROFILE -->
-  <div class="subpanel" id="elec-demand">
-    <div class="card card-accent">
-      <div class="card-title" style="margin-bottom:14px;">DEMAND PROFILE</div>
-      <div class="table-wrap"><table id="demand-table">
-        <thead><tr><th></th><th>0–6h</th><th>6–9h</th><th>9–12h</th><th>12–17h</th><th>17–21h</th><th>21–24h</th></tr></thead>
-        <tbody>
-          <tr><td><b>Weekday kW</b></td>
-            <td><input type="number" data-bind="demand.wd0" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.wd1" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.wd2" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.wd3" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.wd4" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.wd5" onchange="calcDemand()"></td>
-          </tr>
-          <tr><td><b>Weekend kW</b></td>
-            <td><input type="number" data-bind="demand.we0" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.we1" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.we2" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.we3" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.we4" onchange="calcDemand()"></td>
-            <td><input type="number" data-bind="demand.we5" onchange="calcDemand()"></td>
-          </tr>
-        </tbody>
-      </table></div>
-      <div class="metric-row" id="demand-metrics" style="margin-top:14px;"></div>
+    <!-- ============ SECTION 13: REPORT ============ -->
+    <div class="section" id="sec-report">
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:14px;">GENERATE REPORT</div>
+        <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:16px;">Generate a self-contained HTML report or export all data as CSV.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <button class="btn-primary" onclick="generateReport()" style="padding:12px 28px;font-size:.95rem;">📄 Generate HTML Report</button>
+          <button class="btn-secondary" onclick="downloadCSV()" style="padding:12px 28px;font-size:.95rem;">📊 Download CSV</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px;">ECM RECOMMENDATIONS</div>
+        <div class="table-wrap"><table id="ecm-table">
+          <thead><tr><th>ID</th><th>System</th><th>Title</th><th>Savings %</th><th>Priority</th><th>Est Cost $</th><th>Ann Savings $</th><th>Payback</th><th>Selected</th></tr></thead>
+          <tbody id="ecm-body"></tbody>
+        </table></div>
+      </div>
+      <div class="card card-accent">
+        <div class="card-title" style="margin-bottom:10px;">AI-ASSISTED ANALYSIS</div>
+        <p style="color:var(--text-secondary);font-size:.82rem;margin-bottom:10px;">Generate AI narrative analysis for your report. Review and edit before exporting.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn-primary" onclick="generateAIAnalysis('executive')">📝 Executive Summary</button>
+          <button class="btn-secondary" onclick="generateAIAnalysis('findings')">🔍 Key Findings</button>
+          <button class="btn-secondary" onclick="generateAIAnalysis('ecm')">💡 ECM Analysis</button>
+          <button class="btn-secondary" onclick="generateAIAnalysis('electrical')">⚡ Electrical Analysis</button>
+          <button class="btn-secondary" onclick="generateAIAnalysis('full')">📄 Full Report Narrative</button>
+        </div>
+        <div id="ai-status" style="margin-bottom:8px;"></div>
+        <textarea id="ai-output" class="ai-textarea" placeholder="AI-generated analysis will appear here. You can edit before including in the report."></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn-sm btn-secondary" onclick="document.getElementById('ai-output').value='';document.getElementById('ai-status').innerHTML='';">Clear</button>
+          <button class="btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('ai-output').value);alert('Copied!');">📋 Copy</button>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- ============ SECTION 12: ANALYSIS ============ -->
-<div class="section" id="sec-analysis">
-  <div class="card card-accent"><div class="card-title">ANALYSIS & CHARTS</div><div class="card-subtitle">Auto-generated from entered data</div></div>
-  <div class="chart-row">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">UTILITY TREND</div><div class="chart-box"><canvas id="chart-utility"></canvas></div></div>
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">EUI BENCHMARK</div><div class="chart-box"><canvas id="chart-eui"></canvas></div></div>
-  </div>
-  <div class="chart-row">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">END-USE BREAKDOWN</div><div class="chart-box"><canvas id="chart-enduse"></canvas></div></div>
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">LIGHTING LPD BY SPACE</div><div class="chart-box"><canvas id="chart-lpd"></canvas></div></div>
-  </div>
-  <div class="chart-row">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">ECM SAVINGS SUMMARY</div><div class="chart-box"><canvas id="chart-ecm"></canvas></div></div>
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">DEMAND PROFILE</div><div class="chart-box"><canvas id="chart-demand"></canvas></div></div>
-  </div>
-  <div class="chart-row">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER UTILIZATION</div><div class="chart-box"><canvas id="chart-xfmr"></canvas></div></div>
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">POWER FACTOR</div><div class="chart-box"><canvas id="chart-pf"></canvas></div></div>
-  </div>
-  <div class="chart-row">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">LOAD BY CATEGORY</div><div class="chart-box"><canvas id="chart-loadcat"></canvas></div></div>
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">OPERATING MODE</div><div class="chart-box"><canvas id="chart-opmode"></canvas></div></div>
-  </div>
-  <div class="chart-row" id="pq-charts-row" style="display:none;">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">HARMONIC SPECTRUM</div><div class="chart-box"><canvas id="chart-harmonics"></canvas></div></div>
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">VOLTAGE EVENTS</div><div class="chart-box"><canvas id="chart-voltevents"></canvas></div></div>
-  </div>
-  <div class="chart-row">
-    <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER LOSSES</div><div class="chart-box"><canvas id="chart-xfmrloss"></canvas></div></div>
-  </div>
-</div>
-
-<!-- ============ SECTION 13: REPORT ============ -->
-<div class="section" id="sec-report">
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:14px;">GENERATE REPORT</div>
-    <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:16px;">Generate a self-contained HTML report or export all data as CSV.</p>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      <button class="btn-primary" onclick="generateReport()" style="padding:12px 28px;font-size:.95rem;">📄 Generate HTML Report</button>
-      <button class="btn-secondary" onclick="downloadCSV()" style="padding:12px 28px;font-size:.95rem;">📊 Download CSV</button>
+      </main>
     </div>
   </div>
-  <div class="card">
-    <div class="card-title" style="margin-bottom:10px;">ECM RECOMMENDATIONS</div>
-    <div class="table-wrap"><table id="ecm-table">
-      <thead><tr><th>ID</th><th>System</th><th>Title</th><th>Savings %</th><th>Priority</th><th>Est Cost $</th><th>Ann Savings $</th><th>Payback</th><th>Selected</th></tr></thead>
-      <tbody id="ecm-body"></tbody>
-    </table></div>
-  </div>
-  <div class="card card-accent">
-    <div class="card-title" style="margin-bottom:10px;">AI-ASSISTED ANALYSIS</div>
-    <p style="color:var(--text-secondary);font-size:.82rem;margin-bottom:10px;">Generate AI narrative analysis for your report. Review and edit before exporting.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="btn-primary" onclick="generateAIAnalysis('executive')">📝 Executive Summary</button>
-      <button class="btn-secondary" onclick="generateAIAnalysis('findings')">🔍 Key Findings</button>
-      <button class="btn-secondary" onclick="generateAIAnalysis('ecm')">💡 ECM Analysis</button>
-      <button class="btn-secondary" onclick="generateAIAnalysis('electrical')">⚡ Electrical Analysis</button>
-      <button class="btn-secondary" onclick="generateAIAnalysis('full')">📄 Full Report Narrative</button>
-    </div>
-    <div id="ai-status" style="margin-bottom:8px;"></div>
-    <textarea id="ai-output" class="ai-textarea" placeholder="AI-generated analysis will appear here. You can edit before including in the report."></textarea>
-    <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn-sm btn-secondary" onclick="document.getElementById('ai-output').value='';document.getElementById('ai-status').innerHTML='';">Clear</button>
-      <button class="btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('ai-output').value);alert('Copied!');">📋 Copy</button>
-    </div>
-  </div>
-</div>
-
-  </main>
-</div>
-</div>
 
 <!-- PHOTO MODAL -->
 
