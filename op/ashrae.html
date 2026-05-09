@@ -1237,15 +1237,21 @@ function updateTopbar() {
 
 function updateProgress() {
   let complete = 0;
-  const checks = [
-    appState.project.buildingName, appState.settings.auditorName,
-    appState.utility.rows.length > 0, appState.project.grossArea,
-    appState.envelope.condition, appState.lighting.rows.length > 0,
-    appState.hvac.rows.length > 0, appState.dhw.type,
-    appState.plugloads.rows.length > 0, true,
-    appState.electrical.transformers.length > 0 || appState.loads.length > 0,
-    true, true
-  ];
+    const checks = [
+      appState.project.buildingName && appState.project.grossArea,  // Project has name+area
+      appState.settings.auditorName,                                 // Auditor identified
+      appState.utility.rows.some(r => parseFloat(r.kwh) > 0),       // At least 1 utility row with data
+      appState.project.grossArea > 0,                                // Area entered (for EUI)
+      appState.envelope.notes || appState.envelope.wallIns !== 'None', // Envelope assessed
+      appState.lighting.rows.some(r => r.space && r.count),          // Lighting has real data
+      appState.hvac.rows.some(r => r.name && r.cap),                 // HVAC has real data  
+      appState.dhw.capacity > 0 || appState.dhw.type === 'None',     // DHW assessed
+      appState.plugloads.rows.some(r => r.count > 0),                // Plugs have counts
+      Object.keys(appState.other).some(k => k!=='notes' && appState.other[k] && appState.other[k]!=='No' && appState.other[k]!=='Hydraulic'), // Other has data
+      appState.electrical.transformers.length > 0 || appState.loads.length > 0, // Electrical has data
+      Object.values(appState.ecmSelections).some(v => v),            // At least 1 ECM selected
+      false // Report is never "complete" until generated
+    ];
   checks.forEach(c => { if (c) complete++; });
   const pct = Math.round(complete / 13 * 100);
   document.getElementById('progress-fill').style.width = pct + '%';
@@ -2384,53 +2390,323 @@ Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kV
 // ========== DEMO DATA ==========
 function loadDemo() {
   if (!confirm('Load demo project? This will overwrite current data.')) return;
-  appState.settings = {auditorName:'Jane Smith, PE, CEM',companyName:'Energy Solutions LLC',companyLogo:'',climateZone:'2A',units:'IP'};
-  appState.project = {buildingName:'Greenfield Office Complex',address:'1200 Commerce Blvd',city:'Houston',state:'TX',country:'USA',yearBuilt:1998,floors:5,grossArea:85000,areaUnit:'ft²',occupancyType:'Office Large',contact:'Mike Johnson',phone:'713-555-0123',auditDate:'2026-05-09'};
+
+  // Settings — include ALL fields
+  appState.settings = {
+    auditorName:'Jane Smith, PE, CEM',
+    companyName:'Energy Solutions LLC',
+    companyLogo:'',
+    companyLogoURL:'',
+    climateZone:'2A',
+    units:'IP',
+    ashraeLevel:'1',
+    aiApiKey:'AIzaSyAHd1TGPyt6MtP7MEJUNICmTJUGlIcF9f4'
+  };
+
+  // Project — include ALL fields including client info
+  appState.project = {
+    buildingName:'Greenfield Office Complex',
+    address:'1200 Commerce Blvd',
+    city:'Houston',
+    state:'TX',
+    country:'USA',
+    yearBuilt:1998,
+    floors:5,
+    grossArea:85000,
+    areaUnit:'ft²',
+    occupancyType:'Office Large',
+    contact:'Mike Johnson',
+    phone:'713-555-0123',
+    auditDate:'2026-05-09',
+    clientCompany:'Greenfield Properties Inc.',
+    clientContact:'Sarah Chen, VP Facilities',
+    clientEmail:'schen@greenfieldprop.com',
+    clientPhone:'713-555-0456',
+    clientSector:'Commercial',
+    clientLogoURL:'',
+    clientLogo:''
+  };
+
+  // Utility — with realistic peak kW per month
   const months = ['Jan 2025','Feb 2025','Mar 2025','Apr 2025','May 2025','Jun 2025','Jul 2025','Aug 2025','Sep 2025','Oct 2025','Nov 2025','Dec 2025'];
   const kwhs = [285000,270000,295000,340000,410000,490000,530000,515000,460000,360000,300000,278000];
+  const pkws = [680,650,710,820,980,1050,1100,1080,1020,880,750,700];
   const gas = [1200,1050,800,400,120,60,60,60,120,400,900,1150];
-  appState.utility.elecRate = 0.10; appState.utility.gasRate = 1.20;
-  appState.utility.rows = months.map((m,i) => ({month:m,kwh:kwhs[i],ecost:kwhs[i]*0.10,pkw:0,gas:gas[i],gcost:gas[i]*1.20,notes:''}));
-  appState.lighting.rows = [
-    {space:'Open Plan Office',area:40000,areaUnit:'ft²',fixture:'T8 Fluor',count:800,wpf:32,control:'Manual',hpd:10,dpy:261,pctLed:5,condition:'Fair'},
-    {space:'Conference Rooms',area:5000,areaUnit:'ft²',fixture:'T8 Fluor',count:60,wpf:32,control:'Manual',hpd:8,dpy:261,pctLed:0,condition:'Fair'},
-    {space:'Lobby',area:3000,areaUnit:'ft²',fixture:'LED Downlight',count:40,wpf:18,control:'Always On',hpd:14,dpy:365,pctLed:100,condition:'Good'}
-  ];
-  appState.hvac.rows = [
-    {name:'RTU-1',type:'Packaged RTU/VAV',cap:60,capUnit:'tons',year:2005,condition:'Fair',refrigerant:'R-22',eff:9.8,effUnit:'EER',controls:'Programmable',economizer:'No',notes:'Aging, R-22 phase-out concern'},
-    {name:'Chiller-1',type:'Chilled Water',cap:400,capUnit:'tons',year:2001,condition:'Poor',refrigerant:'R-134a',eff:0.72,effUnit:'kW/ton',controls:'BAS',economizer:'No',notes:'End of useful life, low efficiency'}
-  ];
-  appState.hvac.replaceOld = true; appState.hvac.refrigerant = true; appState.hvac.vfd = true;
-  appState.lighting.ledRetrofit = true; appState.lighting.occSensors = true;
-  appState.envelope = {wallConst:'Steel Frame',wallIns:'Fiberglass Batts',roofType:'Single-Ply Membrane',roofIns:'Rigid Board Above Deck',roofColor:'Dark',windowType:'Double Clear',windowFrame:'Aluminum No Break',wwr:40,infiltration:'Average',condition:'Fair',notes:'Roof membrane showing wear. Windows original 1998, no low-E.',airSealing:true,coolRoof:true,addInsulation:false,windowUpgrade:true,shading:false};
-  appState.dhw = {type:'Gas Storage',capacity:120,capacityUnit:'gallons',inputRating:75,inputUnit:'kBtu/h',year:2010,efficiency:0.62,effUnit:'EF',pipingInsulated:'Partial',recirculation:'Yes',recircControls:'Continuous',dailyUse:300,notes:'Continuous recirc pump — timer recommended',insulatePipes:true,tankless:false,hpwh:false,recircTimer:true,reduceTemp:false};
-  appState.plugloads.rows = PLUG_DEFAULTS.map((d,i) => ({...d,count:[450,450,30,4,8,6,10,12][i]||0,powerMgmt:[false,false,false,false,false,false,false,false][i]}));
-  appState.plugloads.powerMgmt = true; appState.plugloads.smartStrips = true;
-  appState.electrical.transformers = [{tag:'TR-1',type:'Dry',ratedKVA:2000,year:1999,priV:13800,secV:480,ironLoss:3200,copperLoss:18000,measKW:680,measKVAR:510,measKVA:850,measPF:0.84,tempRise:'115°C',condition:'Fair'}];
-  appState.electrical.vL1 = 479; appState.electrical.vL2 = 481; appState.electrical.vL3 = 478;
-  appState.electrical.nomVoltage = 480; appState.electrical.voltUnit = 'V'; appState.electrical.voltLevel = 'LV';
-  appState.electrical.frequency = 60; appState.electrical.phases = '3-Phase'; appState.electrical.supplyType = 'Utility Grid';
-  appState.electrical.apfc = true; appState.electrical.vfdMotors = true; appState.electrical.harmonicFilter = true;
-  appState.electrical.reduceBaseLoad = true;
-  appState.pq = {srcBill:true,srcMeter:true,srcLogger:true,billPeakKW:1050,billPFPenalty:'Yes',billPenalty:850,billPFThreshold:0.90,
-    meterDate:'2026-05-01T14:00',meterKW:680,meterKVAR:510,meterKVA:850,meterPF:0.84,meterVL1:479,meterVL2:481,meterVL3:478,meterIL1:1022,meterIL2:1018,meterIL3:1025,
-    loggerModel:'Fluke 1760',loggerPeriod:'7 days',loggerPoint:'Main MSB',logAvgV:479.3,logMinV:462,logMaxV:488,logVImbal:0.42,logAvgKW:580,logPeakKW:1050,logMinKW:185,logAvgKVAR:435,logAvgKVA:725,logDPF:0.86,logMinPF:0.78,logTruePF:0.84,
-    thdVL1:3.2,thdVL2:3.1,thdVL3:3.4,thdVAvg:3.23,thdIL1:18.2,thdIL2:18.8,thdIL3:18.5,thdIAvg:18.5,
+  appState.utility = {
+    elecRate:0.10,
+    gasRate:1.20,
+    rows: months.map((m,i) => ({
+      month:m,
+      kwh:kwhs[i],
+      ecost:Math.round(kwhs[i]*0.10),
+      pkw:pkws[i],
+      gas:gas[i],
+      gcost:Math.round(gas[i]*1.20),
+      notes: i===6?'Peak summer month':i===0?'Heating season peak gas':''
+    }))
+  };
+
+  // Envelope
+  appState.envelope = {
+    wallConst:'Steel Frame',
+    wallIns:'Fiberglass Batts',
+    roofType:'Single-Ply Membrane',
+    roofIns:'Rigid Board Above Deck',
+    roofColor:'Dark',
+    windowType:'Double Clear',
+    windowFrame:'Aluminum No Break',
+    wwr:40,
+    infiltration:'Average',
+    condition:'Fair',
+    notes:'Roof membrane showing wear at seams and penetrations. Windows original 1998, no low-E coating. Solar heat gain significant on west elevation. Loading dock doors do not seal properly.',
+    airSealing:true,
+    coolRoof:true,
+    addInsulation:false,
+    windowUpgrade:true,
+    shading:false
+  };
+
+  // Lighting — 6 zones for realistic coverage
+  appState.lighting = {
+    rows:[
+      {space:'Open Plan Office',area:40000,areaUnit:'ft²',fixture:'T8 Fluor',count:800,wpf:32,control:'Manual',hpd:10,dpy:261,pctLed:5,condition:'Fair'},
+      {space:'Conference Rooms',area:5000,areaUnit:'ft²',fixture:'T8 Fluor',count:60,wpf:32,control:'Manual',hpd:8,dpy:261,pctLed:0,condition:'Fair'},
+      {space:'Lobby',area:3000,areaUnit:'ft²',fixture:'LED Downlight',count:40,wpf:18,control:'Always On',hpd:14,dpy:365,pctLed:100,condition:'Good'},
+      {space:'Corridor',area:8000,areaUnit:'ft²',fixture:'T8 Fluor',count:120,wpf:32,control:'Always On',hpd:12,dpy:365,pctLed:0,condition:'Fair'},
+      {space:'Restroom',area:4000,areaUnit:'ft²',fixture:'T8 Fluor',count:48,wpf:32,control:'Manual',hpd:10,dpy:261,pctLed:0,condition:'Fair'},
+      {space:'Storage',area:6000,areaUnit:'ft²',fixture:'T8 Fluor',count:30,wpf:32,control:'Manual',hpd:4,dpy:261,pctLed:0,condition:'Poor'}
+    ],
+    ledRetrofit:true,
+    occSensors:true,
+    daylighting:false,
+    reduceHours:true,
+    exteriorControls:false
+  };
+
+  // HVAC — 4 systems
+  appState.hvac = {
+    rows:[
+      {name:'RTU-1',type:'Packaged RTU/VAV',cap:60,capUnit:'tons',year:2005,condition:'Fair',refrigerant:'R-22',eff:9.8,effUnit:'EER',controls:'Programmable',economizer:'No',notes:'Aging, R-22 phase-out concern. Compressor short-cycling observed.'},
+      {name:'RTU-2',type:'Packaged RTU/VAV',cap:40,capUnit:'tons',year:2005,condition:'Fair',refrigerant:'R-22',eff:9.5,effUnit:'EER',controls:'Programmable',economizer:'No',notes:'Same vintage as RTU-1. Condenser coils dirty.'},
+      {name:'Chiller-1',type:'Chilled Water',cap:400,capUnit:'tons',year:2001,condition:'Poor',refrigerant:'R-134a',eff:0.72,effUnit:'kW/ton',controls:'BAS',economizer:'No',notes:'End of useful life, low efficiency. Tube fouling evident. Approach temp 8°F vs design 3°F.'},
+      {name:'Boiler-1',type:'Boiler+AHU',cap:2000,capUnit:'kW',year:2003,condition:'Fair',refrigerant:'Other',eff:82,effUnit:'COP',controls:'BAS',economizer:'No',notes:'Natural gas fired. 82% Et. No condensing. Stack temp 420°F.'}
+    ],
+    upgradeControls:true,
+    economizer:true,
+    dcv:true,
+    replaceOld:true,
+    vfd:true,
+    ductSeal:true,
+    refrigerant:true,
+    scheduling:true,
+    erv:false
+  };
+
+  // DHW
+  appState.dhw = {
+    type:'Gas Storage',
+    capacity:120,
+    capacityUnit:'gallons',
+    inputRating:75,
+    inputUnit:'kBtu/h',
+    year:2010,
+    efficiency:0.62,
+    effUnit:'EF',
+    pipingInsulated:'Partial',
+    recirculation:'Yes',
+    recircControls:'Continuous',
+    dailyUse:300,
+    notes:'Continuous recirc pump running 24/7 — timer or aquastat recommended. Tank jacket warm to touch, standby losses evident. Mixing valve set to 140°F, can reduce to 120°F.',
+    insulatePipes:true,
+    tankless:false,
+    hpwh:false,
+    recircTimer:true,
+    reduceTemp:true
+  };
+
+  // Plug Loads — with realistic counts
+  appState.plugloads = {
+    rows: PLUG_DEFAULTS.map((d,i) => ({
+      ...d,
+      count:[450,450,30,4,8,6,10,12][i]||0,
+      powerMgmt:[false,false,false,false,false,false,false,false][i]
+    })),
+    powerMgmt:true,
+    energyStar:false,
+    smartStrips:true,
+    vendingMisers:true,
+    removeUnused:false
+  };
+
+  // Other Systems — fully populated
+  appState.other = {
+    elevCount:3,
+    elevType:'Traction',
+    elevAge:15,
+    elevRegen:'No',
+    dcPresent:'Yes',
+    dcArea:400,
+    dcITkW:45,
+    dcPUE:1.8,
+    kitchenPresent:'Yes',
+    kitchenES:'Partial',
+    kitchenHood:'No',
+    parkingPresent:'Yes',
+    parkingLighting:'HID',
+    evCharging:'No',
+    solarPV:0,
+    notes:'Server room: no hot/cold aisle containment, 3x 15-ton CRAC units running continuously. Parking garage: 150 HID fixtures on 24/7, no photocell or occupancy controls. Kitchen: 5th floor cafeteria, range hood exhaust fan runs continuously during building hours. 3 traction elevators, no regenerative drives.'
+  };
+
+  // Electrical — supply, transformers, panels
+  appState.electrical = {
+    nomVoltage:480,
+    voltUnit:'V',
+    voltLevel:'LV',
+    supplyType:'Utility Grid',
+    phases:'3-Phase',
+    frequency:60,
+    vL1:479,
+    vL2:481,
+    vL3:478,
+    transformers:[
+      {tag:'TR-1',type:'Dry',ratedKVA:2000,year:1999,priV:13800,secV:480,ironLoss:3200,copperLoss:18000,measKW:680,measKVAR:510,measKVA:850,measPF:0.84,tempRise:'115°C',condition:'Fair'},
+      {tag:'TR-2',type:'Dry',ratedKVA:500,year:1999,priV:480,secV:208,ironLoss:900,copperLoss:5500,measKW:120,measKVAR:85,measKVA:147,measPF:0.82,tempRise:'95°C',condition:'Good'}
+    ],
+    panels:[
+      {tag:'MSB-1',type:'Main Switchboard',ratedA:3000,voltage:480,year:1999,condition:'Fair',metering:'Digital'},
+      {tag:'MDP-1',type:'Distribution',ratedA:1200,voltage:480,year:1999,condition:'Fair',metering:'None'},
+      {tag:'LP-1',type:'Sub-Panel',ratedA:400,voltage:208,year:1999,condition:'Fair',metering:'None'},
+      {tag:'MCC-1',type:'Motor Control Center',ratedA:800,voltage:480,year:2005,condition:'Good',metering:'CT Logger'}
+    ],
+    apfc:true,
+    rightSizeXfmr:false,
+    vfdMotors:true,
+    ie3Motors:true,
+    loadScheduling:true,
+    deenergize:true,
+    submetering:true,
+    voltImbalFix:false,
+    harmonicFilter:true,
+    reduceBaseLoad:true
+  };
+
+  // Power Quality — full dataset
+  appState.pq = {
+    srcBill:true,
+    srcMeter:true,
+    srcLogger:true,
+    billPeakKW:1050,
+    billPFPenalty:'Yes',
+    billPenalty:850,
+    billPFThreshold:0.90,
+    meterDate:'2026-05-01T14:00',
+    meterKW:680,
+    meterKVAR:510,
+    meterKVA:850,
+    meterPF:0.84,
+    meterVL1:479,
+    meterVL2:481,
+    meterVL3:478,
+    meterIL1:1022,
+    meterIL2:1018,
+    meterIL3:1025,
+    loggerModel:'Fluke 1760',
+    loggerPeriod:'7 days',
+    loggerPoint:'Main MSB',
+    logAvgV:479.3,
+    logMinV:462,
+    logMaxV:488,
+    logVImbal:0.42,
+    logAvgKW:580,
+    logPeakKW:1050,
+    logMinKW:185,
+    logAvgKVAR:435,
+    logAvgKVA:725,
+    logDPF:0.86,
+    logMinPF:0.78,
+    logTruePF:0.84,
+    thdVL1:3.2,
+    thdVL2:3.1,
+    thdVL3:3.4,
+    thdVAvg:3.23,
+    thdIL1:18.2,
+    thdIL2:18.8,
+    thdIL3:18.5,
+    thdIAvg:18.5,
     hV3:1.2,hV5:2.4,hV7:1.8,hV9:0.5,hV11:0.8,hV13:0.4,hV17:0.2,hV19:0.1,hV23:0.1,hV25:0.05,
     hI3:3.2,hI5:14.8,hI7:9.1,hI9:2.1,hI11:4.2,hI13:2.8,hI17:1.5,hI19:1.0,hI23:0.8,hI25:0.5,
-    ieee519:'Non-Compliant',harmonicSource:'VFDs on chiller and AHU',kFactor:8.4,
-    sagsCount:12,sagsWorstMag:72,sagsWorstDur:450,swellsCount:3,swellsWorstMag:112,swellsWorstDur:200,interruptCount:1,interruptDur:2000,transientCount:5,transientWorst:650,
-    neutralCurrent:340,neutralOverloaded:'Yes',pst:0.8,plt:0.6,
-    pfcInstalled:'No',pfcType:'Fixed Capacitor',pfcKVAR:'',pfcCondition:'Good'};
-  appState.demand = {wd0:185,wd1:520,wd2:950,wd3:1050,wd4:620,wd5:210,we0:180,we1:195,we2:320,we3:350,we4:230,we5:185};
+    ieee519:'Non-Compliant',
+    harmonicSource:'VFDs on chiller and AHU, UPS systems, IT server room loads',
+    kFactor:8.4,
+    sagsCount:12,
+    sagsWorstMag:72,
+    sagsWorstDur:450,
+    swellsCount:3,
+    swellsWorstMag:112,
+    swellsWorstDur:200,
+    interruptCount:1,
+    interruptDur:2000,
+    transientCount:5,
+    transientWorst:650,
+    neutralCurrent:340,
+    neutralOverloaded:'Yes',
+    pst:0.8,
+    plt:0.6,
+    pfcInstalled:'No',
+    pfcType:'Fixed Capacitor',
+    pfcKVAR:'',
+    pfcCondition:'Good'
+  };
+
+  // Demand Profile
+  appState.demand = {
+    wd0:185,wd1:520,wd2:950,wd3:1050,wd4:620,wd5:210,
+    we0:180,we1:195,we2:320,we3:350,we4:230,we5:185
+  };
+
+  // Loads — 10 loads for complete inventory
   appState.loads = [
-    {name:'Chiller-1',category:'HVAC-Chiller',npKW:422,measKW:380,measPF:0.88,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'VFD',condition:'Poor',notes:''},
-    {name:'AHU-1 Fan',category:'HVAC-AHU-Fan',npKW:45,measKW:42,measPF:0.85,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',condition:'Fair',notes:'IE1 motor — upgrade candidate'},
-    {name:'IT UPS',category:'UPS',npKW:80,measKW:65,measPF:0.92,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'None',condition:'Good',notes:''},
-    {name:'Lighting Panel LP-1',category:'Lighting-Interior',npKW:96,measKW:88,measPF:0.95,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'Timer',condition:'Fair',notes:''},
-    {name:'Emergency Gen',category:'Standby Generator',npKW:500,measKW:0,measPF:0.80,mode:'Standby/Backup-normally off',hpd:0.5,dpw:1,wpy:52,control:'Manual',condition:'Good',notes:'Monthly test runs only'}
+    {name:'Chiller-1',category:'HVAC-Chiller',npKW:422,measKW:380,measPF:0.88,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'VFD',condition:'Poor',notes:'End of life. Tube fouling.'},
+    {name:'AHU-1 Supply Fan',category:'HVAC-AHU-Fan',npKW:45,measKW:42,measPF:0.85,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',condition:'Fair',notes:'IE1 motor — upgrade candidate'},
+    {name:'AHU-2 Supply Fan',category:'HVAC-AHU-Fan',npKW:30,measKW:28,measPF:0.84,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',condition:'Fair',notes:'IE1 motor'},
+    {name:'CW Pump P-1',category:'HVAC-Pump',npKW:22,measKW:20,measPF:0.86,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'DOL',condition:'Fair',notes:'Constant speed, throttled valve'},
+    {name:'Cooling Tower CT-1',category:'HVAC-Cooling Tower',npKW:15,measKW:13,measPF:0.82,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'Star-Delta',condition:'Fair',notes:'Two-speed motor'},
+    {name:'IT UPS',category:'UPS',npKW:80,measKW:65,measPF:0.92,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'None',condition:'Good',notes:'Double-conversion UPS, 81% load'},
+    {name:'Server Room CRAC-1',category:'HVAC-Compressor',npKW:18,measKW:16,measPF:0.90,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'Thermostat',condition:'Good',notes:'Set to 68°F. No containment.'},
+    {name:'Lighting Panel LP-1',category:'Lighting-Interior',npKW:96,measKW:88,measPF:0.95,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'Timer',condition:'Fair',notes:'T8 fluorescent, manual overrides common'},
+    {name:'Elevator Motors (3)',category:'Elevator',npKW:45,measKW:15,measPF:0.75,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'VFD',condition:'Good',notes:'Avg load ~33%, intermittent duty'},
+    {name:'Emergency Gen',category:'Standby Generator',npKW:500,measKW:0,measPF:0.80,mode:'Standby/Backup-normally off',hpd:0.5,dpw:1,wpy:52,control:'Manual',condition:'Good',notes:'Monthly test runs only. 500kW diesel.'}
   ];
-  appState.ecmSelections = {L01:true,L02:true,H04:true,H05:true,H08:true,E02:true,EL01:true,EL04:true,EL10:true,EL13:true,W02:true,P01:true};
+
+  // ECM Selections
+  appState.ecmSelections = {
+    L01:true,L02:true,L05:true,
+    H01:true,H04:true,H05:true,H06:true,H08:true,
+    E02:true,E03:true,
+    W01:true,W02:true,
+    P01:true,P03:true,
+    EL01:true,EL04:true,EL06:true,EL07:true,EL08:true,EL10:true,EL13:true
+  };
+  appState.ecmCosts = {
+    L01:170000,L02:8000,L05:0,
+    H01:3000,H04:25000,H05:350000,H06:4000,H08:65000,
+    E02:85000,E03:20000,
+    W01:1500,W02:200,
+    P01:0,P03:2400,
+    EL01:18000,EL04:24000,EL06:3000,EL07:0,EL08:8000,EL10:35000,EL13:2000
+  };
+
+  // Photos — empty but initialized
+  appState.photos = {envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]};
+
+  // Checklist — pre-check the items that a demo would have
+  appState.checklist = {0:true,1:true,2:true,3:false,4:false,5:true,6:true};
+
+  // AI Draft — empty
+  appState.aiDraft = '';
+
+  // Save and rebuild everything
   save();
   bindAll();
   updateFlagButtons();
@@ -2450,6 +2726,7 @@ function loadDemo() {
   updateDashSummary();
   updateProgress();
   buildECMTable();
+  renderPhotos();
   showSection('dashboard');
 }
 
