@@ -1237,35 +1237,35 @@ function updateTopbar() {
 
 function updateProgress() {
   let complete = 0;
-    const checks = [
-      appState.project.buildingName && appState.project.grossArea,  // Project has name+area
-      appState.settings.auditorName,                                 // Auditor identified
-      appState.utility.rows.some(r => parseFloat(r.kwh) > 0),       // At least 1 utility row with data
-      appState.project.grossArea > 0,                                // Area entered (for EUI)
-      appState.envelope.notes || appState.envelope.wallIns !== 'None', // Envelope assessed
-      appState.lighting.rows.some(r => r.space && r.count),          // Lighting has real data
-      appState.hvac.rows.some(r => r.name && r.cap),                 // HVAC has real data  
-      appState.dhw.capacity > 0 || appState.dhw.type === 'None',     // DHW assessed
-      appState.plugloads.rows.some(r => r.count > 0),                // Plugs have counts
-      Object.keys(appState.other).some(k => k!=='notes' && appState.other[k] && appState.other[k]!=='No' && appState.other[k]!=='Hydraulic'), // Other has data
-      appState.electrical.transformers.length > 0 || appState.loads.length > 0, // Electrical has data
-      Object.values(appState.ecmSelections).some(v => v),            // At least 1 ECM selected
-      false // Report is never "complete" until generated
-    ];
+  const checks = [
+    appState.project.buildingName && appState.project.grossArea,
+    appState.settings.auditorName && appState.settings.companyName,
+    appState.utility.rows.some(r => parseFloat(r.kwh) > 0),
+    parseFloat(appState.project.grossArea) > 0,
+    appState.envelope.wallIns !== 'None' || appState.envelope.notes,
+    appState.lighting.rows.some(r => r.space && parseFloat(r.count) > 0),
+    appState.hvac.rows.some(r => r.name && parseFloat(r.cap) > 0),
+    parseFloat(appState.dhw.capacity) > 0 || appState.dhw.type === 'None',
+    appState.plugloads.rows.some(r => parseFloat(r.count) > 0),
+    parseFloat(appState.other.elevCount) > 0 || appState.other.dcPresent === 'Yes' || appState.other.kitchenPresent === 'Yes' || appState.other.parkingPresent === 'Yes',
+    appState.electrical.transformers.length > 0 || appState.loads.length > 0,
+    appState.utility.rows.some(r => parseFloat(r.kwh) > 0) && parseFloat(appState.project.grossArea) > 0,
+    Object.values(appState.ecmSelections).some(v => v)
+  ];
   checks.forEach(c => { if (c) complete++; });
   const pct = Math.round(complete / 13 * 100);
   document.getElementById('progress-fill').style.width = pct + '%';
-  document.getElementById('progress-text').textContent = `${complete} of 13 complete`;
-  buildTiles(complete);
+  document.getElementById('progress-text').textContent = complete + ' of 13 complete';
+  buildTiles(checks);
 }
 
-function buildTiles(complete) {
+function buildTiles(checks) {
   const container = document.getElementById('dash-tiles');
   if (!container) return;
   container.innerHTML = NAV_ITEMS.map((n, i) => {
     let cls = 'tile-empty';
-    if (i < complete) cls = 'tile-complete';
-    return `<div class="tile ${cls}" onclick="showSection('${n.id}')">${n.icon}<br>${n.label}</div>`;
+    if (checks && checks[i]) cls = 'tile-complete';
+    return '<div class="tile ' + cls + '" onclick="showSection(\'' + n.id + '\')">' + n.icon + '<br>' + n.label + '</div>';
   }).join('');
 }
 
@@ -2707,13 +2707,15 @@ function loadDemo() {
   appState.aiDraft = '';
 
   // Save and rebuild everything
-  save();
+// Write state to localStorage WITHOUT reading DOM (which would overwrite our demo data)
+  try { localStorage.setItem('auditflow_state', JSON.stringify(appState)); } catch(e) {}
+  // Now push state TO the DOM
   bindAll();
   updateFlagButtons();
   buildUtilityTable();
   renderLightingRows();
   renderHVACRows();
-  renderPlugRows();
+  buildPlugTable();
   renderTransformers();
   renderPanels();
   renderLoadTable();
