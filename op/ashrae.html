@@ -4249,9 +4249,12 @@ appState._projectId = 'p_demo_' + Date.now();
 
 
 
-            const htmlPart1 = `<!DOCTYPE html>
-          <html><head><meta charset="UTF-8"><title>Energy Audit Report — ${p.buildingName||'Building'}</title>
-          ''
+            const html = `<!DOCTYPE html>
+          <html>
+          <head>  
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+          <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"><\/script>
+            <meta charset="UTF-8"><title>Energy Audit Report — ${p.buildingName||'Building'}</title>
           <style>
           @page { size: A4; margin: 20mm 18mm 25mm 18mm; }
           body { font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif; max-width: 850px; margin: 0 auto; padding: 30px 40px; color: #1e293b; font-size: 12px; line-height: 1.65; }
@@ -4469,34 +4472,27 @@ appState._projectId = 'p_demo_' + Date.now();
             ASHRAE Level ${s.ashraeLevel||'1'} ${s.ashraeLevel==='1'?'Walk-Through':'Energy Survey &'} Energy Audit<br>
             <em>Confidential — prepared for ${p.clientCompany||p.buildingName||'client'}</em>
           </div>
-
-              <div class="no-print" style="text-align:center;margin:30px 0;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-                <button onclick="window.print()" style="padding:12px 24px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">🖨 Print / Save as PDF</button>
-                <button onclick="(function(){const b=new Blob([document.documentElement.outerHTML],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='Energy_Audit_Report.html';a.click();})()" style="padding:12px 24px;background:#10b981;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">💾 Download HTML</button>
-                <button onclick="downloadDocx()" style="padding:12px 24px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">📄 Download .docx</button>
+             <div class="no-print" style="text-align:center;margin:30px 0;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button onclick="window.print()" style="padding:12px 24px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">🖨 Print / Save as PDF</button>
+          <button onclick="(function(){const b=new Blob([document.documentElement.outerHTML],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='Energy_Audit_Report.html';a.click();})()" style="padding:12px 24px;background:#10b981;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">💾 Download HTML</button>
+          <button onclick="downloadDocx()" style="padding:12px 24px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">📄 Download .docx</button>
               </div>
-              <script>  
-                   function downloadDocx() {
-                        if (typeof htmlDocx === 'undefined') { alert('html-docx-js library not loaded. Check your internet connection.'); return; }
-                        generateReport().then(() => {}).catch(() => {});
-                        // Give report window time to open, then grab from appState
-                        setTimeout(() => {
-                          try {
-                            const p = appState.project, s = appState.settings;
-                            // Build a simplified HTML for docx conversion
-                            const reportBody = document.querySelector('.section.active')?.innerHTML || '';
-                            const wrapper = '<html><head><meta charset="utf-8"><style>body{font-family:Arial;font-size:12px;}table{border-collapse:collapse;width:100%;}th{background:#0f1923;color:#fff;padding:6px;}td{padding:5px;border-bottom:1px solid #ddd;}</style></head><body>' + reportBody + '</body></html>';
-                            const converted = htmlDocx.asBlob(wrapper, {margins:{top:720,right:720,bottom:720,left:720}});
-                            const a = document.createElement('a');
-                            a.href = URL.createObjectURL(converted);
-                            a.download = 'Energy_Audit_' + (p.buildingName||'Report').replace(/\s/g,'_') + '.docx';
-                            a.click();
-                          } catch(e) { alert('DOCX failed: ' + e.message + '. Download HTML and open in Word instead.'); }
-                        }, 2000);
-                      }   
-          <`;
-          const htmlPart2 = '/script>   </body> </html>';
-          const html = htmlPart1 + htmlPart2;
+              <script>
+              function downloadDocx() {
+                try {
+                  const content = document.querySelector('body').innerHTML;
+                  const html = '<!DOCTYPE html><html><head><meta charset=\\'utf-8\\'></head><body>' + content.replace(/<div class="no-print"[\\s\\S]*?<\\/div>/g,'') + '</body></html>';
+                  const converted = htmlDocx.asBlob(html, {margins:{top:720,right:720,bottom:720,left:720}});
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(converted);
+                  a.download = 'Energy_Audit_Report.docx';
+                  a.click();
+                } catch(e) { alert('DOCX export failed: ' + e.message + '. Try downloading HTML and opening in Word instead.'); }
+              }
+          <\/script>   
+          </body> 
+          </html>`;
+  
 
             const blob = new Blob([html], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
