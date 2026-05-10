@@ -237,6 +237,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 .ai-textarea { width: 100%; min-height: 200px; font-family: var(--sans); font-size: .85rem; line-height: 1.6; padding: 12px; }
 .ai-loading { display: inline-block; padding: 4px 12px; background: var(--accent-light); border-radius: 12px; font-size: .78rem; color: var(--accent); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+#report-preview-modal .modal { border-radius: 8px; overflow: hidden; }
 /* Section AI Chat */
 .sec-ai-panel { margin:12px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
 .sec-ai-header { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; background:var(--accent-light); cursor:pointer; font-size:.8rem; font-weight:600; }
@@ -323,6 +324,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
   </div>
   <nav id="sidebar-nav"></nav>
   <div class="sidebar-footer">
+    <div id="storage-indicator" style="font-size:.65rem;color:var(--text-muted);padding:2px 8px;"></div>
     <button onclick="openProjMgr()" title="Manage projects">📁 Projects</button>
     <button onclick="exportJSON()" title="Export project as JSON">💾 Export</button>
     <button onclick="document.getElementById('importInput').click()" title="Import project JSON">📂 Import</button>
@@ -457,6 +459,14 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
             </div>
           </div>
         </div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div class="card-title" style="font-size:.82rem;margin-bottom:8px;">STORAGE MANAGEMENT</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-sm btn-secondary" onclick="compressAllPhotos()">🗜 Compress All Photos</button>
+            <button class="btn-sm btn-secondary" onclick="countPhotos()">📊 Photo Stats</button>
+            <span id="photo-stats" style="font-size:.75rem;color:var(--text-muted);align-self:center;"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -1246,6 +1256,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           </div>
           <div class="chart-row">
             <div class="card"><div class="card-title" style="font-size:.78rem;margin-bottom:8px;">TRANSFORMER LOSSES</div><div class="chart-box"><canvas id="chart-xfmrloss"></canvas></div></div>
+            <div style="margin-top:16px;"><canvas id="chart-loadcurve" height="280"></canvas></div>
           </div>
         </div>
 
@@ -1327,6 +1338,28 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
       </div>
     </div>
   </div>
+  <!-- REPORT PREVIEW MODAL -->
+<div class="modal-overlay" id="report-preview-modal" style="z-index:1001;">
+  <div class="modal" style="max-width:95vw;width:900px;max-height:95vh;display:flex;flex-direction:column;padding:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--card-bg);">
+      <span style="font-weight:700;font-size:.9rem;">📄 Report Preview</span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-sm btn-primary" onclick="printReportPreview()">🖨 Print/PDF</button>
+        <button class="btn-sm btn-secondary" onclick="downloadReportPreviewHTML()">💾 HTML</button>
+        <button class="btn-sm btn-secondary" onclick="downloadReportDocx()">📄 DOCX</button>
+        <button class="btn-sm btn-secondary" onclick="openReportInNewTab()">↗ New Tab</button>
+        <button class="btn-sm btn-danger" onclick="closeReportPreview()">✕</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow:hidden;position:relative;">
+      <div id="report-edit-bar" style="position:absolute;top:0;left:0;right:0;background:var(--accent-light);padding:4px 10px;font-size:.75rem;z-index:2;display:flex;align-items:center;gap:8px;">
+        <span>✏️ Click any text in the report to edit it. Changes are saved when you click away.</span>
+        <label style="margin-left:auto;cursor:pointer;"><input type="checkbox" id="report-edit-toggle" onchange="toggleReportEditing(this.checked)"> Enable editing</label>
+      </div>
+      <iframe id="report-preview-frame" style="width:100%;height:100%;border:none;margin-top:28px;"></iframe>
+    </div>
+  </div>
+</div>
 <script>
 // ========== CONSTANTS ==========
     const NAV_ITEMS = [
@@ -1354,6 +1387,23 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
       'Restaurant':{median:432,es75:290},'Supermarket':{median:200,es75:140},
       'Data Center':{median:800,es75:450},'Mixed Use':{median:85,es75:58}
     };
+    const ASHRAE_901_BASELINE_EUI = {
+          '1A':{'Office Large':120,'Office Medium':115,'Office Small':110,'Hotel':165,'Hotel Small':150,'Retail':100,'School':95,'Hospital':350,'Warehouse':45,'Factory Small':130,'Factory Medium':160,'Restaurant':550},
+          '2A':{'Office Large':105,'Office Medium':100,'Office Small':95,'Hotel':145,'Hotel Small':135,'Retail':90,'School':88,'Hospital':320,'Warehouse':42,'Factory Small':125,'Factory Medium':150,'Restaurant':520},
+          '2B':{'Office Large':100,'Office Medium':95,'Office Small':90,'Hotel':140,'Hotel Small':130,'Retail':85,'School':85,'Hospital':310,'Warehouse':40,'Factory Small':120,'Factory Medium':145,'Restaurant':510},
+          '3A':{'Office Large':92,'Office Medium':88,'Office Small':84,'Hotel':130,'Hotel Small':120,'Retail':80,'School':80,'Hospital':290,'Warehouse':38,'Factory Small':115,'Factory Medium':140,'Restaurant':490},
+          '3B':{'Office Large':85,'Office Medium':82,'Office Small':78,'Hotel':120,'Hotel Small':112,'Retail':75,'School':75,'Hospital':275,'Warehouse':35,'Factory Small':110,'Factory Medium':135,'Restaurant':475},
+          '3C':{'Office Large':78,'Office Medium':75,'Office Small':72,'Hotel':110,'Hotel Small':105,'Retail':70,'School':70,'Hospital':260,'Warehouse':33,'Factory Small':105,'Factory Medium':130,'Restaurant':460},
+          '4A':{'Office Large':88,'Office Medium':85,'Office Small':80,'Hotel':125,'Hotel Small':118,'Retail':78,'School':78,'Hospital':285,'Warehouse':37,'Factory Small':112,'Factory Medium':138,'Restaurant':485},
+          '4B':{'Office Large':82,'Office Medium':78,'Office Small':75,'Hotel':118,'Hotel Small':110,'Retail':73,'School':73,'Hospital':270,'Warehouse':34,'Factory Small':108,'Factory Medium':132,'Restaurant':470},
+          '4C':{'Office Large':75,'Office Medium':72,'Office Small':68,'Hotel':108,'Hotel Small':102,'Retail':68,'School':68,'Hospital':255,'Warehouse':32,'Factory Small':102,'Factory Medium':128,'Restaurant':455},
+          '5A':{'Office Large':90,'Office Medium':86,'Office Small':82,'Hotel':128,'Hotel Small':120,'Retail':80,'School':80,'Hospital':295,'Warehouse':39,'Factory Small':118,'Factory Medium':142,'Restaurant':495},
+          '5B':{'Office Large':84,'Office Medium':80,'Office Small':76,'Hotel':120,'Hotel Small':112,'Retail':75,'School':75,'Hospital':280,'Warehouse':36,'Factory Small':112,'Factory Medium':136,'Restaurant':480},
+          '6A':{'Office Large':95,'Office Medium':90,'Office Small':86,'Hotel':135,'Hotel Small':125,'Retail':85,'School':84,'Hospital':305,'Warehouse':42,'Factory Small':122,'Factory Medium':148,'Restaurant':505},
+          '6B':{'Office Large':88,'Office Medium':84,'Office Small':80,'Hotel':125,'Hotel Small':118,'Retail':80,'School':80,'Hospital':290,'Warehouse':38,'Factory Small':118,'Factory Medium':142,'Restaurant':490},
+          '7':{'Office Large':100,'Office Medium':95,'Office Small':90,'Hotel':142,'Hotel Small':132,'Retail':90,'School':88,'Hospital':318,'Warehouse':45,'Factory Small':128,'Factory Medium':155,'Restaurant':515},
+          '8':{'Office Large':108,'Office Medium':102,'Office Small':98,'Hotel':150,'Hotel Small':140,'Retail':95,'School':92,'Hospital':335,'Warehouse':48,'Factory Small':135,'Factory Medium':162,'Restaurant':530}
+        };
 
     const LPD_BUILDING = {'Office Large':11.06,'Office Medium':11.06,'Office Small':11.06,'Retail':16.99,'Hotel':7.82,'Hotel Small':7.82,'Motel':7.82,'School':11.73,'University':11.73,'Healthcare Clinic':12.14,'Hospital':14.16,'Warehouse':8.90,'Factory Small':12.00,'Factory Medium':12.00,'Factory Large':12.00,'Restaurant':9.90,'Supermarket':16.10,'Data Center':5.00,'Mixed Use':11.06};
     const LPD_SPACE = {'Open Plan Office':11.84,'Conference Room':14.00,'Corridor':5.38,'Lobby':13.99,'Restroom':9.69,'Stairwell':6.46,'Storage':8.61,'Office':11.84,'Break Room':7.15,'Kitchen':13.99};
@@ -1556,6 +1606,7 @@ function init() {
   updateAIProviderUI();
   applyLevelVisibility();
   fetchAvailableModels();
+  updateStorageIndicator();
   // Now safe to save — DOM has correct values
   try {
     localStorage.setItem('auditflow_project_' + appState._projectId, JSON.stringify(appState));
@@ -1646,6 +1697,7 @@ function loadState() {
   if (!appState.demand.season) appState.demand.season = 'summer';
   if (!appState.demand.summer) appState.demand = {season:'summer',summer:{wd:Array(24).fill(0),we:Array(24).fill(0)},winter:{wd:Array(24).fill(0),we:Array(24).fill(0)},shoulder:{wd:Array(24).fill(0),we:Array(24).fill(0)}};
   if (!appState.other.customEquip) appState.other.customEquip = [];
+  (appState.loads||[]).forEach(l => { if(!l.startType) l.startType='None'; if(!l.inrushX) l.inrushX=0; });
   if (!appState.settings.aiProvider) appState.settings.aiProvider = 'gemini';
   if (appState.settings.aiModel === undefined) appState.settings.aiModel = '';
   if (appState.settings.aiEndpoint === undefined) appState.settings.aiEndpoint = '';
@@ -1658,10 +1710,61 @@ function loadState() {
     appState.settings.aiProvider = 'gemini';
   }
 }
+function updateStorageIndicator() {
+  const el = document.getElementById('storage-indicator');
+  if (!el) return;
+  try {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith('auditflow_')) total += localStorage.getItem(key).length;
+    }
+    const mb = (total / 1024 / 1024).toFixed(1);
+    const pct = (total / (5 * 1024 * 1024) * 100).toFixed(0);
+    const color = pct > 80 ? 'var(--danger)' : pct > 50 ? 'var(--warning)' : 'var(--text-muted)';
+    el.innerHTML = `<span style="color:${color}">💾 ${mb}MB / 5MB (${pct}%)</span>`;
+  } catch(e) {}
+}
+async function compressAllPhotos() {
+  let count = 0, saved = 0;
+  for (const sec of Object.keys(appState.photos)) {
+    for (let i = 0; i < (appState.photos[sec]||[]).length; i++) {
+      const p = appState.photos[sec][i];
+      if (!p.data) continue;
+      const origLen = p.data.length;
+      count++;
+      const compressed = await compressImage(p.data, 800, 0.6);
+      if (compressed.length < origLen) {
+        saved += origLen - compressed.length;
+        appState.photos[sec][i].data = compressed;
+      }
+    }
+  }
+  save();
+  updateStorageIndicator();
+  alert('Compressed ' + count + ' photos. Saved ~' + (saved/1024/1024).toFixed(1) + 'MB');
+}
+
+function countPhotos() {
+  let total = 0, totalBytes = 0;
+  for (const sec of Object.keys(appState.photos)) {
+    const n = (appState.photos[sec]||[]).length;
+    total += n;
+    (appState.photos[sec]||[]).forEach(p => { totalBytes += (p.data||'').length; });
+  }
+  document.getElementById('photo-stats').textContent = total + ' photos, ~' + (totalBytes/1024/1024).toFixed(1) + 'MB';
+}
 
 function save() {
   readBindings();
   appState._projectName = appState.project.buildingName || 'Untitled Project';
+  // Warn if approaching localStorage limit
+  try {
+    const testStr = JSON.stringify(appState);
+    if (testStr.length > 4 * 1024 * 1024) {
+      console.warn('Project data approaching 5MB localStorage limit (' + (testStr.length/1024/1024).toFixed(1) + 'MB). Consider reducing photo count or quality.');
+    }
+  } catch(e) {}
   try {
     localStorage.setItem('auditflow_project_' + appState._projectId, JSON.stringify(appState));
     localStorage.setItem('auditflow_active_project', appState._projectId);
@@ -2287,7 +2390,7 @@ function calcVoltImbalance() {
 
 // ========== LOADS ==========
 function addLoadRow() {
-  appState.loads.push({name:'',category:'Other',npKW:'',measKW:'',measPF:'',mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'None',condition:'Fair',notes:''});
+  appState.loads.push({name:'',category:'Other',npKW:'',measKW:'',measPF:'',mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'None',condition:'Fair',notes:'',startType:'None',inrushX:0});
   save(); renderLoadTable();
 }
 
@@ -2320,8 +2423,10 @@ function renderLoadTable() {
       <td><input type="number" value="${l.dpw}" onchange="appState.loads[${i}].dpw=parseFloat(this.value)||0;save();renderLoadTable();" style="width:40px;"></td>
       <td><input type="number" value="${l.wpy}" onchange="appState.loads[${i}].wpy=parseFloat(this.value)||0;save();renderLoadTable();" style="width:40px;"></td>
       <td><select onchange="appState.loads[${i}].control=this.value;save();" style="font-size:.7rem;">
-        ${['DOL','Star-Delta','Soft Starter','VFD','Inverter','Manual','BAS','Timer','Thermostat','None'].map(o=>`<option ${l.control===o?'selected':''}>${o}</option>`).join('')}
+        ${['DOL','Star-Delta','Soft Start','VFD','None'].map(o=>`<option ${(l.startType||'None')===o?'selected':''}>${o}</option>`).join('')}
       </select></td>
+          <td><input type="number" step="0.1" value="${l.inrushX||''}" onchange="appState.loads[${i}].inrushX=parseFloat(this.value)||0;save();" style="width:50px;" placeholder="${l.startType==='DOL'?'6':l.startType==='Star-Delta'?'2':l.startType==='Soft Start'?'1.5':'1'}"></td>
+
       <td style="font-family:var(--mono);font-size:.75rem;">${util}%</td>
       <td style="font-family:var(--mono);font-size:.75rem;">${fmt(Math.round(annKWH))}</td>
       <td style="font-family:var(--mono);font-size:.75rem;">$${fmt(Math.round(annCost))}</td>
@@ -2616,41 +2721,58 @@ function closePhotoModal() {
       reader.readAsDataURL(file);
     });
   });
-
-  function savePhoto() {
-  const fileInput = document.getElementById('photo-file');
-  const files = fileInput.files;
-  if (!files.length) { alert('Please select at least one photo'); return; }
-  const section = currentPhotoSection;
-  const caption = document.getElementById('photo-caption').value;
-  const tag = document.getElementById('photo-tag').value;
-  const photoType = document.getElementById('photo-type').value;
-  const flag = document.getElementById('photo-flag').value;
-  const equipment = document.getElementById('photo-equipment').value;
-  let loaded = 0;
-  Array.from(files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      if (!appState.photos[section]) appState.photos[section] = [];
-      appState.photos[section].push({
-        data: ev.target.result,
-        caption: caption,
-        tag: tag,
-        photoType: photoType,
-        flag: flag,
-        equipment: equipment,
-        date: new Date().toISOString()
+    function compressImage(dataUrl, maxWidth, quality) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = function() {
+          let w = img.width, h = img.height;
+          if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = dataUrl;
       });
-      loaded++;
-      if (loaded === files.length) {
+    }
+        async function savePhoto() {
+        const fileInput = document.getElementById('photo-file');
+        const files = fileInput.files;
+        if (!files.length) { alert('Select at least one photo'); return; }
+        const section = currentPhotoSection;
+        const caption = document.getElementById('photo-caption').value;
+        const tag = document.getElementById('photo-tag').value;
+        const photoType = document.getElementById('photo-type').value;
+        const flag = document.getElementById('photo-flag').value;
+        const equipment = document.getElementById('photo-equipment').value;
+        let loaded = 0;
+        const totalFiles = files.length;
+        for (const file of Array.from(files)) {
+          const dataUrl = await new Promise((res) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => res(ev.target.result);
+            reader.readAsDataURL(file);
+          });
+          // Compress: max 800px wide, JPEG quality 0.6
+          const compressed = await compressImage(dataUrl, 800, 0.6);
+          if (!appState.photos[section]) appState.photos[section] = [];
+          appState.photos[section].push({
+            data: compressed,
+            caption: caption,
+            tag: tag,
+            photoType: photoType,
+            flag: flag,
+            equipment: equipment,
+            date: new Date().toISOString()
+          });
+          loaded++;
+        }
         save();
         renderPhotos();
         closePhotoModal();
+        updateStorageIndicator();
       }
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
    function renderPhotos() {
       ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(sec => {
@@ -2787,21 +2909,32 @@ function renderCharts() {
     });
   }
 
-  // 2. EUI Benchmark
-  const eui = calcEUI();
-  const bm = BENCHMARKS[appState.project.occupancyType] || BENCHMARKS['Office Large'];
-  if (eui !== null) {
-    charts.eui = new Chart(document.getElementById('chart-eui'), {
-      type: 'bar',
-      data: {
-        labels: ['Building', 'ENERGY STAR 75th', 'CBECS Median'],
-        datasets: [{ data: [eui, bm.es75, bm.median], backgroundColor: [eui<=bm.es75?'#10b981':eui<=bm.median?'#f59e0b':'#ef4444', '#0ea5e9', '#94a3b8'] }]
-      },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, title: { display: true, text: 'kBtu/ft²·yr' } } }
-      }
-    });
-  }
+  // 2. EUI Benchmark with ASHRAE 90.1 Appendix G
+    const eui = calcEUI();
+    const bm = BENCHMARKS[appState.project.occupancyType] || {median:81,es75:54};
+    const cz = (appState.settings.climateZone||'2A').replace(/[^0-9A-Ba-b]/g,'');
+    const czKey = Object.keys(ASHRAE_901_BASELINE_EUI).find(k => cz.startsWith(k)) || '2A';
+    const appGBaseline = (ASHRAE_901_BASELINE_EUI[czKey]||{})[appState.project.occupancyType] || bm.median * 1.3;
+    if (eui !== null) {
+      charts.eui = new Chart(document.getElementById('chart-eui'), {
+        type: (appState.chartConfig?.eui?.type) || 'bar',
+        data: {
+          labels: ['This Building', 'CBECS Median', 'ENERGY STAR 75th', 'ASHRAE 90.1 Baseline'],
+          datasets: [{
+            label: 'EUI kBtu/ft²·yr',
+            data: [Math.round(eui), bm.median, bm.es75, appGBaseline],
+            backgroundColor: [
+              eui <= bm.es75 ? '#10b981' : eui <= bm.median ? '#f59e0b' : '#ef4444',
+              '#94a3b8', '#10b981', '#6366f1'
+            ]
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { title: { display: true, text: appState.chartConfig?.eui?.title || 'EUI Benchmark Comparison (CZ ' + czKey + ')' }, legend: { display: false } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: 'kBtu/ft²·yr' } } }
+        }
+      });
+    }
 
   // 3. End-Use Breakdown (estimated)
   const totalKWH = appState.utility.rows.reduce((s, r) => s + (parseFloat(r.kwh)||0), 0);
@@ -2891,7 +3024,43 @@ function renderCharts() {
       }
     });
   }
-
+// 6b. Load Curve with Transient Spikes
+  const lcCanvas = document.getElementById('chart-loadcurve');
+  if (lcCanvas && appState.demand.summer) {
+    const wd = appState.demand.summer.wd || Array(24).fill(0);
+    const we = appState.demand.summer.we || Array(24).fill(0);
+    const hrLabels = Array.from({length:24},(_,h)=>h+':00');
+    // Build transient spike dataset
+    const spikes = Array(24).fill(0);
+    appState.loads.forEach(l => {
+      if (!l.startType || l.startType === 'None' || l.startType === 'VFD') return;
+      const inrush = parseFloat(l.inrushX) || (l.startType==='DOL'?6:l.startType==='Star-Delta'?2:1.5);
+      const measKW = parseFloat(l.measKW) || 0;
+      const spikeKW = measKW * (inrush - 1);
+      // Estimate start hour from mode
+      let startHr = 7;
+      if (l.mode && l.mode.includes('7am')) startHr = 7;
+      else if (l.mode && l.mode.includes('8am')) startHr = 8;
+      else if (l.mode && l.mode.includes('6am')) startHr = 6;
+      else if (l.mode && l.mode.includes('24/7')) startHr = -1;
+      if (startHr >= 0 && startHr < 24) spikes[startHr] += spikeKW;
+    });
+    const spikeData = wd.map((v,h) => spikes[h] > 0 ? v + spikes[h] : null);
+    const datasets = [
+      {label:'Weekday kW',data:wd,borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.1)',fill:true,tension:0.3,pointRadius:1},
+      {label:'Weekend kW',data:we,borderColor:'#64748b',borderDash:[4,2],tension:0.3,pointRadius:0,fill:false}
+    ];
+    if (spikes.some(s=>s>0)) {
+      datasets.push({label:'Inrush Transient',data:spikeData,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.3)',pointStyle:'triangle',pointRadius:8,pointHoverRadius:12,showLine:false,fill:false});
+    }
+    charts.loadcurve = new Chart(lcCanvas, {
+      type:'line', data:{labels:hrLabels,datasets:datasets},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{title:{display:true,text:appState.chartConfig?.loadcurve?.title||'Building 24h Load Curve with Motor Inrush'},legend:{position:'top'}},
+        scales:{y:{beginAtZero:true,title:{display:true,text:'kW'}},x:{title:{display:true,text:'Hour'}}}
+      }
+    });
+  }
   // 7. Transformer Utilization
   if (appState.electrical.transformers.length > 0) {
     const xfmrs = appState.electrical.transformers;
@@ -3949,12 +4118,12 @@ function loadDemo() {
 
   // Loads — 10 loads for complete inventory
   appState.loads = [
-    {name:'Chiller-1',category:'HVAC-Chiller',npKW:422,measKW:380,measPF:0.88,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'VFD',condition:'Poor',notes:'End of life. Tube fouling.'},
-    {name:'AHU-1 Supply Fan',category:'HVAC-AHU-Fan',npKW:45,measKW:42,measPF:0.85,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',condition:'Fair',notes:'IE1 motor — upgrade candidate'},
-    {name:'AHU-2 Supply Fan',category:'HVAC-AHU-Fan',npKW:30,measKW:28,measPF:0.84,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',condition:'Fair',notes:'IE1 motor'},
-    {name:'CW Pump P-1',category:'HVAC-Pump',npKW:22,measKW:20,measPF:0.86,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'DOL',condition:'Fair',notes:'Constant speed, throttled valve'},
-    {name:'Cooling Tower CT-1',category:'HVAC-Cooling Tower',npKW:15,measKW:13,measPF:0.82,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'Star-Delta',condition:'Fair',notes:'Two-speed motor'},
-    {name:'IT UPS',category:'UPS',npKW:80,measKW:65,measPF:0.92,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'None',condition:'Good',notes:'Double-conversion UPS, 81% load'},
+    {name:'Chiller-1',category:'HVAC-Chiller',npKW:422,measKW:380,measPF:0.88,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'VFD',startType:'VFD',inrushX:1.1,condition:'Poor',notes:'End of life.'},
+    {name:'AHU-1 Supply Fan',category:'HVAC-AHU-Fan',npKW:45,measKW:42,measPF:0.85,mode:'Business Hours 7am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',startType:'DOL',inrushX:6,condition:'Fair',notes:'IE1 motor'},
+    {name:'AHU-2 Supply Fan',category:'HVAC-AHU-Fan',npKW:30,measKW:28,measPF:0.84,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'DOL',startType:'None',inrushX:0,condition:'Fair',notes:'IE1 motor'},
+    {name:'CW Pump P-1',category:'HVAC-Pump',npKW:22,measKW:20,measPF:0.86,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'DOL',startType:'Star-Delta',inrushX:2,condition:'Fair',notes:'Constant speed'},
+    {name:'Cooling Tower CT-1',category:'HVAC-Cooling Tower',npKW:15,measKW:13,measPF:0.82,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:30,control:'Star-Delta',startType:'Star-Delta',inrushX:2,condition:'Fair',notes:'Two-speed'},
+    {name:'IT UPS',category:'UPS',npKW:80,measKW:65,measPF:0.92,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'None',startType:'None',inrushX:0,condition:'Good',notes:'Double-conversion UPS, 81% load'},
     {name:'Server Room CRAC-1',category:'HVAC-Compressor',npKW:18,measKW:16,measPF:0.90,mode:'24/7 Continuous',hpd:24,dpw:7,wpy:52,control:'Thermostat',condition:'Good',notes:'Set to 68°F. No containment.'},
     {name:'Lighting Panel LP-1',category:'Lighting-Interior',npKW:96,measKW:88,measPF:0.95,mode:'Business Hours 8am-6pm',hpd:10,dpw:5,wpy:52,control:'Timer',condition:'Fair',notes:'T8 fluorescent, manual overrides common'},
     {name:'Elevator Motors (3)',category:'Elevator',npKW:45,measKW:15,measPF:0.75,mode:'Business Hours 8am-6pm',hpd:12,dpw:5,wpy:52,control:'VFD',condition:'Good',notes:'Avg load ~33%, intermittent duty'},
@@ -4022,7 +4191,7 @@ appState._projectId = 'p_demo_' + Date.now();
 // ========== REPORT GENERATION ==========
       async function captureCharts() {
       const chartImages = {};
-      const ids = ['chart-utility','chart-eui','chart-enduse','chart-lpd','chart-ecm','chart-demand','chart-xfmr','chart-pf','chart-load-cat','chart-load-mode','chart-harmonics','chart-voltage','chart-xfmr-loss'];
+      const ids = ['chart-utility','chart-eui','chart-enduse','chart-lpd','chart-ecm','chart-demand','chart-xfmr','chart-pf','chart-load-cat','chart-load-mode','chart-harmonics','chart-voltage','chart-xfmr-loss','chart-loadcurve'];
       for (const id of ids) {
         const canvas = document.getElementById(id);
         if (canvas && canvas.width > 0 && canvas.height > 0) {
@@ -4135,7 +4304,65 @@ appState._projectId = 'p_demo_' + Date.now();
                 a.click();
               } catch(e) { alert('DOCX export failed: ' + e.message); }
             }
+        // ========== REPORT PREVIEW ==========
+        let currentReportHTML = '';
 
+        function showReportPreview(html) {
+          currentReportHTML = html;
+          document.getElementById('report-preview-modal').classList.add('show');
+          const frame = document.getElementById('report-preview-frame');
+          frame.srcdoc = html;
+        }
+
+        function closeReportPreview() {
+          document.getElementById('report-preview-modal').classList.remove('show');
+          document.getElementById('report-preview-frame').srcdoc = '';
+        }
+
+        function toggleReportEditing(enabled) {
+          const frame = document.getElementById('report-preview-frame');
+          try {
+            const doc = frame.contentDocument;
+            if (enabled) {
+              doc.body.contentEditable = 'true';
+              doc.body.style.outline = 'none';
+              doc.body.addEventListener('input', function() { currentReportHTML = '<!DOCTYPE html><html>' + doc.documentElement.innerHTML + '</html>'; });
+            } else {
+              doc.body.contentEditable = 'false';
+              currentReportHTML = '<!DOCTYPE html><html>' + doc.documentElement.innerHTML + '</html>';
+            }
+          } catch(e) { console.warn('Cannot edit cross-origin frame'); }
+        }
+
+        function printReportPreview() {
+          const frame = document.getElementById('report-preview-frame');
+          try { frame.contentWindow.print(); } catch(e) { window.open(URL.createObjectURL(new Blob([currentReportHTML],{type:'text/html'})),'_blank').print(); }
+        }
+
+        function downloadReportPreviewHTML() {
+          const blob = new Blob([currentReportHTML], {type:'text/html'});
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'Energy_Audit_' + (appState.project.buildingName||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '.html';
+          a.click();
+        }
+
+        function openReportInNewTab() {
+          const blob = new Blob([currentReportHTML], {type:'text/html'});
+          window.open(URL.createObjectURL(blob), '_blank');
+        }
+
+        function downloadReportDocx() {
+          if (typeof htmlDocx === 'undefined') { alert('html-docx-js not loaded'); return; }
+          try {
+            const cleaned = currentReportHTML.replace(/<div class="no-print"[\s\S]*?<\/div>/g,'').replace(/<img[^>]*>/g,'[Image]');
+            const converted = htmlDocx.asBlob(cleaned, {margins:{top:720,right:720,bottom:720,left:720}});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(converted);
+            a.download = 'Energy_Audit_' + (appState.project.buildingName||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '.docx';
+            a.click();
+          } catch(e) { alert('DOCX failed: ' + e.message); }
+        }
     async function generateReport() {
         // Sync AI draft from textarea
         const aiEl = document.getElementById('ai-output');
@@ -4462,6 +4689,7 @@ appState._projectId = 'p_demo_' + Date.now();
           }).join('')}</tbody></table>
           ${chartImg['chart-load-cat']?`<h3>9.1 Load by Category</h3><img src="${chartImg['chart-load-cat']}" style="width:100%;max-width:400px;display:block;margin:10px auto;">`:'' }
           ${chartImg['chart-demand']?`<h3>9.2 24-Hour Demand Profile</h3><img src="${chartImg['chart-demand']}" style="width:100%;max-width:700px;display:block;margin:10px auto;">`:'' }
+          ${chartImg['chart-loadcurve']?`<h3>9.3 Building Load Curve with Transient Analysis</h3><img src="${chartImg['chart-loadcurve']}" style="width:100%;max-width:750px;display:block;margin:10px auto;">`:'' }
                   ${appState.loads.notes?`<p><em>${appState.loads.notes}</em></p>`:''}
  
                 ${appState.aiSections.loads?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.loads)}</div>`:''}
@@ -4543,10 +4771,9 @@ appState._projectId = 'p_demo_' + Date.now();
           </html>`;
   
 
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-      }
+            // Show in preview modal instead of new window
+          showReportPreview(html);
+        }
 // ========== CSV DOWNLOAD ==========
 function downloadCSV() {
   readBindings();
