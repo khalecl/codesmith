@@ -234,6 +234,25 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 .ai-textarea { width: 100%; min-height: 200px; font-family: var(--sans); font-size: .85rem; line-height: 1.6; padding: 12px; }
 .ai-loading { display: inline-block; padding: 4px 12px; background: var(--accent-light); border-radius: 12px; font-size: .78rem; color: var(--accent); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+/* Project Manager */
+.proj-list { max-height:300px; overflow-y:auto; }
+.proj-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; cursor:pointer; transition:all .15s; }
+.proj-item:hover { background:var(--table-hover); }
+.proj-item.active { border-color:var(--accent); background:var(--accent-light); }
+.proj-item .pi-name { font-weight:700; font-size:.85rem; flex:1; }
+.proj-item .pi-meta { font-size:.7rem; color:var(--text-muted); }
+.proj-item .pi-actions { display:flex; gap:4px; }
+/* 24h Load Curve */
+.hour-bars { display:flex; align-items:flex-end; gap:2px; height:200px; padding:4px 0; border-bottom:2px solid var(--border); }
+.hour-bar { flex:1; min-width:0; background:var(--accent); border-radius:3px 3px 0 0; cursor:ns-resize; position:relative; transition:background .15s; touch-action:none; }
+.hour-bar:hover { background:var(--accent-hover); }
+.hour-bar .hb-val { position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:.6rem; color:var(--text-secondary); white-space:nowrap; }
+.hour-labels { display:flex; gap:2px; }
+.hour-labels span { flex:1; text-align:center; font-size:.58rem; color:var(--text-muted); font-family:var(--mono); }
+.season-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.season-tab { padding:4px 12px; border-radius:12px; font-size:.75rem; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--card-bg); color:var(--text-secondary); }
+.season-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
 /* MODAL */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500; align-items: center; justify-content: center; }
 .modal-overlay.show { display: flex; }
@@ -285,10 +304,11 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
   </div>
   <nav id="sidebar-nav"></nav>
   <div class="sidebar-footer">
+    <button onclick="openProjMgr()" title="Manage projects">📁 Projects</button>
     <button onclick="exportJSON()" title="Export project as JSON">💾 Export</button>
     <button onclick="document.getElementById('importInput').click()" title="Import project JSON">📂 Import</button>
     <input type="file" id="importInput" accept=".json" style="display:none" onchange="importJSON(event)">
-    <button onclick="if(confirm('Reset all data?')){localStorage.removeItem('auditflow_state');location.reload();}">🗑 Reset</button>
+    <button onclick="if(confirm('Reset current project?')){deleteCurrentProject();}" >🗑 Reset</button>
   </div>
 </aside>
 
@@ -375,8 +395,24 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
               <option value="3">Level 3 — Detailed Analysis / Investment-Grade</option>
             </select>
           </div>
-          <div class="fg"><label>AI Inference API Key (Gemini)</label>
-            <input type="text" data-bind="settings.aiApiKey" placeholder="AIzaSy..." onchange="save()">
+          <div class="fg"><label>AI Provider</label>
+            <select data-bind="settings.aiProvider" onchange="save();updateAIProviderUI();">
+              <option value="gemini">Gemini (Free — 15 req/min)</option>
+              <option value="groq">Groq (Free — 30 req/min)</option>
+              <option value="openai">OpenAI (Paid)</option>
+              <option value="anthropic">Anthropic Claude (Paid)</option>
+              <option value="ollama">Ollama (Local — Free)</option>
+              <option value="custom">Custom API</option>
+            </select>
+          </div>
+          <div class="fg"><label id="ai-key-label">API Key</label>
+            <input type="text" data-bind="settings.aiApiKey" placeholder="API key..." onchange="save()">
+          </div>
+          <div class="fg" id="fg-aiModel" style="display:none;"><label>Model Override</label>
+            <input type="text" data-bind="settings.aiModel" placeholder="Auto-detected" onchange="save()">
+          </div>
+          <div class="fg" id="fg-aiEndpoint" style="display:none;"><label>Custom Endpoint URL</label>
+            <input type="text" data-bind="settings.aiEndpoint" placeholder="https://api.example.com/v1/chat/completions" onchange="save()">
           </div>
         </div>
         </div>
@@ -457,15 +493,28 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
             <button class="btn-sm btn-secondary" onclick="addUtilityRows(1)">+1 Row</button>
           </div>
         </div>
-        <div class="form-row" style="margin-bottom:12px;">
-          <div class="fg"><label>Elec Tariff ($/kWh)</label><input type="number" step="0.01" data-bind="utility.elecRate" value="0.10" onchange="calcUtility()"></div>
-          <div class="fg"><label>Gas Rate ($/therm)</label><input type="number" step="0.01" data-bind="utility.gasRate" value="1.20" onchange="calcUtility()"></div>
-        </div>
-        <div class="table-wrap"><table id="utility-table">
-          <thead><tr><th>#</th><th>Month/Year</th><th>kWh</th><th>Elec Cost $</th><th>Peak kW</th><th>Gas (therms)</th><th>Gas Cost $</th><th>Notes</th><th></th></tr></thead>
-          <tbody id="utility-body"></tbody>
-          <tfoot><tr><td></td><td><b>TOTALS</b></td><td id="ut-kwh">0</td><td id="ut-ecost">0</td><td id="ut-pkw">—</td><td id="ut-gas">0</td><td id="ut-gcost">0</td><td></td><td></td></tr></tfoot>
-        </table></div>
+    <div class="card" style="padding:10px 16px;margin-bottom:12px;background:var(--accent-light);">
+              <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-secondary);margin-bottom:6px;">Utility Types Present</div>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;"><input type="checkbox" checked disabled> ⚡ Electricity</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;"><input type="checkbox" data-bind="utility.showGas" onchange="save();rebuildUtilityTable();"> 🔥 Natural Gas</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;"><input type="checkbox" data-bind="utility.showDC" onchange="save();rebuildUtilityTable();"> ❄️ District Cooling</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;"><input type="checkbox" data-bind="utility.showWater" onchange="save();rebuildUtilityTable();"> 💧 Water</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;"><input type="checkbox" data-bind="utility.showSteam" onchange="save();rebuildUtilityTable();"> ♨️ Steam</label>
+              </div>
+            </div>
+            <div class="form-row" style="margin-bottom:12px;">
+              <div class="fg"><label>Elec Tariff ($/kWh)</label><input type="number" step="0.01" data-bind="utility.elecRate" value="0.10" onchange="calcUtility()"></div>
+              <div class="fg" id="fg-gasRate"><label>Gas Rate ($/therm)</label><input type="number" step="0.01" data-bind="utility.gasRate" value="1.20" onchange="calcUtility()"></div>
+              <div class="fg" id="fg-dcRate" style="display:none;"><label>DC Rate ($/TR·h)</label><input type="number" step="0.01" data-bind="utility.dcRate" value="0.15" onchange="calcUtility()"></div>
+              <div class="fg" id="fg-waterRate" style="display:none;"><label>Water Rate ($/m³)</label><input type="number" step="0.01" data-bind="utility.waterRate" value="5.00" onchange="calcUtility()"></div>
+              <div class="fg" id="fg-steamRate" style="display:none;"><label>Steam Rate ($/klb)</label><input type="number" step="0.01" data-bind="utility.steamRate" value="25.00" onchange="calcUtility()"></div>
+            </div>
+            <div class="table-wrap"><table id="utility-table">
+              <thead id="utility-thead"></thead>
+              <tbody id="utility-body"></tbody>
+              <tfoot id="utility-tfoot"></tfoot>
+            </table></div>
       </div>
       <div class="card">
         <div class="card-title" style="margin-bottom:10px;">EUI CALCULATION</div>
@@ -594,11 +643,13 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
     <!-- ============ SECTION 9: PLUG LOADS ============ -->
     <div class="section" id="sec-plugloads">
       <div class="card card-accent">
-        <div class="card-title" style="margin-bottom:14px;">PLUG & PROCESS LOADS</div>
+        <div class="card-header"><div class="card-title">PLUG & PROCESS LOADS</div>
+                  <button class="btn-sm btn-primary" onclick="addPlugRow()">+ Add Equipment</button>
+                </div>
         <div class="table-wrap"><table id="plug-table">
-          <thead><tr><th>Equipment</th><th>Count</th><th>Avg W</th><th>Hr/Day</th><th>Days/Yr</th><th>Power Mgmt</th><th>Annual kWh</th></tr></thead>
+          <thead><tr><th>Equipment</th><th>Count</th><th>Avg W</th><th>Hr/Day</th><th>Days/Yr</th><th>Power Mgmt</th><th>Annual kWh</th><th></th></tr></thead>
           <tbody id="plug-body"></tbody>
-          <tfoot><tr><td colspan="6"><b>TOTAL</b></td><td id="plug-total" style="font-family:var(--mono);">0</td></tr></tfoot>
+            <tfoot><tr><td colspan="6"><b>TOTAL</b></td><td id="plug-total" style="font-family:var(--mono);">0</td><td></td></tr></tfoot>
         </table></div>
         <div class="flag-group">
           <button class="flag-btn" data-flag="plugloads.powerMgmt" onclick="toggleFlag(this)">💻 Power Management</button>
@@ -650,6 +701,15 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
             <div class="fg"><label>EV Charging</label><select data-bind="other.evCharging"><option>No</option><option>Yes</option></select></div>
             <div class="fg"><label>Solar PV (kW)</label><input type="number" data-bind="other.solarPV"></div>
           </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--accent);">
+          <div class="card-header"><div class="card-title" style="font-size:.82rem;">CUSTOM / OTHER EQUIPMENT</div>
+            <button class="btn-sm btn-primary" onclick="addCustomEquipment()">+ Add</button>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Equipment</th><th>Type</th><th>Capacity</th><th>Unit</th><th>Year</th><th>Condition</th><th>Est. kWh/yr</th><th>Notes</th><th></th></tr></thead>
+            <tbody id="custom-equip-body"></tbody>
+          </table></div>
         </div>
         <div class="fg"><label>Notes</label><textarea data-bind="other.notes" rows="3"></textarea></div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('other')" style="margin-top:8px;">📷 Add Photo</button>
@@ -886,31 +946,27 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
         </div>
       </div>
 
-      <!-- DEMAND PROFILE -->
+    <!-- DEMAND PROFILE -->
       <div class="subpanel" id="elec-demand">
         <div class="card card-accent">
-          <div class="card-title" style="margin-bottom:14px;">DEMAND PROFILE</div>
-          <div class="table-wrap"><table id="demand-table">
-            <thead><tr><th></th><th>0–6h</th><th>6–9h</th><th>9–12h</th><th>12–17h</th><th>17–21h</th><th>21–24h</th></tr></thead>
-            <tbody>
-              <tr><td><b>Weekday kW</b></td>
-                <td><input type="number" data-bind="demand.wd0" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.wd1" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.wd2" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.wd3" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.wd4" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.wd5" onchange="calcDemand()"></td>
-              </tr>
-              <tr><td><b>Weekend kW</b></td>
-                <td><input type="number" data-bind="demand.we0" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.we1" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.we2" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.we3" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.we4" onchange="calcDemand()"></td>
-                <td><input type="number" data-bind="demand.we5" onchange="calcDemand()"></td>
-              </tr>
-            </tbody>
-          </table></div>
+          <div class="card-title" style="margin-bottom:6px;">24-HOUR LOAD PROFILE</div>
+          <div class="card-subtitle" style="margin-bottom:12px;">Drag bars up/down to set kW for each hour. Tap a bar on mobile.</div>
+          <div class="season-tabs">
+            <div class="season-tab active" onclick="switchSeason('summer',this)">☀️ Summer</div>
+            <div class="season-tab" onclick="switchSeason('winter',this)">❄️ Winter</div>
+            <div class="season-tab" onclick="switchSeason('shoulder',this)">🍂 Shoulder</div>
+          </div>
+          <div style="font-size:.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">WEEKDAY</div>
+          <div class="hour-bars" id="wd-bars"></div>
+          <div class="hour-labels" id="wd-labels"></div>
+          <div style="font-size:.75rem;font-weight:600;color:var(--text-secondary);margin:10px 0 4px;">WEEKEND</div>
+          <div class="hour-bars" id="we-bars"></div>
+          <div class="hour-labels" id="we-labels"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+            <span style="font-size:.78rem;color:var(--text-secondary);">Quick set peak kW:</span>
+            <input type="number" id="demand-peak-input" style="width:80px;" placeholder="e.g. 1050">
+            <button class="btn-sm btn-secondary" onclick="applyTypicalProfile()">Apply Typical Profile</button>
+          </div>
           <div class="metric-row" id="demand-metrics" style="margin-top:14px;"></div>
         </div>
       </div>
@@ -1008,7 +1064,21 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
     </div>
   </div>
 </div>
-
+  <!-- PROJECT MANAGER MODAL -->
+  <div class="modal-overlay" id="projmgr-modal">
+    <div class="modal" style="max-width:600px;">
+      <h3>📁 Project Manager</h3>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="btn-primary btn-sm" onclick="newProject()">+ New Project</button>
+        <button class="btn-secondary btn-sm" onclick="document.getElementById('projImportInput').click()">📂 Import JSON</button>
+        <input type="file" id="projImportInput" accept=".json" style="display:none" onchange="importProjectFile(event)">
+      </div>
+      <div class="proj-list" id="proj-list"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeProjMgr()">Close</button>
+      </div>
+    </div>
+  </div>
 <script>
 // ========== CONSTANTS ==========
 const NAV_ITEMS = [
@@ -1109,22 +1179,65 @@ const ECM_LIB = [
   {id:'EL14',sys:'Electrical',title:'Sag Protection',range:'0-0%',lo:0,hi:0,complexity:'Medium',costRange:'$5k-20k',ref:'IEEE 1159',quickWin:false,typicalROI:'N/A — reliability',impact:'Protects sensitive equipment from voltage sags. UPS or dynamic sag corrector. No energy savings but prevents process losses.'}
 ];
 
-const CHECKLIST_ITEMS = ['Utility bills (12+ months)','Building drawings/plans','Equipment schedules','O&M manuals','Previous audit reports','Interview questions for FM staff','Audit equipment (light meter, IR camera, clamp meter)'];
 
+const CHECKLIST_ITEMS = {
+  'Documents to Obtain': [
+    '24+ months utility bills — all fuels (electricity, gas, district cooling, water, steam)',
+    'Building floor plans with gross/net areas per zone',
+    'Mechanical/electrical single-line diagrams',
+    'Equipment schedule — nameplate data for all major HVAC, electrical, DHW equipment',
+    'BAS/BMS trend logs (minimum 1 week — temperature, airflow, valve positions)',
+    'Previous energy audit reports or retro-commissioning studies',
+    'O&M manuals for HVAC systems, lighting controls, BAS',
+    'Maintenance records — last 12 months work orders',
+    'Occupancy schedule by zone (office hrs, cleaning, security)',
+    'Tenant/department list with approximate areas and occupant counts',
+    'Rate tariff schedules from utility provider (demand charges, TOU rates, PF penalties)',
+    'Architectural specs — wall/roof R-values, window U-factor, SHGC if available'
+  ],
+  'Instruments to Bring': [
+    'Clamp-on ammeter — True RMS, AC/DC (motor & panel current measurements)',
+    'Digital multimeter — voltage measurements at panels and equipment',
+    'Power quality analyzer / power logger — kW, kVAR, kVA, PF, harmonics (Fluke 1760 or similar)',
+    'Light meter (lux/fc) — for LPD verification per space',
+    'IR thermometer or thermal imaging camera — envelope defects, motor bearings, connections',
+    'Combustion analyzer — if gas-fired boilers/heaters present (flue gas O₂, CO, efficiency)',
+    'Temperature/humidity datalogger — for space conditions verification',
+    'Ultrasonic leak detector — for compressed air leak surveys',
+    'Contact tachometer or strobe — for fan/pump RPM verification',
+    'Duct traversing pitot tube + manometer — for airflow measurement (Level 2+)',
+    'Phone/camera — for nameplates, equipment condition, deficiencies'
+  ],
+  'What to Measure On-Site': [
+    'Lighting: fixture count per zone, W/fixture, lamp type, control type, operating hours',
+    'HVAC: nameplate (tons/kW, EER/SEER/COP/kW-per-ton), refrigerant, age, condition',
+    'Motors: nameplate HP/kW, voltage, FLA, service factor, RPM — then measure amps & PF',
+    'Transformers: kVA rating, year, type — measure kVA, kW, kVAR, PF, temperature rise',
+    'Panels: main breaker rating, bus rating — measure voltage all 3 phases, current per phase',
+    'Envelope: identify wall/roof construction, insulation type & thickness, window type & frame',
+    'DHW: heater type, capacity, efficiency rating, pipe insulation, recirc pump schedule',
+    'BAS: verify actual setpoints vs design, occupied/unoccupied schedules, alarm history',
+    'Compressed air (if present): compressor HP/kW, set pressure, run hours, perform leak survey',
+    'Record outdoor conditions at time of all readings (dry-bulb temp, RH, cloud cover, wind)',
+    'Interview facility staff: comfort complaints, recent changes, maintenance issues, operating practices'
+  ]
+};
 // ========== APP STATE ==========
 let appState = {
-  settings:{auditorName:'',companyName:'',companyLogo:'',climateZone:'2A',units:'IP',ashraeLevel:'1',aiApiKey:'AIzaSyAHd1TGPyt6MtP7MEJUNICmTJUGlIcF9f4',companyLogoURL:''},
+  _projectId:'',
+  _projectName:'',
+settings:{auditorName:'',companyName:'',companyLogo:'',companyLogoURL:'',climateZone:'2A',units:'IP',ashraeLevel:'1',aiProvider:'gemini',aiApiKey:'',aiModel:'',aiEndpoint:''},
   project:{buildingName:'',address:'',city:'',state:'',country:'USA',yearBuilt:'',floors:'',grossArea:'',areaUnit:'ft²',occupancyType:'Office Large',contact:'',phone:'',auditDate:'',clientCompany:'',clientContact:'',clientEmail:'',clientPhone:'',clientSector:'Commercial',clientLogoURL:'',clientLogo:''},
-  utility:{elecRate:0.10,gasRate:1.20,rows:[]},
+  utility:{elecRate:0.10,gasRate:1.20,dcRate:0.15,waterRate:5.00,steamRate:25.00,showGas:true,showDC:false,showWater:false,showSteam:false,rows:[]},
   envelope:{wallConst:'Steel Frame',wallIns:'None',roofType:'Built-Up',roofIns:'None',roofColor:'Dark',windowType:'Single Clear',windowFrame:'Aluminum No Break',wwr:'',infiltration:'Average',condition:'Fair',notes:'',airSealing:false,coolRoof:false,addInsulation:false,windowUpgrade:false,shading:false},
   lighting:{rows:[],ledRetrofit:false,occSensors:false,daylighting:false,reduceHours:false,exteriorControls:false},
   hvac:{rows:[],upgradeControls:false,economizer:false,dcv:false,replaceOld:false,vfd:false,ductSeal:false,refrigerant:false,scheduling:false,erv:false},
   dhw:{type:'Gas Storage',capacity:'',capacityUnit:'gallons',inputRating:'',inputUnit:'kBtu/h',year:'',efficiency:'',effUnit:'UEF',pipingInsulated:'No',recirculation:'No',recircControls:'Continuous',dailyUse:'',notes:'',insulatePipes:false,tankless:false,hpwh:false,recircTimer:false,reduceTemp:false},
   plugloads:{rows:[],powerMgmt:false,energyStar:false,smartStrips:false,vendingMisers:false,removeUnused:false},
-  other:{elevCount:'',elevType:'Hydraulic',elevAge:'',elevRegen:'No',dcPresent:'No',dcArea:'',dcITkW:'',dcPUE:'',kitchenPresent:'No',kitchenES:'No',kitchenHood:'No',parkingPresent:'No',parkingLighting:'HID',evCharging:'No',solarPV:'',notes:''},
+  other:{elevCount:'',elevType:'Hydraulic',elevAge:'',elevRegen:'No',dcPresent:'No',dcArea:'',dcITkW:'',dcPUE:'',kitchenPresent:'No',kitchenES:'No',kitchenHood:'No',parkingPresent:'No',parkingLighting:'HID',evCharging:'No',solarPV:'',notes:'',customEquip:[]},
   electrical:{nomVoltage:'',voltUnit:'V',voltLevel:'LV',supplyType:'Utility Grid',phases:'3-Phase',frequency:60,vL1:'',vL2:'',vL3:'',transformers:[],panels:[],apfc:false,rightSizeXfmr:false,vfdMotors:false,ie3Motors:false,loadScheduling:false,deenergize:false,submetering:false,voltImbalFix:false,harmonicFilter:false,reduceBaseLoad:false},
   pq:{srcBill:false,srcMeter:false,srcLogger:false,billPeakKW:'',billPFPenalty:'No',billPenalty:'',billPFThreshold:'',meterDate:'',meterKW:'',meterKVAR:'',meterKVA:'',meterPF:'',meterVL1:'',meterVL2:'',meterVL3:'',meterIL1:'',meterIL2:'',meterIL3:'',loggerModel:'',loggerPeriod:'',loggerPoint:'',logAvgV:'',logMinV:'',logMaxV:'',logVImbal:'',logAvgKW:'',logPeakKW:'',logMinKW:'',logAvgKVAR:'',logAvgKVA:'',logDPF:'',logMinPF:'',logTruePF:'',thdVL1:'',thdVL2:'',thdVL3:'',thdVAvg:'',thdIL1:'',thdIL2:'',thdIL3:'',thdIAvg:'',hV3:'',hV5:'',hV7:'',hV9:'',hV11:'',hV13:'',hV17:'',hV19:'',hV23:'',hV25:'',hI3:'',hI5:'',hI7:'',hI9:'',hI11:'',hI13:'',hI17:'',hI19:'',hI23:'',hI25:'',ieee519:'Not Assessed',harmonicSource:'',kFactor:'',sagsCount:'',sagsWorstMag:'',sagsWorstDur:'',swellsCount:'',swellsWorstMag:'',swellsWorstDur:'',interruptCount:'',interruptDur:'',transientCount:'',transientWorst:'',neutralCurrent:'',neutralOverloaded:'No',pst:'',plt:'',pfcInstalled:'No',pfcType:'Fixed Capacitor',pfcKVAR:'',pfcCondition:'Good'},
-  demand:{wd0:'',wd1:'',wd2:'',wd3:'',wd4:'',wd5:'',we0:'',we1:'',we2:'',we3:'',we4:'',we5:''},
+demand:{season:'summer',summer:{wd:Array(24).fill(0),we:Array(24).fill(0)},winter:{wd:Array(24).fill(0),we:Array(24).fill(0)},shoulder:{wd:Array(24).fill(0),we:Array(24).fill(0)}},
   loads:[],
   ecmSelections:{},
   ecmCosts:{},
@@ -1149,6 +1262,7 @@ function init() {
   renderTransformers();
   renderPanels();
   renderLoadTable();
+  renderCustomEquipment();
   showSection('dashboard');
   updateTopbar();
   updateEnvelope();
@@ -1159,7 +1273,35 @@ function init() {
 }
 
 function loadState() {
-  try { const s = localStorage.getItem('auditflow_state'); if (s) appState = JSON.parse(s); } catch(e) {}
+  // Determine which project to load
+  let pid = localStorage.getItem('auditflow_active_project') || '';
+  if (pid) {
+    try {
+      const s = localStorage.getItem('auditflow_project_' + pid);
+      if (s) appState = JSON.parse(s);
+    } catch(e) {}
+  } else {
+    // Migration: load old single-project format
+    try {
+      const s = localStorage.getItem('auditflow_state');
+      if (s) {
+        appState = JSON.parse(s);
+        // Assign a project ID and migrate
+        pid = 'p_' + Date.now();
+        appState._projectId = pid;
+        appState._projectName = appState.project.buildingName || 'Untitled Project';
+        localStorage.setItem('auditflow_project_' + pid, JSON.stringify(appState));
+        localStorage.setItem('auditflow_active_project', pid);
+        // Keep old key for backward compat but stop using it
+      }
+    } catch(e) {}
+  }
+  if (!appState._projectId) {
+    appState._projectId = 'p_' + Date.now();
+    appState._projectName = 'New Project';
+    localStorage.setItem('auditflow_active_project', appState._projectId);
+  }
+  // Field migrations
   if (!appState.photos) appState.photos = {envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]};
   if (!appState.loads) appState.loads = [];
   if (!appState.ecmSelections) appState.ecmSelections = {};
@@ -1167,11 +1309,47 @@ function loadState() {
   if (!appState.checklist) appState.checklist = {};
   if (!appState.electrical.transformers) appState.electrical.transformers = [];
   if (!appState.electrical.panels) appState.electrical.panels = [];
+  if (appState.utility.showGas === undefined) appState.utility.showGas = true;
+  if (appState.utility.showDC === undefined) appState.utility.showDC = false;
+  if (appState.utility.showWater === undefined) appState.utility.showWater = false;
+  if (appState.utility.showSteam === undefined) appState.utility.showSteam = false;
+  if (appState.utility.dcRate === undefined) appState.utility.dcRate = 0.15;
+  if (appState.utility.waterRate === undefined) appState.utility.waterRate = 5.00;
+  if (appState.utility.steamRate === undefined) appState.utility.steamRate = 25.00;
+  appState.utility.rows.forEach(r => {
+    if (r.dc === undefined) r.dc = '';
+    if (r.dccost === undefined) r.dccost = '';
+    if (r.water === undefined) r.water = '';
+    if (r.wcost === undefined) r.wcost = '';
+    if (r.steam === undefined) r.steam = '';
+    if (r.scost === undefined) r.scost = '';
+  });
+  if (appState.demand.wd0 !== undefined && appState.demand.summer === undefined) {
+    const oldWd = [appState.demand.wd0,appState.demand.wd1,appState.demand.wd2,appState.demand.wd3,appState.demand.wd4,appState.demand.wd5].map(v=>parseFloat(v)||0);
+    const oldWe = [appState.demand.we0,appState.demand.we1,appState.demand.we2,appState.demand.we3,appState.demand.we4,appState.demand.we5].map(v=>parseFloat(v)||0);
+    const blockHrs = [[0,6],[6,9],[9,12],[12,17],[17,21],[21,24]];
+    const wd24 = Array(24).fill(0);
+    const we24 = Array(24).fill(0);
+    blockHrs.forEach(([s,e],bi) => { for(let h=s;h<e;h++) { wd24[h]=oldWd[bi]; we24[h]=oldWe[bi]; } });
+    appState.demand = {season:'summer',summer:{wd:wd24,we:we24},winter:{wd:wd24.map(v=>Math.round(v*0.7)),we:we24.map(v=>Math.round(v*0.7))},shoulder:{wd:wd24.map(v=>Math.round(v*0.85)),we:we24.map(v=>Math.round(v*0.85))}};
+  }
+  if (!appState.demand.season) appState.demand.season = 'summer';
+  if (!appState.demand.summer) appState.demand = {season:'summer',summer:{wd:Array(24).fill(0),we:Array(24).fill(0)},winter:{wd:Array(24).fill(0),we:Array(24).fill(0)},shoulder:{wd:Array(24).fill(0),we:Array(24).fill(0)}};
+  if (!appState.other.customEquip) appState.other.customEquip = [];
+  if (!appState.settings.aiProvider) appState.settings.aiProvider = 'gemini';
+  if (appState.settings.aiModel === undefined) appState.settings.aiModel = '';
+  if (appState.settings.aiEndpoint === undefined) appState.settings.aiEndpoint = '';
 }
 
 function save() {
   readBindings();
-  try { localStorage.setItem('auditflow_state', JSON.stringify(appState)); } catch(e) {}
+  appState._projectName = appState.project.buildingName || 'Untitled Project';
+  try {
+    localStorage.setItem('auditflow_project_' + appState._projectId, JSON.stringify(appState));
+    localStorage.setItem('auditflow_active_project', appState._projectId);
+  } catch(e) {
+    console.warn('Save failed — localStorage may be full', e);
+  }
   highlightRequired();
 }
 
@@ -1272,9 +1450,16 @@ function buildTiles(checks) {
 // ========== DASHBOARD ==========
 function buildDashboard() {
   const cl = document.getElementById('dash-checklist');
-  cl.innerHTML = CHECKLIST_ITEMS.map((item, i) =>
-    `<label><input type="checkbox" ${appState.checklist[i]?'checked':''} onchange="appState.checklist[${i}]=this.checked;save();"> ${item}</label>`
-  ).join('');
+  let idx = 0;
+  let html = '';
+  for (const [category, items] of Object.entries(CHECKLIST_ITEMS)) {
+    html += `<div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin:12px 0 6px;border-bottom:1px solid var(--border);padding-bottom:4px;">${category}</div>`;
+    items.forEach(item => {
+      html += `<label><input type="checkbox" ${appState.checklist[idx]?'checked':''} onchange="appState.checklist[${idx}]=this.checked;save();"> ${item}</label>`;
+      idx++;
+    });
+  }
+  cl.innerHTML = html;
   updateDashSummary();
 }
 
@@ -1321,72 +1506,135 @@ function toggleTheme() {
 // ========== UTILITY ==========
 function buildUtilityTable() {
   if (appState.utility.rows.length === 0) addUtilityRows(12);
+  rebuildUtilityTable();
+}
+
+function rebuildUtilityTable() {
+  readBindings();
+  const g = appState.utility.showGas;
+  const dc = appState.utility.showDC;
+  const w = appState.utility.showWater;
+  const st = appState.utility.showSteam;
+  // Show/hide rate fields
+  const sh = (id,v) => { const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
+  sh('fg-gasRate',g); sh('fg-dcRate',dc); sh('fg-waterRate',w); sh('fg-steamRate',st);
+  // Build thead
+  let cols = '<th>#</th><th>Month/Year</th><th>kWh</th><th>Elec $</th><th>Peak kW</th>';
+  if(g) cols += '<th>Gas therms</th><th>Gas $</th>';
+  if(dc) cols += '<th>DC TR·h</th><th>DC $</th>';
+  if(w) cols += '<th>Water m³</th><th>Water $</th>';
+  if(st) cols += '<th>Steam klb</th><th>Steam $</th>';
+  cols += '<th>Notes</th><th></th>';
+  document.getElementById('utility-thead').innerHTML = '<tr>'+cols+'</tr>';
+  // Build tfoot
+  let foot = '<td></td><td><b>TOTALS</b></td><td id="ut-kwh">0</td><td id="ut-ecost">0</td><td id="ut-pkw">—</td>';
+  if(g) foot += '<td id="ut-gas">0</td><td id="ut-gcost">0</td>';
+  if(dc) foot += '<td id="ut-dc">0</td><td id="ut-dccost">0</td>';
+  if(w) foot += '<td id="ut-water">0</td><td id="ut-wcost">0</td>';
+  if(st) foot += '<td id="ut-steam">0</td><td id="ut-scost">0</td>';
+  foot += '<td></td><td></td>';
+  document.getElementById('utility-tfoot').innerHTML = '<tr>'+foot+'</tr>';
   renderUtilityRows();
+  calcUtility();
 }
 
 function addUtilityRows(n) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   for (let i = 0; i < n; i++) {
     const idx = appState.utility.rows.length;
-    appState.utility.rows.push({month: months[idx % 12] + ' ' + (new Date().getFullYear()), kwh:'',ecost:'',pkw:'',gas:'',gcost:'',notes:''});
+    appState.utility.rows.push({month: months[idx % 12] + ' ' + (new Date().getFullYear()), kwh:'',ecost:'',pkw:'',gas:'',gcost:'',dc:'',dccost:'',water:'',wcost:'',steam:'',scost:'',notes:''});
   }
   save();
-  renderUtilityRows();
+  rebuildUtilityTable();
 }
 
 function renderUtilityRows() {
   const body = document.getElementById('utility-body');
-  body.innerHTML = appState.utility.rows.map((r, i) => `<tr>
+  const g = appState.utility.showGas;
+  const dc = appState.utility.showDC;
+  const w = appState.utility.showWater;
+  const st = appState.utility.showSteam;
+  body.innerHTML = appState.utility.rows.map((r, i) => {
+    let row = `<tr>
     <td>${i+1}</td>
     <td><input type="text" value="${r.month}" onchange="appState.utility.rows[${i}].month=this.value;save();calcUtility();" style="min-width:90px;"></td>
     <td><input type="number" value="${r.kwh}" onchange="appState.utility.rows[${i}].kwh=parseFloat(this.value)||0;save();calcUtility();"></td>
     <td><input type="number" value="${r.ecost}" onchange="appState.utility.rows[${i}].ecost=parseFloat(this.value)||0;save();calcUtility();"></td>
-    <td><input type="number" value="${r.pkw}" onchange="appState.utility.rows[${i}].pkw=parseFloat(this.value)||0;save();calcUtility();"></td>
-    <td><input type="number" value="${r.gas}" onchange="appState.utility.rows[${i}].gas=parseFloat(this.value)||0;save();calcUtility();"></td>
-    <td><input type="number" value="${r.gcost}" onchange="appState.utility.rows[${i}].gcost=parseFloat(this.value)||0;save();calcUtility();"></td>
-    <td><input type="text" value="${r.notes||''}" onchange="appState.utility.rows[${i}].notes=this.value;save();" style="min-width:80px;"></td>
-    <td><button class="btn-icon btn-sm" onclick="appState.utility.rows.splice(${i},1);save();renderUtilityRows();calcUtility();">✕</button></td>
-  </tr>`).join('');
+    <td><input type="number" value="${r.pkw}" onchange="appState.utility.rows[${i}].pkw=parseFloat(this.value)||0;save();calcUtility();"></td>`;
+    if(g) row += `<td><input type="number" value="${r.gas}" onchange="appState.utility.rows[${i}].gas=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.gcost}" onchange="appState.utility.rows[${i}].gcost=parseFloat(this.value)||0;save();calcUtility();"></td>`;
+    if(dc) row += `<td><input type="number" value="${r.dc||''}" onchange="appState.utility.rows[${i}].dc=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.dccost||''}" onchange="appState.utility.rows[${i}].dccost=parseFloat(this.value)||0;save();calcUtility();"></td>`;
+    if(w) row += `<td><input type="number" value="${r.water||''}" onchange="appState.utility.rows[${i}].water=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.wcost||''}" onchange="appState.utility.rows[${i}].wcost=parseFloat(this.value)||0;save();calcUtility();"></td>`;
+    if(st) row += `<td><input type="number" value="${r.steam||''}" onchange="appState.utility.rows[${i}].steam=parseFloat(this.value)||0;save();calcUtility();"></td>
+    <td><input type="number" value="${r.scost||''}" onchange="appState.utility.rows[${i}].scost=parseFloat(this.value)||0;save();calcUtility();"></td>`;
+    row += `<td><input type="text" value="${r.notes||''}" onchange="appState.utility.rows[${i}].notes=this.value;save();" style="min-width:80px;"></td>
+    <td><button class="btn-icon btn-sm" onclick="appState.utility.rows.splice(${i},1);save();rebuildUtilityTable();">✕</button></td>
+    </tr>`;
+    return row;
+  }).join('');
 }
 
 function calcUtility() {
   readBindings();
   let totalKWH=0, totalECost=0, totalGas=0, totalGCost=0, maxPKW=0;
+  let totalDC=0, totalDCCost=0, totalWater=0, totalWCost=0, totalSteam=0, totalSCost=0;
   appState.utility.rows.forEach(r => {
     totalKWH += (parseFloat(r.kwh)||0);
     totalECost += (parseFloat(r.ecost)||0);
     totalGas += (parseFloat(r.gas)||0);
     totalGCost += (parseFloat(r.gcost)||0);
+    totalDC += (parseFloat(r.dc)||0);
+    totalDCCost += (parseFloat(r.dccost)||0);
+    totalWater += (parseFloat(r.water)||0);
+    totalWCost += (parseFloat(r.wcost)||0);
+    totalSteam += (parseFloat(r.steam)||0);
+    totalSCost += (parseFloat(r.scost)||0);
     const pk = parseFloat(r.pkw)||0;
     if (pk > maxPKW) maxPKW = pk;
   });
-  document.getElementById('ut-kwh').textContent = fmt(totalKWH);
-  document.getElementById('ut-ecost').textContent = '$' + fmt(totalECost);
-  document.getElementById('ut-pkw').textContent = maxPKW > 0 ? fmt(maxPKW) : '—';
-  document.getElementById('ut-gas').textContent = fmt(totalGas);
-  document.getElementById('ut-gcost').textContent = '$' + fmt(totalGCost);
+  const el = id => document.getElementById(id);
+  if(el('ut-kwh')) el('ut-kwh').textContent = fmt(totalKWH);
+  if(el('ut-ecost')) el('ut-ecost').textContent = '$' + fmt(totalECost);
+  if(el('ut-pkw')) el('ut-pkw').textContent = maxPKW > 0 ? fmt(maxPKW) : '—';
+  if(el('ut-gas')) el('ut-gas').textContent = fmt(totalGas);
+  if(el('ut-gcost')) el('ut-gcost').textContent = '$' + fmt(totalGCost);
+  if(el('ut-dc')) el('ut-dc').textContent = fmt(totalDC);
+  if(el('ut-dccost')) el('ut-dccost').textContent = '$' + fmt(totalDCCost);
+  if(el('ut-water')) el('ut-water').textContent = fmt(totalWater);
+  if(el('ut-wcost')) el('ut-wcost').textContent = '$' + fmt(totalWCost);
+  if(el('ut-steam')) el('ut-steam').textContent = fmt(totalSteam);
+  if(el('ut-scost')) el('ut-scost').textContent = '$' + fmt(totalSCost);
 
   const eui = calcEUI();
   const metrics = document.getElementById('eui-metrics');
-  const annKBtu = totalKWH * 3.412 + totalGas * 100;
-  metrics.innerHTML = `
-    <div class="metric-box"><div class="mv">${fmt(totalKWH)}</div><div class="ml">Total kWh</div></div>
-    <div class="metric-box"><div class="mv">${fmt(totalGas)}</div><div class="ml">Total Therms</div></div>
-    <div class="metric-box"><div class="mv">${fmt(Math.round(annKBtu))}</div><div class="ml">Annual kBtu</div></div>
-    <div class="metric-box"><div class="mv" style="color:${eui!==null?(eui<=(BENCHMARKS[appState.project.occupancyType]||{es75:54}).es75?'var(--success)':eui<=(BENCHMARKS[appState.project.occupancyType]||{median:81}).median?'var(--warning)':'var(--danger)'):'var(--accent)'}">${eui!==null?eui.toFixed(1):'—'}</div><div class="ml">EUI kBtu/ft²·yr</div></div>
-  `;
+  const annKBtu = totalKWH * 3.412 + totalGas * 100 + totalDC * 12 + totalSteam * 1000;
+  const totalAllCost = totalECost + totalGCost + totalDCCost + totalWCost + totalSCost;
+  let mhtml = `
+    <div class="metric-box"><div class="mv">${fmt(totalKWH)}</div><div class="ml">Total kWh</div></div>`;
+  if(appState.utility.showGas) mhtml += `<div class="metric-box"><div class="mv">${fmt(totalGas)}</div><div class="ml">Total Therms</div></div>`;
+  if(appState.utility.showDC) mhtml += `<div class="metric-box"><div class="mv">${fmt(totalDC)}</div><div class="ml">Total TR·h</div></div>`;
+  mhtml += `<div class="metric-box"><div class="mv">${fmt(Math.round(annKBtu))}</div><div class="ml">Annual kBtu</div></div>
+    <div class="metric-box"><div class="mv">$${fmt(Math.round(totalAllCost))}</div><div class="ml">Total Utility Cost</div></div>
+    <div class="metric-box"><div class="mv" style="color:${eui!==null?(eui<=(BENCHMARKS[appState.project.occupancyType]||{es75:54}).es75?'var(--success)':eui<=(BENCHMARKS[appState.project.occupancyType]||{median:81}).median?'var(--warning)':'var(--danger)'):'var(--accent)'}">${eui!==null?eui.toFixed(1):'—'}</div><div class="ml">EUI kBtu/ft²·yr</div></div>`;
+  metrics.innerHTML = mhtml;
   updateDashSummary();
-  save();
 }
 
 function calcEUI() {
-  let totalKWH=0, totalGas=0;
-  appState.utility.rows.forEach(r => { totalKWH += (parseFloat(r.kwh)||0); totalGas += (parseFloat(r.gas)||0); });
+  let totalKWH=0, totalGas=0, totalDC=0, totalSteam=0;
+  appState.utility.rows.forEach(r => {
+    totalKWH += (parseFloat(r.kwh)||0);
+    totalGas += (parseFloat(r.gas)||0);
+    totalDC += (parseFloat(r.dc)||0);
+    totalSteam += (parseFloat(r.steam)||0);
+  });
   const area = parseFloat(appState.project.grossArea) || 0;
   if (area === 0 || totalKWH === 0) return null;
   let areaFt2 = area;
   if (appState.project.areaUnit === 'm²') areaFt2 = area * 10.7639;
-  const annKBtu = totalKWH * 3.412 + totalGas * 100;
+  const annKBtu = totalKWH * 3.412 + totalGas * 100 + totalDC * 12 + totalSteam * 1000;
   return annKBtu / areaFt2;
 }
 
@@ -1492,25 +1740,55 @@ function buildPlugTable() {
   renderPlugRows();
 }
 
-function renderPlugRows() {
-  const body = document.getElementById('plug-body');
-  let total = 0;
-  body.innerHTML = appState.plugloads.rows.map((r, i) => {
-    const annKwh = (r.count||0) * (r.watts||0) * (r.hrs||0) * (r.days||0) / 1000;
-    total += annKwh;
-    return `<tr>
-      <td>${r.name}</td>
-      <td><input type="number" value="${r.count}" onchange="appState.plugloads.rows[${i}].count=parseFloat(this.value)||0;save();renderPlugRows();"></td>
-      <td><input type="number" value="${r.watts}" onchange="appState.plugloads.rows[${i}].watts=parseFloat(this.value)||0;save();renderPlugRows();" style="font-family:var(--mono);"></td>
-      <td><input type="number" value="${r.hrs}" onchange="appState.plugloads.rows[${i}].hrs=parseFloat(this.value)||0;save();renderPlugRows();"></td>
-      <td><input type="number" value="${r.days}" onchange="appState.plugloads.rows[${i}].days=parseFloat(this.value)||0;save();renderPlugRows();"></td>
-      <td><select onchange="appState.plugloads.rows[${i}].powerMgmt=this.value==='Yes';save();"><option ${r.powerMgmt?'selected':''}>Yes</option><option ${!r.powerMgmt?'selected':''}>No</option></select></td>
-      <td style="font-family:var(--mono);">${fmt(Math.round(annKwh))}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('plug-total').textContent = fmt(Math.round(total));
-}
+  function renderPlugRows() {
+    const body = document.getElementById('plug-body');
+    let total = 0;
+    body.innerHTML = appState.plugloads.rows.map((r, i) => {
+      const annKwh = (r.count||0) * (r.watts||0) * (r.hrs||0) * (r.days||0) / 1000;
+      total += annKwh;
+      return `<tr>
+        <td><input type="text" value="${r.name}" onchange="appState.plugloads.rows[${i}].name=this.value;save();" style="min-width:100px;"></td>
+        <td><input type="number" value="${r.count}" onchange="appState.plugloads.rows[${i}].count=parseFloat(this.value)||0;save();renderPlugRows();"></td>
+        <td><input type="number" value="${r.watts}" onchange="appState.plugloads.rows[${i}].watts=parseFloat(this.value)||0;save();renderPlugRows();" style="font-family:var(--mono);"></td>
+        <td><input type="number" value="${r.hrs}" onchange="appState.plugloads.rows[${i}].hrs=parseFloat(this.value)||0;save();renderPlugRows();"></td>
+        <td><input type="number" value="${r.days}" onchange="appState.plugloads.rows[${i}].days=parseFloat(this.value)||0;save();renderPlugRows();"></td>
+        <td><select onchange="appState.plugloads.rows[${i}].powerMgmt=this.value==='Yes';save();"><option ${r.powerMgmt?'selected':''}>Yes</option><option ${!r.powerMgmt?'selected':''}>No</option></select></td>
+        <td style="font-family:var(--mono);">${fmt(Math.round(annKwh))}</td>
+        <td><button class="btn-icon btn-sm" onclick="appState.plugloads.rows.splice(${i},1);save();renderPlugRows();">✕</button></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('plug-total').textContent = fmt(Math.round(total));
+  }
+    function addPlugRow() {
+      appState.plugloads.rows.push({name:'Custom Equipment',watts:100,hrs:8,days:261,count:1,powerMgmt:false});
+      save();
+      renderPlugRows();
+    }
+    function addCustomEquipment() {
+        if (!appState.other.customEquip) appState.other.customEquip = [];
+        appState.other.customEquip.push({name:'',type:'Motor',capacity:'',unit:'kW',year:'',condition:'Fair',annKwh:'',notes:''});
+        save();
+        renderCustomEquipment();
+      }
 
+      function renderCustomEquipment() {
+        const body = document.getElementById('custom-equip-body');
+        if (!body) return;
+        if (!appState.other.customEquip) appState.other.customEquip = [];
+        body.innerHTML = appState.other.customEquip.map((eq, i) => `<tr>
+          <td><input type="text" value="${eq.name}" onchange="appState.other.customEquip[${i}].name=this.value;save();" style="min-width:90px;"></td>
+          <td><select onchange="appState.other.customEquip[${i}].type=this.value;save();">
+            ${['Motor','Pump','Fan','Compressor','Conveyor','Oven','Boiler','Cooling Tower','Pool Equipment','Escalator','Compressed Air','Process','BMS/Controls','Fire System','Irrigation','Other'].map(o=>`<option ${eq.type===o?'selected':''}>${o}</option>`).join('')}
+          </select></td>
+          <td><input type="number" value="${eq.capacity}" onchange="appState.other.customEquip[${i}].capacity=this.value;save();" style="width:70px;"></td>
+          <td><select onchange="appState.other.customEquip[${i}].unit=this.value;save();">${['kW','HP','tons','kBtu/h','CFM','GPM'].map(o=>`<option ${eq.unit===o?'selected':''}>${o}</option>`).join('')}</select></td>
+          <td><input type="number" value="${eq.year}" onchange="appState.other.customEquip[${i}].year=this.value;save();" style="width:60px;"></td>
+          <td><select onchange="appState.other.customEquip[${i}].condition=this.value;save();">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${eq.condition===o?'selected':''}>${o}</option>`).join('')}</select></td>
+          <td><input type="number" value="${eq.annKwh}" onchange="appState.other.customEquip[${i}].annKwh=this.value;save();" style="width:80px;font-family:var(--mono);"></td>
+          <td><input type="text" value="${eq.notes||''}" onchange="appState.other.customEquip[${i}].notes=this.value;save();" style="min-width:70px;"></td>
+          <td><button class="btn-icon btn-sm" onclick="appState.other.customEquip.splice(${i},1);save();renderCustomEquipment();">✕</button></td>
+        </tr>`).join('');
+      }
 // ========== ELECTRICAL: TRANSFORMERS ==========
 function addTransformer() {
   appState.electrical.transformers.push({tag:'TR-'+(appState.electrical.transformers.length+1),type:'Dry',ratedKVA:'',year:'',priV:'',secV:'',ironLoss:'',copperLoss:'',measKW:'',measKVAR:'',measKVA:'',measPF:'',tempRise:'',condition:'Fair'});
@@ -1706,38 +1984,124 @@ function calcPQ() {
 }
 
 // ========== DEMAND PROFILE ==========
-function calcDemand() {
-  readBindings();
-  const d = appState.demand;
-  const blockHrs = [6,3,3,5,4,3]; // hours per block
-  const wd = [parseFloat(d.wd0)||0,parseFloat(d.wd1)||0,parseFloat(d.wd2)||0,parseFloat(d.wd3)||0,parseFloat(d.wd4)||0,parseFloat(d.wd5)||0];
-  const we = [parseFloat(d.we0)||0,parseFloat(d.we1)||0,parseFloat(d.we2)||0,parseFloat(d.we3)||0,parseFloat(d.we4)||0,parseFloat(d.we5)||0];
-  const all = [...wd, ...we].filter(v => v > 0);
-  if (all.length === 0) { document.getElementById('demand-metrics').innerHTML = ''; return; }
-  const peak = Math.max(...all);
-  const minD = Math.min(...all);
-  // weighted average
-  let totalKWH = 0;
-  for (let b = 0; b < 6; b++) {
-    totalKWH += wd[b] * blockHrs[b] * 261; // weekday days
-    totalKWH += we[b] * blockHrs[b] * 104; // weekend days
-  }
-  const avgDemand = totalKWH / 8760;
-  const loadFactor = peak > 0 ? (avgDemand / peak) : 0;
-  const baseLoad = Math.min(wd[0], wd[5], we[0], we[5]);
-  const basePct = peak > 0 ? (baseLoad / peak * 100) : 0;
+// ========== 24H DEMAND PROFILE ==========
+    let currentSeason = 'summer';
+    let draggingBar = null;
 
-  document.getElementById('demand-metrics').innerHTML = `
-    <div class="metric-box"><div class="mv">${fmt(peak)}</div><div class="ml">Peak kW</div></div>
-    <div class="metric-box"><div class="mv">${fmt(minD)}</div><div class="ml">Min kW</div></div>
-    <div class="metric-box"><div class="mv">${avgDemand.toFixed(0)}</div><div class="ml">Avg kW</div></div>
-    <div class="metric-box"><div class="mv">${(loadFactor*100).toFixed(1)}%</div><div class="ml">Load Factor</div></div>
-    <div class="metric-box"><div class="mv">${fmt(baseLoad)}</div><div class="ml">Base Load kW</div></div>
-    <div class="metric-box"><div class="mv" style="color:${basePct>30?'var(--warning)':'var(--success)'}">${basePct.toFixed(1)}%</div><div class="ml">Base %</div></div>
-    <div class="metric-box"><div class="mv">${fmt(Math.round(totalKWH))}</div><div class="ml">Est. Ann kWh</div></div>
-  `;
-  save();
-}
+    function switchSeason(season, btn) {
+      currentSeason = season;
+      appState.demand.season = season;
+      document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
+      if(btn) btn.classList.add('active');
+      renderDemandBars();
+      save();
+    }
+
+    function renderDemandBars() {
+      const s = appState.demand[currentSeason] || {wd:Array(24).fill(0),we:Array(24).fill(0)};
+      const maxKW = Math.max(...s.wd, ...s.we, 100);
+      renderBarSet('wd-bars','wd-labels', s.wd, maxKW, 'wd');
+      renderBarSet('we-bars','we-labels', s.we, maxKW, 'we');
+      calcDemandMetrics();
+    }
+
+    function renderBarSet(barId, labelId, data, maxKW, prefix) {
+      const container = document.getElementById(barId);
+      const labels = document.getElementById(labelId);
+      if(!container) return;
+      container.innerHTML = data.map((v,h) => {
+        const pct = maxKW > 0 ? (v/maxKW*100) : 0;
+        const bg = h>=6&&h<18 ? 'var(--accent)' : h>=18&&h<22 ? 'var(--warning)' : 'var(--text-muted)';
+        return `<div class="hour-bar" style="height:${Math.max(pct,2)}%;background:${bg};" data-hour="${h}" data-prefix="${prefix}" onmousedown="startDrag(event,this)" ontouchstart="startDrag(event,this)"><div class="hb-val">${v>0?v:''}</div></div>`;
+      }).join('');
+      labels.innerHTML = Array.from({length:24},(_,h) => `<span>${h}</span>`).join('');
+    }
+
+    function startDrag(e, bar) {
+      e.preventDefault();
+      draggingBar = bar;
+      const container = bar.parentElement;
+      const rect = container.getBoundingClientRect();
+      const maxKW = Math.max(...getDemandData().wd, ...getDemandData().we, 100);
+
+      function onMove(ev) {
+        if(!draggingBar) return;
+        const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        const pct = Math.max(0, Math.min(1, (rect.bottom - clientY) / rect.height));
+        const kw = Math.round(pct * maxKW / 10) * 10;
+        const h = parseInt(draggingBar.dataset.hour);
+        const pre = draggingBar.dataset.prefix;
+        const sData = appState.demand[currentSeason];
+        sData[pre][h] = kw;
+        draggingBar.style.height = Math.max(pct*100,2) + '%';
+        draggingBar.querySelector('.hb-val').textContent = kw > 0 ? kw : '';
+        calcDemandMetrics();
+      }
+      function onUp() {
+        draggingBar = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+        save();
+        renderDemandBars();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, {passive:false});
+      document.addEventListener('touchend', onUp);
+      onMove(e);
+    }
+
+    function getDemandData() {
+      return appState.demand[currentSeason] || {wd:Array(24).fill(0),we:Array(24).fill(0)};
+    }
+
+    function applyTypicalProfile() {
+      const peak = parseFloat(document.getElementById('demand-peak-input').value) || 0;
+      if(peak <= 0) { alert('Enter a peak kW value first'); return; }
+      // Typical office profile as fraction of peak
+      const wdProfile = [0.18,0.18,0.18,0.18,0.18,0.20,0.35,0.55,0.78,0.90,0.95,0.98,1.0,1.0,0.98,0.95,0.90,0.75,0.55,0.35,0.25,0.20,0.18,0.18];
+      const weProfile = [0.17,0.17,0.17,0.17,0.17,0.17,0.18,0.19,0.25,0.30,0.32,0.33,0.34,0.33,0.32,0.30,0.25,0.22,0.20,0.18,0.17,0.17,0.17,0.17];
+      const s = appState.demand[currentSeason];
+      s.wd = wdProfile.map(f => Math.round(peak * f / 10) * 10);
+      s.we = weProfile.map(f => Math.round(peak * f / 10) * 10);
+      save();
+      renderDemandBars();
+    }
+
+    function calcDemandMetrics() {
+      const s = getDemandData();
+      const wd = s.wd;
+      const we = s.we;
+      const all = [...wd,...we].filter(v => v > 0);
+      if (all.length === 0) { document.getElementById('demand-metrics').innerHTML = ''; return; }
+      const peak = Math.max(...all);
+      const minD = Math.min(...all);
+      let totalKWH = 0;
+      for (let h = 0; h < 24; h++) {
+        totalKWH += wd[h] * 261;
+        totalKWH += we[h] * 104;
+      }
+      const avgDemand = totalKWH / 8760;
+      const loadFactor = peak > 0 ? (avgDemand / peak) : 0;
+      const baseLoad = Math.min(...wd.filter(v=>v>0).concat(we.filter(v=>v>0)), peak);
+      const basePct = peak > 0 ? (baseLoad / peak * 100) : 0;
+
+      document.getElementById('demand-metrics').innerHTML = `
+        <div class="metric-box"><div class="mv">${fmt(peak)}</div><div class="ml">Peak kW</div></div>
+        <div class="metric-box"><div class="mv">${fmt(minD)}</div><div class="ml">Min kW</div></div>
+        <div class="metric-box"><div class="mv">${avgDemand.toFixed(0)}</div><div class="ml">Avg kW</div></div>
+        <div class="metric-box"><div class="mv">${(loadFactor*100).toFixed(1)}%</div><div class="ml">Load Factor</div></div>
+        <div class="metric-box"><div class="mv">${fmt(baseLoad)}</div><div class="ml">Base Load kW</div></div>
+        <div class="metric-box"><div class="mv" style="color:${basePct>30?'var(--warning)':'var(--success)'}">${basePct.toFixed(1)}%</div><div class="ml">Base %</div></div>
+        <div class="metric-box"><div class="mv">${fmt(Math.round(totalKWH))}</div><div class="ml">Est. Ann kWh</div></div>
+      `;
+    }
+
+    function calcDemand() {
+      renderDemandBars();
+    }
 
 // ========== FLAGS ==========
 function toggleFlag(btn) {
@@ -1779,6 +2143,19 @@ function highlightRequired() {
     }
   });
 }
+
+  function updateAIProviderUI() {
+    const prov = appState.settings.aiProvider || 'gemini';
+    const keyLabel = document.getElementById('ai-key-label');
+    const modelFG = document.getElementById('fg-aiModel');
+    const endpointFG = document.getElementById('fg-aiEndpoint');
+    if(keyLabel) {
+      const labels = {gemini:'Gemini API Key',groq:'Groq API Key',openai:'OpenAI API Key',anthropic:'Anthropic API Key',ollama:'(Not needed for local)',custom:'API Key'};
+      keyLabel.textContent = labels[prov] || 'API Key';
+    }
+    if(modelFG) modelFG.style.display = (prov==='ollama'||prov==='custom') ? '' : 'none';
+    if(endpointFG) endpointFG.style.display = prov==='custom' ? '' : 'none';
+  }
 // ========== PHOTOS ==========
 function openPhotoModal(section) {
   currentPhotoSection = section;
@@ -2011,21 +2388,24 @@ function renderCharts() {
     });
   }
 
-  // 6. Demand Profile
-  const d = appState.demand;
-  const wdVals = [parseFloat(d.wd0)||0,parseFloat(d.wd1)||0,parseFloat(d.wd2)||0,parseFloat(d.wd3)||0,parseFloat(d.wd4)||0,parseFloat(d.wd5)||0];
-  const weVals = [parseFloat(d.we0)||0,parseFloat(d.we1)||0,parseFloat(d.we2)||0,parseFloat(d.we3)||0,parseFloat(d.we4)||0,parseFloat(d.we5)||0];
-  if (wdVals.some(v => v > 0)) {
+ // 6. Demand Profile — 24h
+  const dData = appState.demand.summer || {wd:Array(24).fill(0),we:Array(24).fill(0)};
+  if (dData.wd.some(v => v > 0)) {
+    const hrLabels = Array.from({length:24},(_,h)=>h+':00');
     charts.demand = new Chart(document.getElementById('chart-demand'), {
-      type: 'bar',
+      type: 'line',
       data: {
-        labels: ['0-6h','6-9h','9-12h','12-17h','17-21h','21-24h'],
+        labels: hrLabels,
         datasets: [
-          { label: 'Weekday', data: wdVals, backgroundColor: '#0ea5e9' },
-          { label: 'Weekend', data: weVals, backgroundColor: '#94a3b8' }
+          { label: 'Summer WD', data: (appState.demand.summer||{}).wd||[], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.08)', fill: true, tension: 0.3, pointRadius: 1 },
+          { label: 'Summer WE', data: (appState.demand.summer||{}).we||[], borderColor: '#f59e0b', borderDash:[4,2], tension: 0.3, pointRadius: 0, fill: false },
+          { label: 'Winter WD', data: (appState.demand.winter||{}).wd||[], borderColor: '#0ea5e9', tension: 0.3, pointRadius: 0, fill: false },
+          { label: 'Winter WE', data: (appState.demand.winter||{}).we||[], borderColor: '#0ea5e9', borderDash:[4,2], tension: 0.3, pointRadius: 0, fill: false }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'kW' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'kW' } }, x: { title: { display: true, text: 'Hour' } } }
+      }
     });
   }
 
@@ -2221,6 +2601,144 @@ function updateClientLogo() {
     save();
   }
 }
+// ========== PROJECT MANAGER ==========
+function getProjectList() {
+  const list = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('auditflow_project_')) {
+      try {
+        const data = JSON.parse(localStorage.getItem(key));
+        list.push({
+          id: key.replace('auditflow_project_',''),
+          name: data._projectName || data.project?.buildingName || 'Untitled',
+          type: data.project?.occupancyType || '',
+          date: data.project?.auditDate || '',
+          city: data.project?.city || '',
+          active: key === 'auditflow_project_' + appState._projectId
+        });
+      } catch(e) {}
+    }
+  }
+  return list.sort((a,b) => b.active - a.active);
+}
+
+function openProjMgr() {
+  document.getElementById('projmgr-modal').classList.add('show');
+  renderProjectList();
+}
+
+function closeProjMgr() {
+  document.getElementById('projmgr-modal').classList.remove('show');
+}
+
+function renderProjectList() {
+  const list = getProjectList();
+  const el = document.getElementById('proj-list');
+  if (list.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:20px;text-align:center;">No saved projects yet. Current project will be saved automatically.</div>';
+    return;
+  }
+  el.innerHTML = list.map(p => `<div class="proj-item ${p.active?'active':''}" onclick="switchProject('${p.id}')">
+    <div>
+      <div class="pi-name">${p.name} ${p.active?'<span class="badge badge-blue">ACTIVE</span>':''}</div>
+      <div class="pi-meta">${p.type} ${p.city?'• '+p.city:''} ${p.date?'• '+p.date:''}</div>
+    </div>
+    <div class="pi-actions">
+      <button class="btn-sm btn-secondary" onclick="event.stopPropagation();duplicateProject('${p.id}')" title="Duplicate">📋</button>
+      <button class="btn-sm btn-secondary" onclick="event.stopPropagation();exportProjectById('${p.id}')" title="Export">💾</button>
+      ${p.active?'':`<button class="btn-sm btn-danger" onclick="event.stopPropagation();deleteProject('${p.id}')" title="Delete">✕</button>`}
+    </div>
+  </div>`).join('');
+}
+
+function switchProject(pid) {
+  save(); // Save current first
+  localStorage.setItem('auditflow_active_project', pid);
+  location.reload();
+}
+
+function newProject() {
+  save(); // Save current first
+  const pid = 'p_' + Date.now();
+  // Reset to default state
+  const defaultState = {
+    _projectId: pid,
+    _projectName: 'New Project',
+    settings:{auditorName:appState.settings.auditorName||'',companyName:appState.settings.companyName||'',companyLogo:appState.settings.companyLogo||'',companyLogoURL:appState.settings.companyLogoURL||'',climateZone:'2A',units:'IP',ashraeLevel:'1',aiApiKey:appState.settings.aiApiKey||''},
+    project:{buildingName:'',address:'',city:'',state:'',country:'',yearBuilt:'',floors:'',grossArea:'',areaUnit:'ft²',occupancyType:'Office Large',contact:'',phone:'',auditDate:'',clientCompany:'',clientContact:'',clientEmail:'',clientPhone:'',clientSector:'Commercial',clientLogoURL:'',clientLogo:''},
+    utility:{elecRate:0.10,gasRate:1.20,dcRate:0.15,waterRate:5.00,steamRate:25.00,showGas:true,showDC:false,showWater:false,showSteam:false,rows:[]},
+    envelope:{wallConst:'Steel Frame',wallIns:'None',roofType:'Built-Up',roofIns:'None',roofColor:'Dark',windowType:'Single Clear',windowFrame:'Aluminum No Break',wwr:'',infiltration:'Average',condition:'Fair',notes:'',airSealing:false,coolRoof:false,addInsulation:false,windowUpgrade:false,shading:false},
+    lighting:{rows:[],ledRetrofit:false,occSensors:false,daylighting:false,reduceHours:false,exteriorControls:false},
+    hvac:{rows:[],upgradeControls:false,economizer:false,dcv:false,replaceOld:false,vfd:false,ductSeal:false,refrigerant:false,scheduling:false,erv:false},
+    dhw:{type:'Gas Storage',capacity:'',capacityUnit:'gallons',inputRating:'',inputUnit:'kBtu/h',year:'',efficiency:'',effUnit:'UEF',pipingInsulated:'No',recirculation:'No',recircControls:'Continuous',dailyUse:'',notes:'',insulatePipes:false,tankless:false,hpwh:false,recircTimer:false,reduceTemp:false},
+    plugloads:{rows:[],powerMgmt:false,energyStar:false,smartStrips:false,vendingMisers:false,removeUnused:false},
+    other:{elevCount:'',elevType:'Hydraulic',elevAge:'',elevRegen:'No',dcPresent:'No',dcArea:'',dcITkW:'',dcPUE:'',kitchenPresent:'No',kitchenES:'No',kitchenHood:'No',parkingPresent:'No',parkingLighting:'HID',evCharging:'No',solarPV:'',notes:'',customEquip:[]},
+    electrical:{nomVoltage:'',voltUnit:'V',voltLevel:'LV',supplyType:'Utility Grid',phases:'3-Phase',frequency:60,vL1:'',vL2:'',vL3:'',transformers:[],panels:[],apfc:false,rightSizeXfmr:false,vfdMotors:false,ie3Motors:false,loadScheduling:false,deenergize:false,submetering:false,voltImbalFix:false,harmonicFilter:false,reduceBaseLoad:false},
+    pq:{srcBill:false,srcMeter:false,srcLogger:false,billPeakKW:'',billPFPenalty:'No',billPenalty:'',billPFThreshold:'',meterDate:'',meterKW:'',meterKVAR:'',meterKVA:'',meterPF:'',meterVL1:'',meterVL2:'',meterVL3:'',meterIL1:'',meterIL2:'',meterIL3:'',loggerModel:'',loggerPeriod:'',loggerPoint:'',logAvgV:'',logMinV:'',logMaxV:'',logVImbal:'',logAvgKW:'',logPeakKW:'',logMinKW:'',logAvgKVAR:'',logAvgKVA:'',logDPF:'',logMinPF:'',logTruePF:'',thdVL1:'',thdVL2:'',thdVL3:'',thdVAvg:'',thdIL1:'',thdIL2:'',thdIL3:'',thdIAvg:'',hV3:'',hV5:'',hV7:'',hV9:'',hV11:'',hV13:'',hV17:'',hV19:'',hV23:'',hV25:'',hI3:'',hI5:'',hI7:'',hI9:'',hI11:'',hI13:'',hI17:'',hI19:'',hI23:'',hI25:'',ieee519:'Not Assessed',harmonicSource:'',kFactor:'',sagsCount:'',sagsWorstMag:'',sagsWorstDur:'',swellsCount:'',swellsWorstMag:'',swellsWorstDur:'',interruptCount:'',interruptDur:'',transientCount:'',transientWorst:'',neutralCurrent:'',neutralOverloaded:'No',pst:'',plt:'',pfcInstalled:'No',pfcType:'Fixed Capacitor',pfcKVAR:'',pfcCondition:'Good'},
+    demand:{season:'summer',summer:{wd:Array(24).fill(0),we:Array(24).fill(0)},winter:{wd:Array(24).fill(0),we:Array(24).fill(0)},shoulder:{wd:Array(24).fill(0),we:Array(24).fill(0)}},
+    loads:[],ecmSelections:{},ecmCosts:{},photos:{envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]},checklist:{},aiDraft:''
+  };
+  localStorage.setItem('auditflow_project_' + pid, JSON.stringify(defaultState));
+  localStorage.setItem('auditflow_active_project', pid);
+  location.reload();
+}
+
+function duplicateProject(pid) {
+  try {
+    const data = JSON.parse(localStorage.getItem('auditflow_project_' + pid));
+    const newPid = 'p_' + Date.now();
+    data._projectId = newPid;
+    data._projectName = (data._projectName || 'Project') + ' (Copy)';
+    if (data.project) data.project.buildingName = (data.project.buildingName || 'Project') + ' (Copy)';
+    localStorage.setItem('auditflow_project_' + newPid, JSON.stringify(data));
+    renderProjectList();
+  } catch(e) { alert('Failed to duplicate project'); }
+}
+
+function deleteProject(pid) {
+  if (!confirm('Delete this project permanently?')) return;
+  localStorage.removeItem('auditflow_project_' + pid);
+  renderProjectList();
+}
+
+function deleteCurrentProject() {
+  if (!confirm('Reset current project? This cannot be undone.')) return;
+  localStorage.removeItem('auditflow_project_' + appState._projectId);
+  localStorage.removeItem('auditflow_active_project');
+  // Also remove legacy key
+  localStorage.removeItem('auditflow_state');
+  location.reload();
+}
+
+function exportProjectById(pid) {
+  try {
+    const data = JSON.parse(localStorage.getItem('auditflow_project_' + pid));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'AuditFlow_' + (data._projectName || 'project').replace(/\s/g, '_') + '.json';
+    a.click();
+  } catch(e) { alert('Export failed'); }
+}
+
+function importProjectFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const pid = 'p_' + Date.now();
+      data._projectId = pid;
+      if (!data._projectName) data._projectName = data.project?.buildingName || 'Imported Project';
+      localStorage.setItem('auditflow_project_' + pid, JSON.stringify(data));
+      renderProjectList();
+    } catch(err) { alert('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
 // ========== EXPORT/IMPORT ==========
 function exportJSON() {
   readBindings();
@@ -2250,11 +2768,16 @@ async function generateAIAnalysis(mode) {
   readBindings();
   const statusEl = document.getElementById('ai-status');
   const outputEl = document.getElementById('ai-output');
-  const apiKey = appState.settings.aiApiKey;
-  if (!apiKey) { alert('Please enter a Gemini API key in Settings'); return; }
+  const provider = appState.settings.aiProvider || 'gemini';
+  const apiKey = appState.settings.aiApiKey || '';
+  const customModel = appState.settings.aiModel || '';
+  const customEndpoint = appState.settings.aiEndpoint || '';
 
-  statusEl.innerHTML = '<span class="ai-loading">⏳ Generating analysis...</span>';
+  if (provider !== 'ollama' && !apiKey) { alert('Please enter an API key in Settings for ' + provider); return; }
 
+  statusEl.innerHTML = '<span class="ai-loading">⏳ Generating with ' + provider + '...</span>';
+
+  // Build context
   const p = appState.project;
   const s = appState.settings;
   const eui = calcEUI();
@@ -2266,7 +2789,7 @@ async function generateAIAnalysis(mode) {
   const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
   const pf = parseFloat(appState.pq.meterPF) || parseFloat(appState.pq.logTruePF) || 0;
 
-  let dataContext = `Building: ${p.buildingName}, ${p.address} ${p.city} ${p.state}
+  const dataContext = `Building: ${p.buildingName}, ${p.address} ${p.city} ${p.state}
 Type: ${p.occupancyType}, ${p.floors} floors, ${p.grossArea} ${p.areaUnit}, Built ${p.yearBuilt}
 Climate Zone: ${s.climateZone}, ASHRAE Level: ${s.ashraeLevel}
 Client: ${p.clientCompany||'N/A'}
@@ -2280,111 +2803,92 @@ Power Factor: ${pf||'N/A'}, THD-I: ${appState.pq.thdIAvg||'N/A'}%
 Selected ECMs: ${selectedECMs.map(e=>e.id+' '+e.title+' ('+e.range+')').join('; ')}
 Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kVA util='+(parseFloat(t.measKVA)||0)/(parseFloat(t.ratedKVA)||1)*100+'%').join('; ')}`;
 
-  let prompt = '';
-  if (mode === 'executive') {
-    prompt = `You are an ASHRAE-certified energy auditor writing a professional Level ${s.ashraeLevel} energy audit report. Write an executive summary (3-4 paragraphs) for this building based on the data below. Include EUI comparison to benchmarks, key findings, estimated savings potential, and priority recommendations. Be specific with numbers. Use professional energy engineering language.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'findings') {
-    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed "Key Findings" section (5-8 bullet points expanded into paragraphs) for this Level ${s.ashraeLevel} energy audit. Focus on deficiencies, code compliance gaps, aging equipment, efficiency opportunities. Be specific with data.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'ecm') {
-    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed ECM analysis section for this Level ${s.ashraeLevel} audit. For each selected ECM, provide: description, technical basis, estimated savings methodology, implementation considerations, and priority ranking. Group by system.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'electrical') {
-    prompt = `You are an electrical engineer writing the electrical systems analysis section of an ASHRAE Level ${s.ashraeLevel} energy audit. Cover: power quality (PF, harmonics, voltage), transformer loading and losses, load profile analysis, demand management opportunities. Be specific with measured data.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'full') {
-    prompt = `You are an ASHRAE-certified energy auditor. Write a complete narrative for an ASHRAE Level ${s.ashraeLevel} energy audit report including: Executive Summary, Building Description, Utility Analysis, Envelope Assessment, Lighting Assessment, HVAC Assessment, Electrical Systems Assessment, Key Findings, and ECM Recommendations. Be thorough and professional. Use specific data.\n\nDATA:\n${dataContext}`;
-  }
+  const prompts = {
+    executive: `You are an ASHRAE-certified energy auditor writing a professional Level ${s.ashraeLevel} energy audit report. Write an executive summary (3-4 paragraphs) for this building. Include EUI comparison to benchmarks, key findings, estimated savings potential, and priority recommendations. Be specific with numbers.\n\nDATA:\n${dataContext}`,
+    findings: `You are an ASHRAE-certified energy auditor. Write a detailed "Key Findings" section (5-8 findings as paragraphs) for this Level ${s.ashraeLevel} energy audit. Focus on deficiencies, code compliance gaps, aging equipment, efficiency opportunities. Be specific.\n\nDATA:\n${dataContext}`,
+    ecm: `You are an ASHRAE-certified energy auditor. Write a detailed ECM analysis section for this Level ${s.ashraeLevel} audit. For each selected ECM, provide: description, technical basis, estimated savings, implementation considerations, priority. Group by system.\n\nDATA:\n${dataContext}`,
+    electrical: `You are an electrical engineer writing the electrical systems analysis section of an ASHRAE Level ${s.ashraeLevel} energy audit. Cover: power quality (PF, harmonics, voltage), transformer loading and losses, load profile analysis, demand management. Be specific with measured data.\n\nDATA:\n${dataContext}`,
+    full: `You are an ASHRAE-certified energy auditor. Write a complete narrative for an ASHRAE Level ${s.ashraeLevel} energy audit report: Executive Summary, Building Description, Utility Analysis, Envelope, Lighting, HVAC, Electrical Systems, Key Findings, ECM Recommendations. Be thorough, use specific data.\n\nDATA:\n${dataContext}`
+  };
+  const prompt = prompts[mode] || prompts.executive;
 
   try {
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
-      })
-    });
-    const data = await resp.json();
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      const text = data.candidates[0].content.parts.map(p => p.text).join('\n');
-      outputEl.value = text;
-      appState.aiDraft = text;
-      save();
-      statusEl.innerHTML = '<span class="badge badge-green">✓ Generated — review and edit below</span>';
-    } else {
-      statusEl.innerHTML = '<span class="badge badge-red">Error: ' + (data.error?.message || 'No response from API') + '</span>';
+    let text = '';
+
+    if (provider === 'gemini') {
+      const model = customModel || 'gemini-2.0-flash';
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7,maxOutputTokens:4096}})
+      });
+      const data = await resp.json();
+      if (data.candidates?.[0]?.content) text = data.candidates[0].content.parts.map(p=>p.text).join('\n');
+      else throw new Error(data.error?.message || 'No response');
+
+    } else if (provider === 'groq') {
+      const model = customModel || 'llama-3.1-70b-versatile';
+      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+        body: JSON.stringify({model:model,messages:[{role:'user',content:prompt}],temperature:0.7,max_tokens:4096})
+      });
+      const data = await resp.json();
+      if (data.choices?.[0]?.message) text = data.choices[0].message.content;
+      else throw new Error(data.error?.message || 'No response');
+
+    } else if (provider === 'openai') {
+      const model = customModel || 'gpt-4o-mini';
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+        body: JSON.stringify({model:model,messages:[{role:'user',content:prompt}],temperature:0.7,max_tokens:4096})
+      });
+      const data = await resp.json();
+      if (data.choices?.[0]?.message) text = data.choices[0].message.content;
+      else throw new Error(data.error?.message || 'No response');
+
+    } else if (provider === 'anthropic') {
+      const model = customModel || 'claude-sonnet-4-20250514';
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body: JSON.stringify({model:model,max_tokens:4096,messages:[{role:'user',content:prompt}]})
+      });
+      const data = await resp.json();
+      if (data.content?.[0]?.text) text = data.content.map(c=>c.text||'').join('\n');
+      else throw new Error(data.error?.message || 'No response');
+
+    } else if (provider === 'ollama') {
+      const model = customModel || 'llama3.1';
+      const resp = await fetch('http://localhost:11434/api/generate', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({model:model,prompt:prompt,stream:false})
+      });
+      const data = await resp.json();
+      text = data.response || '';
+      if (!text) throw new Error('No response from Ollama. Is the server running?');
+
+    } else if (provider === 'custom') {
+      if (!customEndpoint) throw new Error('Enter a custom endpoint URL in Settings');
+      const model = customModel || 'default';
+      const resp = await fetch(customEndpoint, {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+        body: JSON.stringify({model:model,messages:[{role:'user',content:prompt}],temperature:0.7,max_tokens:4096})
+      });
+      const data = await resp.json();
+      // Try OpenAI-compatible format first, then Gemini, then raw
+      if (data.choices?.[0]?.message) text = data.choices[0].message.content;
+      else if (data.candidates?.[0]?.content) text = data.candidates[0].content.parts.map(p=>p.text).join('\n');
+      else if (data.content?.[0]?.text) text = data.content.map(c=>c.text||'').join('\n');
+      else if (data.response) text = data.response;
+      else throw new Error('Unrecognized response format');
     }
+
+    outputEl.value = text;
+    appState.aiDraft = text;
+    save();
+    statusEl.innerHTML = '<span class="badge badge-green">✓ Generated via ' + provider + ' — review and edit below</span>';
+
   } catch(err) {
-    statusEl.innerHTML = '<span class="badge badge-red">Error: ' + err.message + '</span>';
-  }
-}
-// ========== AI INFERENCE ==========
-async function generateAIAnalysis(mode) {
-  readBindings();
-  const statusEl = document.getElementById('ai-status');
-  const outputEl = document.getElementById('ai-output');
-  const apiKey = appState.settings.aiApiKey;
-  if (!apiKey) { alert('Please enter a Gemini API key in Settings'); return; }
-
-  statusEl.innerHTML = '<span class="ai-loading">⏳ Generating analysis...</span>';
-
-  const p = appState.project;
-  const s = appState.settings;
-  const eui = calcEUI();
-  const bm = BENCHMARKS[p.occupancyType] || BENCHMARKS['Office Large'];
-  const totalKWH = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.kwh)||0),0);
-  const totalGas = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.gas)||0),0);
-  const totalElecCost = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.ecost)||0),0);
-  const totalGasCost = appState.utility.rows.reduce((sum,r)=>sum+(parseFloat(r.gcost)||0),0);
-  const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
-  const pf = parseFloat(appState.pq.meterPF) || parseFloat(appState.pq.logTruePF) || 0;
-
-  let dataContext = `Building: ${p.buildingName}, ${p.address} ${p.city} ${p.state}
-Type: ${p.occupancyType}, ${p.floors} floors, ${p.grossArea} ${p.areaUnit}, Built ${p.yearBuilt}
-Climate Zone: ${s.climateZone}, ASHRAE Level: ${s.ashraeLevel}
-Client: ${p.clientCompany||'N/A'}
-Annual kWh: ${totalKWH}, Annual Therms: ${totalGas}
-Annual Elec Cost: $${totalElecCost}, Annual Gas Cost: $${totalGasCost}
-EUI: ${eui?eui.toFixed(1):'N/A'} kBtu/ft²·yr (Benchmark median: ${bm.median}, ES75: ${bm.es75})
-HVAC: ${appState.hvac.rows.map(r=>r.name+' '+r.type+' '+r.cap+r.capUnit+' '+r.refrigerant+' '+r.condition).join('; ')}
-Lighting: ${appState.lighting.rows.length} zones, ${appState.lighting.rows.filter(r=>r.fixture&&r.fixture.includes('LED')).length} LED
-Envelope: Wall ${appState.envelope.wallConst}/${appState.envelope.wallIns}, Roof ${appState.envelope.roofType}/${appState.envelope.roofColor}, Windows ${appState.envelope.windowType}, Condition ${appState.envelope.condition}
-Power Factor: ${pf||'N/A'}, THD-I: ${appState.pq.thdIAvg||'N/A'}%
-Selected ECMs: ${selectedECMs.map(e=>e.id+' '+e.title+' ('+e.range+')').join('; ')}
-Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kVA util='+(parseFloat(t.measKVA)||0)/(parseFloat(t.ratedKVA)||1)*100+'%').join('; ')}`;
-
-  let prompt = '';
-  if (mode === 'executive') {
-    prompt = `You are an ASHRAE-certified energy auditor writing a professional Level ${s.ashraeLevel} energy audit report. Write an executive summary (3-4 paragraphs) for this building based on the data below. Include EUI comparison to benchmarks, key findings, estimated savings potential, and priority recommendations. Be specific with numbers. Use professional energy engineering language.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'findings') {
-    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed "Key Findings" section (5-8 bullet points expanded into paragraphs) for this Level ${s.ashraeLevel} energy audit. Focus on deficiencies, code compliance gaps, aging equipment, efficiency opportunities. Be specific with data.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'ecm') {
-    prompt = `You are an ASHRAE-certified energy auditor. Write a detailed ECM analysis section for this Level ${s.ashraeLevel} audit. For each selected ECM, provide: description, technical basis, estimated savings methodology, implementation considerations, and priority ranking. Group by system.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'electrical') {
-    prompt = `You are an electrical engineer writing the electrical systems analysis section of an ASHRAE Level ${s.ashraeLevel} energy audit. Cover: power quality (PF, harmonics, voltage), transformer loading and losses, load profile analysis, demand management opportunities. Be specific with measured data.\n\nDATA:\n${dataContext}`;
-  } else if (mode === 'full') {
-    prompt = `You are an ASHRAE-certified energy auditor. Write a complete narrative for an ASHRAE Level ${s.ashraeLevel} energy audit report including: Executive Summary, Building Description, Utility Analysis, Envelope Assessment, Lighting Assessment, HVAC Assessment, Electrical Systems Assessment, Key Findings, and ECM Recommendations. Be thorough and professional. Use specific data.\n\nDATA:\n${dataContext}`;
-  }
-
-  try {
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
-      })
-    });
-    const data = await resp.json();
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      const text = data.candidates[0].content.parts.map(p => p.text).join('\n');
-      outputEl.value = text;
-      appState.aiDraft = text;
-      save();
-      statusEl.innerHTML = '<span class="badge badge-green">✓ Generated — review and edit below</span>';
-    } else {
-      statusEl.innerHTML = '<span class="badge badge-red">Error: ' + (data.error?.message || 'No response from API') + '</span>';
-    }
-  } catch(err) {
-    statusEl.innerHTML = '<span class="badge badge-red">Error: ' + err.message + '</span>';
+    statusEl.innerHTML = '<span class="badge badge-red">Error (' + provider + '): ' + err.message + '</span>';
   }
 }
 // ========== DEMO DATA ==========
@@ -2392,7 +2896,7 @@ function loadDemo() {
   if (!confirm('Load demo project? This will overwrite current data.')) return;
 
   // Settings — include ALL fields
-  appState.settings = {
+ appState.settings = {
     auditorName:'Jane Smith, PE, CEM',
     companyName:'Energy Solutions LLC',
     companyLogo:'',
@@ -2400,7 +2904,10 @@ function loadDemo() {
     climateZone:'2A',
     units:'IP',
     ashraeLevel:'1',
-    aiApiKey:'AIzaSyAHd1TGPyt6MtP7MEJUNICmTJUGlIcF9f4'
+    aiProvider:'gemini',
+    aiApiKey:'',
+    aiModel:'',
+    aiEndpoint:''
   };
 
   // Project — include ALL fields including client info
@@ -2557,7 +3064,11 @@ function loadDemo() {
     solarPV:0,
     notes:'Server room: no hot/cold aisle containment, 3x 15-ton CRAC units running continuously. Parking garage: 150 HID fixtures on 24/7, no photocell or occupancy controls. Kitchen: 5th floor cafeteria, range hood exhaust fan runs continuously during building hours. 3 traction elevators, no regenerative drives.'
   };
-
+  appState.other.customEquip = [
+      {name:'Lobby Fountain Pump',type:'Pump',capacity:'2',unit:'kW',year:'2015',condition:'Good',annKwh:'8760',notes:'Runs 24/7'},
+      {name:'Loading Dock Compactor',type:'Compressor',capacity:'5',unit:'HP',year:'2008',condition:'Fair',annKwh:'3900',notes:'Runs ~3hrs/day'},
+      {name:'Parking Exhaust Fans (4)',type:'Fan',capacity:'3',unit:'kW',year:'1999',condition:'Poor',annKwh:'26280',notes:'No CO sensor control, run continuously'}
+    ];
   // Electrical — supply, transformers, panels
   appState.electrical = {
     nomVoltage:480,
@@ -2661,8 +3172,19 @@ function loadDemo() {
 
   // Demand Profile
   appState.demand = {
-    wd0:185,wd1:520,wd2:950,wd3:1050,wd4:620,wd5:210,
-    we0:180,we1:195,we2:320,we3:350,we4:230,we5:185
+    season:'summer',
+    summer:{
+      wd:[185,185,185,185,185,195,350,550,780,950,1000,1050,1050,1050,1020,980,900,750,550,350,250,210,190,185],
+      we:[180,180,180,180,180,180,185,195,250,320,340,350,350,350,340,320,280,230,210,195,185,180,180,180]
+    },
+    winter:{
+      wd:[190,190,190,190,190,200,320,480,650,750,780,800,800,790,770,740,680,550,420,300,230,200,195,190],
+      we:[185,185,185,185,185,185,190,200,240,290,310,320,320,310,300,280,250,220,200,190,185,185,185,185]
+    },
+    shoulder:{
+      wd:[185,185,185,185,185,195,340,520,720,880,920,950,960,950,930,890,820,650,480,320,240,205,190,185],
+      we:[180,180,180,180,180,180,185,195,245,310,330,340,340,335,325,305,270,225,205,190,185,180,180,180]
+    }
   };
 
   // Loads — 10 loads for complete inventory
@@ -2701,14 +3223,19 @@ function loadDemo() {
   appState.photos = {envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]};
 
   // Checklist — pre-check the items that a demo would have
-  appState.checklist = {0:true,1:true,2:true,3:false,4:false,5:true,6:true};
+appState.checklist = {0:true,1:true,2:true,3:true,4:false,5:false,6:false,7:true,8:true,9:true,10:true,11:false,12:true,13:true,14:true,15:true,16:true,17:false,18:false,19:false,20:false,21:true,22:true,23:true,24:true,25:true,26:true,27:true,28:true,29:false,30:true,31:true,32:true};
 
   // AI Draft — empty
   appState.aiDraft = '';
 
   // Save and rebuild everything
 // Write state to localStorage WITHOUT reading DOM (which would overwrite our demo data)
-  try { localStorage.setItem('auditflow_state', JSON.stringify(appState)); } catch(e) {}
+appState._projectId = 'p_demo_' + Date.now();
+  appState._projectName = 'Greenfield Office Complex';
+  try {
+    localStorage.setItem('auditflow_project_' + appState._projectId, JSON.stringify(appState));
+    localStorage.setItem('auditflow_active_project', appState._projectId);
+  } catch(e) {}
   // Now push state TO the DOM
   bindAll();
   updateFlagButtons();
