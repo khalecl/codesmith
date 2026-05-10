@@ -414,14 +414,17 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
               <option value="3">Level 3 — Detailed Analysis / Investment-Grade</option>
             </select>
           </div>
-        <div class="fg"><label>AI Provider</label>
+          <div class="fg"><label>AI Provider</label>
             <select data-bind="settings.aiProvider" onchange="save();updateAIProviderUI();">
               <option value="gemini">Gemini (Free — 15 req/min)</option>
               <option value="groq">Groq (Free — 30 req/min)</option>
               <option value="openai">OpenAI (Paid)</option>
-              <option value="custom">Custom OpenAI-Compatible</option>
+              <option value="anthropic">Anthropic Claude (Paid)</option>
+              <option value="ollama">Ollama (Local — Free)</option>
+              <option value="custom">Custom API</option>
             </select>
           </div>
+
           <div class="fg"><label id="ai-key-label">API Key</label>
             <input type="text" data-bind="settings.aiApiKey" placeholder="API key..." onchange="save();fetchAvailableModels();">
           </div>
@@ -2536,7 +2539,7 @@ function highlightRequired() {
     // Update key label
     const keyLabel = document.getElementById('ai-key-label');
     if(keyLabel) {
-      const labels = {gemini:'Gemini API Key',groq:'Groq API Key',openai:'OpenAI API Key',custom:'API Key'};
+      const labels = {gemini:'Gemini API Key',groq:'Groq API Key',openai:'OpenAI API Key',anthropic:'Anthropic API Key',ollama:'(Not needed for local)',custom:'API Key'};
       keyLabel.textContent = labels[prov] || 'API Key';
     }
     // Load models if we have a key
@@ -3522,7 +3525,8 @@ async function generateAIAnalysis(mode) {
   const model = appState.settings.aiModel || '';
   const maxTokens = parseInt(appState.settings.aiMaxTokens) || 4096;
   const temperature = parseFloat(appState.settings.aiTemp) || 0.7;
-
+  const customEndpoint = appState.settings.aiEndpoint || '';
+  if (provider !== 'ollama' && !apiKey) { alert('Please enter an API key in Settings for ' + provider); return; }
   if (!apiKey) { alert('Please enter an API key in Settings'); return; }
   if (!model) { alert('Please select a model in Settings'); return; }
 
@@ -3597,6 +3601,27 @@ Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kV
       if (data.error) throw new Error(data.error.message);
       text = data.choices?.[0]?.message?.content || '';
       if (!text) throw new Error('Empty response from OpenAI');
+    } else if (provider === 'anthropic') {
+      const model = customModel || 'claude-sonnet-4-20250514';
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body: JSON.stringify({model:model,max_tokens:4096,messages:[{role:'user',content:prompt}]})
+      });
+      const data = await resp.json();
+      if (data.content?.[0]?.text) text = data.content.map(c=>c.text||'').join('\n');
+      else throw new Error(data.error?.message || 'No response');
+
+    } else if (provider === 'ollama') {
+      const model = customModel || 'llama3.1';
+      const resp = await fetch('http://localhost:11434/api/generate', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({model:model,prompt:prompt,stream:false})
+      });
+      const data = await resp.json();
+      text = data.response || '';
+      if (!text) throw new Error('No response from Ollama. Is the server running?');
+
 
     } else if (provider === 'custom') {
       const endpoint = appState.settings.aiEndpoint;
@@ -3628,7 +3653,7 @@ function loadDemo() {
 
   // Settings — include ALL fields
  appState.settings = {
-    auditorName:'Jane Smith, PE, CEM',
+    auditorName:'John Smith, PE, CEM',
     companyName:'Energy Solutions LLC',
     companyLogo:'',
     companyLogoURL:'',
@@ -4001,7 +4026,7 @@ appState._projectId = 'p_demo_' + Date.now();
         const canvas = document.getElementById(id);
         if (canvas && canvas.width > 0 && canvas.height > 0) {
           try {
-            const dataUrl = canvas.toDataURL('image/png', 0.92);
+            const dataUrl = canvas.toDataURL('image/png', 0.99);
             if (dataUrl && dataUrl.length > 100) chartImages[id] = dataUrl;
           } catch(e) { console.warn('Chart capture failed:', id, e); }
         }
@@ -4256,6 +4281,8 @@ appState._projectId = 'p_demo_' + Date.now();
           <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"><\/script>
             <meta charset="UTF-8"><title>Energy Audit Report — ${p.buildingName||'Building'}</title>
           <style>
+          .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+          .table-wrap table { min-width: 600px; }
           @page { size: A4; margin: 20mm 18mm 25mm 18mm; }
           body { font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif; max-width: 850px; margin: 0 auto; padding: 30px 40px; color: #1e293b; font-size: 12px; line-height: 1.65; }
           h1 { font-size: 22px; color: #0f1923; border-bottom: 3px solid #0ea5e9; padding-bottom: 8px; margin-top: 0; }
@@ -4358,8 +4385,8 @@ appState._projectId = 'p_demo_' + Date.now();
             </tbody></table>
           </div>
                 ${appState.envelope.notes?`<p><em>${appState.envelope.notes}</em></p>`:''}
-            ${appState.aiSections.envelope?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.envelope)}</div>`:''}
-            ${sectionPhotos('envelope')}
+                ${appState.aiSections.envelope?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.envelope)}</div>`:''}
+                ${sectionPhotos('envelope')}
 
           <!-- 4. LIGHTING -->
           <h2 id="lighting">4. Lighting Assessment</h2>
@@ -4369,16 +4396,20 @@ appState._projectId = 'p_demo_' + Date.now();
             const lpd=am>0?((parseFloat(r.count)||0)*(parseFloat(r.wpf)||0)/am).toFixed(1):'—';
             return `<tr><td>${r.space}</td><td>${r.area} ${r.areaUnit}</td><td>${r.fixture}</td><td>${r.count}</td><td>${r.wpf}</td><td>${r.control}</td><td style="font-family:monospace;">${lpd}</td><td>${r.condition}</td></tr>`;
           }).join('')}</tbody></table>
+                 ${appState.lighting.notes?`<p><em>${appState.lighting.notes}</em></p>`:''}
+                  ${appState.aiSections.lighting?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.lighting)}</div>`:''}
           ${sectionPhotos('lighting')}
           ${chartImg['chart-lpd']?`<h3>4.1 LPD by Space</h3><img src="${chartImg['chart-lpd']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
-              ${appState.aiSections.lighting?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.lighting)}</div>`:''}
           <!-- 5. HVAC -->
           <h2 id="hvac">5. HVAC Systems Assessment</h2>
           <table><thead><tr><th>Name</th><th>Type</th><th>Capacity</th><th>Year</th><th>Refrigerant</th><th>Efficiency</th><th>Condition</th></tr></thead>
           <tbody>${appState.hvac.rows.map(r=>`<tr><td>${r.name}</td><td>${r.type}</td><td>${r.cap} ${r.capUnit}</td><td>${r.year}</td><td>${r.refrigerant==='R-22'?'<span class="badge br">R-22 ⚠</span>':r.refrigerant}</td><td>${r.eff} ${r.effUnit}</td><td>${r.condition}</td></tr>`).join('')}</tbody></table>
-          ${appState.hvac.rows.some(r=>r.notes)?`<div class="section-box">${appState.hvac.rows.filter(r=>r.notes).map(r=>`<p><strong>${r.name}:</strong> ${r.notes}</p>`).join('')}</div>`:''}
-          ${sectionPhotos('hvac')}
+                ${appState.hvac.rows.some(r=>r.notes)?`<div class="section-box">${appState.hvac.rows.filter(r=>r.notes).map(r=>`<p><strong>${r.name}:</strong> ${r.notes}</p>`).join('')}</div>`:''}
+                  ${appState.hvac.notes?`<p><em>${appState.hvac.notes}</em></p>`:''}
+
                 ${appState.aiSections.hvac?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.hvac)}</div>`:''}
+
+                ${sectionPhotos('hvac')}
           <!-- 6. DHW -->
           <h2 id="dhw">6. Domestic Hot Water</h2>
           <div class="section-box"><table style="margin:0;"><tbody>
@@ -4389,9 +4420,10 @@ appState._projectId = 'p_demo_' + Date.now();
             <tr><td style="font-weight:600;">Piping Insulated</td><td>${appState.dhw.pipingInsulated}</td></tr>
             <tr><td style="font-weight:600;">Recirculation</td><td>${appState.dhw.recirculation} ${appState.dhw.recircControls!=='None'?'('+appState.dhw.recircControls+')':''}</td></tr>
           </tbody></table></div>
-          ${appState.dhw.notes?`<p><em>${appState.dhw.notes}</em></p>`:''}
-          ${sectionPhotos('dhw')}
-              ${appState.aiSections.dhw?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.dhw)}</div>`:''}
+                  ${appState.dhw.notes?`<p><em>${appState.dhw.notes}</em></p>`:''}
+                  ${appState.aiSections.dhw?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.dhw)}</div>`:''}
+
+                   ${sectionPhotos('dhw')}
           <!-- 7. ELECTRICAL -->
           <h2 id="electrical">7. Electrical Systems</h2>
           <h3>7.1 Transformer Assessment</h3>
@@ -4399,7 +4431,11 @@ appState._projectId = 'p_demo_' + Date.now();
           <tbody>${xfmrRows.map(t=>`<tr><td>${t.tag}</td><td>${t.type}</td><td>${t.kva}</td><td>${t.year||'—'}</td><td style="font-family:monospace;">${t.util}%</td><td style="font-family:monospace;">${t.eff}%</td><td style="font-family:monospace;">${fmt(t.annLoss)}</td><td>${t.condition}</td></tr>`).join('')}</tbody></table>
             ${chartImg['chart-xfmr']?`<h3>7.2 Transformer Utilization</h3><img src="${chartImg['chart-xfmr']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
             ${chartImg['chart-xfmr-loss']?`<h3>7.3 Transformer Losses</h3><img src="${chartImg['chart-xfmr-loss']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
+                  ${appState.electrical.notes?`<p><em>${appState.electrical.notes}</em></p>`:''}
+             
                 ${appState.aiSections.electrical?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.electrical)}</div>`:''}
+                 ${sectionPhotos('electrical')}
+                
           <!-- 8. POWER QUALITY -->
           <h2 id="pq">8. Power Quality</h2>
           <div class="section-box"><table style="margin:0;"><tbody>
@@ -4410,10 +4446,11 @@ appState._projectId = 'p_demo_' + Date.now();
           ${appState.pq.neutralOverloaded==='Yes'?`<tr><td style="font-weight:600;">Neutral</td><td>${appState.pq.neutralCurrent}A</td><td><span class="badge br">OVERLOADED</span></td></tr>`:''}
           ${appState.pq.sagsCount?`<tr><td style="font-weight:600;">Voltage Sags</td><td>${appState.pq.sagsCount} events (worst: ${appState.pq.sagsWorstMag}% for ${appState.pq.sagsWorstDur}ms)</td><td></td></tr>`:''}
           </tbody></table></div>
-          ${sectionPhotos('electrical')}
+                   ${appState.pq.notes?`<p><em>${appState.pq.notes}</em></p>`:''}
+          ${appState.aiSections.pq?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.pq)}</div>`:''}
+          ${sectionPhotos('pq')}
           ${chartImg['chart-pf']?`<h3>8.1 Power Factor</h3><img src="${chartImg['chart-pf']}" style="width:100%;max-width:300px;display:block;margin:10px auto;">`:'' }
           ${chartImg['chart-harmonics']?`<h3>8.2 Harmonic Spectrum</h3><img src="${chartImg['chart-harmonics']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
-                ${appState.aiSections.pq?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.pq)}</div>`:''}
           <!-- 9. LOAD ANALYSIS -->
           <h2 id="loads">9. Load Analysis</h2>
           <table><thead><tr><th>Load</th><th>Category</th><th>NP kW</th><th>Meas kW</th><th>PF</th><th>Mode</th><th>Ann kWh</th></tr></thead>
@@ -4424,6 +4461,8 @@ appState._projectId = 'p_demo_' + Date.now();
           }).join('')}</tbody></table>
           ${chartImg['chart-load-cat']?`<h3>9.1 Load by Category</h3><img src="${chartImg['chart-load-cat']}" style="width:100%;max-width:400px;display:block;margin:10px auto;">`:'' }
           ${chartImg['chart-demand']?`<h3>9.2 24-Hour Demand Profile</h3><img src="${chartImg['chart-demand']}" style="width:100%;max-width:700px;display:block;margin:10px auto;">`:'' }
+                  ${appState.loads.notes?`<p><em>${appState.loads.notes}</em></p>`:''}
+ 
                 ${appState.aiSections.loads?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.loads)}</div>`:''}
           <!-- 10. KEY FINDINGS -->
           <h2 id="findings">10. Key Findings</h2>
@@ -4474,10 +4513,19 @@ appState._projectId = 'p_demo_' + Date.now();
           </div>
              <div class="no-print" style="text-align:center;margin:30px 0;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
           <button onclick="window.print()" style="padding:12px 24px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">🖨 Print / Save as PDF</button>
-          <button onclick="(function(){const b=new Blob([document.documentElement.outerHTML],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='Energy_Audit_Report.html';a.click();})()" style="padding:12px 24px;background:#10b981;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">💾 Download HTML</button>
+          <button onclick="downloadReportHTML()" style="padding:12px 24px;background:#10b981;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">💾 Download HTML</button>
+
           <button onclick="downloadDocx()" style="padding:12px 24px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">📄 Download .docx</button>
               </div>
               <script>
+              function downloadReportHTML() {
+                const html = document.documentElement.outerHTML;
+                const blob = new Blob([html], {type:'text/html'});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'Energy_Audit_Report_${(p.buildingName||'Building').replace(/[^a-zA-Z0-9]/g,'_')}.html';
+                a.click();
+              }
               function downloadDocx() {
                 try {
                   const content = document.querySelector('body').innerHTML;
