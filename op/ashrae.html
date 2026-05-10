@@ -1256,7 +1256,7 @@ function init() {
   buildUtilityTable();
   buildPlugTable();
   buildECMTable();
-  bindAll();
+  bindAll(); // Push state TO dom first
   updateFlagButtons();
   renderPhotos();
   renderTransformers();
@@ -1267,9 +1267,13 @@ function init() {
   updateTopbar();
   updateEnvelope();
   togglePQSection();
-  calcUtility();
   calcDemand();
   highlightRequired();
+  updateAIProviderUI();
+  // Now safe to save — DOM has correct values
+  try {
+    localStorage.setItem('auditflow_project_' + appState._projectId, JSON.stringify(appState));
+  } catch(e) {}
 }
 
 function loadState() {
@@ -1355,13 +1359,25 @@ function save() {
 
 function readBindings() {
   document.querySelectorAll('[data-bind]').forEach(el => {
+    // Never overwrite appState with empty DOM if appState already has a value
     const path = el.getAttribute('data-bind').split('.');
     let obj = appState;
     for (let i = 0; i < path.length - 1; i++) { if (!obj[path[i]]) obj[path[i]] = {}; obj = obj[path[i]]; }
     const key = path[path.length - 1];
-    if (el.type === 'checkbox') obj[key] = el.checked;
-    else if (el.type === 'number') obj[key] = el.value === '' ? '' : parseFloat(el.value);
-    else obj[key] = el.value;
+    const existing = obj[key];
+    if (el.type === 'checkbox') {
+      obj[key] = el.checked;
+    } else if (el.type === 'number') {
+      const domVal = el.value;
+      // Don't overwrite a real number with empty
+      if (domVal === '' && existing !== '' && existing !== undefined && existing !== null && existing !== 0) return;
+      obj[key] = domVal === '' ? '' : parseFloat(domVal);
+    } else {
+      const domVal = el.value;
+      // Don't overwrite a real string with empty
+      if (domVal === '' && existing && existing !== '') return;
+      obj[key] = domVal;
+    }
   });
 }
 
@@ -2741,8 +2757,16 @@ function importProjectFile(e) {
 }
 // ========== EXPORT/IMPORT ==========
 function exportJSON() {
+  // Read current DOM values into appState first
   readBindings();
-  const blob = new Blob([JSON.stringify(appState, null, 2)], { type: 'application/json' });
+  appState._projectName = appState.project.buildingName || 'Untitled Project';
+  // Write to localStorage so it's current
+  try {
+    localStorage.setItem('auditflow_project_' + appState._projectId, JSON.stringify(appState));
+  } catch(e) {}
+  // Now export the full appState as-is
+  const exportData = JSON.parse(JSON.stringify(appState));
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'AuditFlow_' + (appState.project.buildingName || 'project').replace(/\s/g, '_') + '.json';
@@ -2755,12 +2779,20 @@ function importJSON(e) {
   const reader = new FileReader();
   reader.onload = function(ev) {
     try {
-      appState = JSON.parse(ev.target.result);
-      save();
+      const imported = JSON.parse(ev.target.result);
+      // Assign a new project ID if missing
+      if (!imported._projectId) {
+        imported._projectId = 'p_' + Date.now();
+        imported._projectName = imported.project?.buildingName || 'Imported Project';
+      }
+      // Save directly to localStorage WITHOUT reading DOM
+      localStorage.setItem('auditflow_project_' + imported._projectId, JSON.stringify(imported));
+      localStorage.setItem('auditflow_active_project', imported._projectId);
       location.reload();
     } catch(err) { alert('Invalid JSON file'); }
   };
   reader.readAsText(file);
+  e.target.value = '';
 }
 
 // ========== AI INFERENCE ==========
