@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"></script>
+
 <style>
 :root {
   --sidebar-bg: #0f1923;
@@ -91,6 +92,10 @@ button { cursor: pointer; border: none; border-radius: 4px; padding: 6px 14px; f
   width: var(--sidebar-w); background: var(--sidebar-bg); display: flex; flex-direction: column;
   position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; transition: transform .3s;
 }
+.sidebar-toggle { display:none; position:fixed; top:8px; left:8px; z-index:201; width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); cursor:pointer; font-size:18px; line-height:36px; text-align:center; }
+@media (max-width:768px) { .sidebar-toggle { display:block; } }
+#sidebar.collapsed { transform: translateX(-100%); pointer-events: none; }
+#sidebar.collapsed ~ #main-wrap { margin-left: 0; }
 #sidebar .logo { padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
 #sidebar .logo span { color: #fff; font-weight: 700; font-size: 1.1rem; letter-spacing: .5px; }
 #sidebar .logo .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
@@ -111,6 +116,11 @@ button { cursor: pointer; border: none; border-radius: 4px; padding: 6px 14px; f
 #sidebar .sidebar-footer { padding: 12px 18px; border-top: 1px solid rgba(255,255,255,.06); display: flex; gap: 6px; flex-wrap: wrap; }
 #sidebar .sidebar-footer button { font-size: .72rem; padding: 4px 8px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.5); border-radius: 4px; }
 #sidebar .sidebar-footer button:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+.rec-btn { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; font-size:.75rem; cursor:pointer; border:1px solid var(--border); background:var(--card-bg); }
+.rec-btn.recording { background:#fee2e2; border-color:#ef4444; color:#ef4444; animation:pulse 1s infinite; }
+.rec-list audio { width:100%; max-width:250px; height:32px; }
+.rec-item { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:.75rem; }
 
 #main-wrap { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; height: 100vh; }
 #topbar {
@@ -237,6 +247,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 .ai-textarea { width: 100%; min-height: 200px; font-family: var(--sans); font-size: .85rem; line-height: 1.6; padding: 12px; }
 .ai-loading { display: inline-block; padding: 4px 12px; background: var(--accent-light); border-radius: 12px; font-size: .78rem; color: var(--accent); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+.crop-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:1002; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.crop-canvas { max-width:90vw; max-height:70vh; border:2px solid #0ea5e9; cursor:crosshair; }
 #report-preview-modal .modal { border-radius: 8px; overflow: hidden; }
 /* Section AI Chat */
 .sec-ai-panel { margin:12px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
@@ -288,7 +300,16 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 .subpanel.active { display: block; }
 
 /* MOBILE */
-@media (max-width: 768px) {
+
+@media (max-width:768px) {
+  .sidebar-toggle { display:block; }
+  #sidebar { transform: translateX(-100%); }
+  #sidebar:not(.collapsed) { transform: translateX(0); }
+  body.sidebar-open #sidebar { transform: translateX(0); pointer-events: auto; }
+  body.sidebar-open #main-wrap { margin-left: 0; }
+  #main-wrap { margin-left: 0; }
+}
+/* @media (max-width: 768px) {
   .sidebar { display: none; }
   .main { margin-left: 0; padding: 10px 12px; }
   .topbar { left: 0; padding: 8px 12px; }
@@ -301,7 +322,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
   .hour-bars { height: 150px; }
   .card { padding: 10px; }
   .modal { max-width: 95vw; max-height: 90vh; overflow-y: auto; }
-}
+}*/
 
 /* SCROLLBAR */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -316,7 +337,10 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 <body>
 <div id="app">
 <!-- SIDEBAR -->
+<button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
 <aside id="sidebar">
+    <button onclick="toggleSidebar()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-secondary);" title="Collapse sidebar">◀</button>
+
   <div class="logo"><div class="dot"></div><span>AuditFlow L1</span></div>
   <div class="progress-wrap">
     <div class="ptext" id="progress-text">0 of 13 complete</div>
@@ -631,6 +655,27 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
         </div>
         <div class="chart-box" style="max-height:200px;margin-top:16px;"><canvas id="eui-benchmark-chart"></canvas></div>
       </div>
+      <div class="card" style="border-left:3px solid var(--accent);">
+          <div class="card-header"><div class="card-title" style="font-size:.82rem;">📸 Scan Utility Bill</div></div>
+          <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">Take a photo or upload a utility bill image. AI will extract the data for review before adding.</p>
+          <input type="file" accept="image/*" capture="environment" id="bill-photo-input" onchange="scanUtilityBill(event)">
+          <div id="bill-scan-status" style="margin-top:6px;font-size:.75rem;"></div>
+          <div id="bill-scan-preview" style="margin-top:8px;display:none;">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <img id="bill-scan-img" style="max-width:200px;max-height:200px;border-radius:6px;border:1px solid var(--border);">
+              <div style="flex:1;min-width:200px;">
+                <div class="table-wrap"><table id="bill-scan-table" style="font-size:.78rem;">
+                  <thead><tr><th>Field</th><th>Extracted Value</th><th>Edit</th></tr></thead>
+                  <tbody id="bill-scan-body"></tbody>
+                </table></div>
+                <div style="display:flex;gap:6px;margin-top:8px;">
+                  <button class="btn-sm btn-primary" onclick="applyScannedBill()">✓ Add to Utility Table</button>
+                  <button class="btn-sm btn-secondary" onclick="document.getElementById('bill-scan-preview').style.display='none';">✕ Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
     </div>
 
     <!-- ============ SECTION 5: ENVELOPE ============ -->
@@ -666,6 +711,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
         </div>
         <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea data-bind="envelope.notes" rows="3"></textarea></div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('envelope')" style="margin-top:8px;">📷 Add Photo</button>
+       <button class="rec-btn" id="rec-btn-envelope" onclick="toggleRecording('envelope')">🎙 Record Interview</button>
+        <div id="recordings-envelope" style="margin-top:6px;"></div>
         <div class="sec-ai-panel">
           <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — Envelope <span>▼</span></div>
           <div class="sec-ai-body" id="ai-chat-envelope">
@@ -701,6 +748,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           <button class="flag-btn" data-flag="lighting.exteriorControls" onclick="toggleFlag(this)">🔦 Exterior Controls</button>
         </div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('lighting')" style="margin-top:8px;">📷 Add Photo</button>
+        <button class="rec-btn" id="rec-btn-lighting" onclick="toggleRecording('lighting')">🎙 Record Interview</button>
+        <div id="recordings-lighting" style="margin-top:6px;"></div>
         <div class="sec-ai-panel">
           <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — Lighting <span>▼</span></div>
           <div class="sec-ai-body" id="ai-chat-lighting">
@@ -779,6 +828,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           <button class="flag-btn" data-flag="hvac.erv" onclick="toggleFlag(this)">🔄 ERV</button>
         </div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('hvac')" style="margin-top:8px;">📷 Add Photo</button>
+        <button class="rec-btn" id="rec-btn-hvac" onclick="toggleRecording('hvac')">🎙 Record Interview</button>
+        <div id="recordings-hvac" style="margin-top:6px;"></div>
         <div class="sec-ai-panel">
             <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — HVAC Systems <span>▼</span></div>
             <div class="sec-ai-body" id="ai-chat-hvac">
@@ -824,6 +875,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           <button class="flag-btn" data-flag="dhw.reduceTemp" onclick="toggleFlag(this)">🌡 Reduce Temp</button>
         </div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('dhw')" style="margin-top:8px;">📷 Add Photo</button>
+        <button class="rec-btn" id="rec-btn-dhw" onclick="toggleRecording('dhw')">🎙 Record Interview</button>
+        <div id="recordings-dhw" style="margin-top:6px;"></div>
        <div class="sec-ai-panel">
           <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — Domestic Hot Water <span>▼</span></div>
           <div class="sec-ai-body" id="ai-chat-dhw">
@@ -860,6 +913,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           <button class="flag-btn" data-flag="plugloads.removeUnused" onclick="toggleFlag(this)">🗑 Remove Unused</button>
         </div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('plugloads')" style="margin-top:8px;">📷 Add Photo</button>
+        <button class="rec-btn" id="rec-btn-plugloads" onclick="toggleRecording('plugloads')">🎙 Record Interview</button>
+        <div id="recordings-plugloads" style="margin-top:6px;"></div>
         <div class="sec-ai-panel">
             <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — Plug & Process Loads <span>▼</span></div>
             <div class="sec-ai-body" id="ai-chat-plugloads">
@@ -927,6 +982,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
         </div>
         <div class="fg"><label>Notes</label><textarea data-bind="other.notes" rows="3"></textarea></div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('other')" style="margin-top:8px;">📷 Add Photo</button>
+        <button class="rec-btn" id="rec-btn-other" onclick="toggleRecording('other')">🎙 Record Interview</button>
+        <div id="recordings-other" style="margin-top:6px;"></div>
         <div class="sec-ai-panel">
             <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — Other Systems <span>▼</span></div>
             <div class="sec-ai-body" id="ai-chat-other">
@@ -987,6 +1044,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           </table></div>
         </div>
         <button class="btn-sm btn-secondary" onclick="openPhotoModal('electrical')" style="margin-top:8px;">📷 Add Photo</button>
+        <button class="rec-btn" id="rec-btn-electrical" onclick="toggleRecording('electrical')">🎙 Record Interview</button>
+        <div id="recordings-electrical" style="margin-top:6px;"></div>
         <div class="sec-ai-panel">
           <div class="sec-ai-header" onclick="this.nextElementSibling.classList.toggle('open')">🤖 AI Analysis — Electrical Systems <span>▼</span></div>
           <div class="sec-ai-body" id="ai-chat-electrical">
@@ -1260,6 +1319,23 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           </div>
         </div>
 
+        <!-- SECTION 14: REFERENCES -->
+            <div class="section" id="sec-references">
+              <div class="card card-accent">
+                <div class="card-header"><div class="card-title">REFERENCES & SOURCES</div>
+                  <button class="btn-sm btn-primary" onclick="addReference()">+ Add Reference</button>
+                </div>
+                <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:10px;">Standards, codes, client documents, and data sources used in this audit.</p>
+                <div class="table-wrap"><table>
+                  <thead><tr><th>#</th><th>Type</th><th>Title / Description</th><th>Source</th><th>Section</th><th></th></tr></thead>
+                  <tbody id="ref-body"></tbody>
+                </table></div>
+                <div style="margin-top:10px;">
+                  <button class="btn-sm btn-secondary" onclick="addStandardRefs()">📚 Add ASHRAE Standard References</button>
+                </div>
+              </div>
+            </div>
+            
     <!-- ============ SECTION 13: REPORT ============ -->
         <div class="section" id="sec-report">
           <div class="card card-accent">
@@ -1312,12 +1388,6 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
       <div class="fg"><label>Section</label><select id="photo-tag"><option>Envelope</option><option>Lighting</option><option>HVAC</option><option>DHW</option><option>Plug Loads</option><option>Electrical</option><option>General</option></select></div>
       <div class="fg"><label>Photo Type</label><select id="photo-type"><option>Overview</option><option>Nameplate</option><option>Detail</option><option>Deficiency</option></select></div>
       <div class="fg"><label>Flag</label><select id="photo-flag"><option>Documentation</option><option>Deficiency</option><option>Opportunity</option></select></div>
-    </div>
-   <div class="fg" style="display:flex;align-items:center;gap:8px;">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;">
-        <input type="checkbox" id="photo-ai-analyze" checked> 🤖 AI auto-detect (caption, type, flag, issues)
-      </label>
-      <span id="photo-save-status" style="font-size:.75rem;"></span>
     </div>
     <div class="fg"><label>Equipment Name</label>
       <input type="text" id="photo-equipment" list="photo-equip-list" placeholder="Select or type equipment name">
@@ -1381,6 +1451,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
       {id:'other',icon:'🏗',label:'Other Systems'},
       {id:'electrical',icon:'🔋',label:'Electrical'},
       {id:'analysis',icon:'📈',label:'Analysis'},
+      {id:'references',icon:'📚',label:'References'},
       {id:'report',icon:'📄',label:'Report'}
     ];
 
@@ -1567,7 +1638,7 @@ demand:{season:'summer',summer:{wd:Array(24).fill(0),we:Array(24).fill(0)},winte
   ecmSelections:{},
   ecmCosts:{},
   photos:{envelope:[],lighting:[],hvac:[],dhw:[],plugloads:[],other:[],electrical:[],general:[]},
-  checklist:{},aiDraft:'',aiSections:{executive:'',utility:'',envelope:'',lighting:'',hvac:'',dhw:'',electrical:'',pq:'',loads:'',findings:'',ecm:''}
+  checklist:{},aiDraft:'',aiSections:{executive:'',utility:'',envelope:'',lighting:'',hvac:'',dhw:'',electrical:'',pq:'',loads:'',findings:'',ecm:''},references:[]
   ,chartConfig:{
         utility:{type:'bar',title:'Monthly Consumption',showGrid:true},
         eui:{type:'bar',title:'EUI Benchmark'},
@@ -1583,7 +1654,95 @@ demand:{season:'summer',summer:{wd:Array(24).fill(0),we:Array(24).fill(0)},winte
 
 let charts = {};
 let currentPhotoSection = '';
+let mediaRecorder = null;
+let recordingChunks = [];
+let currentRecSection = '';
 
+      function toggleRecording(section) {
+        const btn = document.getElementById('rec-btn-' + section);
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+          btn.classList.remove('recording');
+          btn.textContent = '🎙 Record Interview';
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
+          currentRecSection = section;
+          recordingChunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordingChunks.push(e.data); };
+          mediaRecorder.onstop = () => {
+            stream.getTracks().forEach(t=>t.stop());
+            const blob = new Blob(recordingChunks, {type:'audio/webm'});
+            const url = URL.createObjectURL(blob);
+            if (!appState.recordings) appState.recordings = {};
+            if (!appState.recordings[section]) appState.recordings[section] = [];
+            // Store as base64 for persistence (small clips only)
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+              appState.recordings[section].push({
+                data: ev.target.result,
+                date: new Date().toISOString(),
+                notes: ''
+              });
+              save();
+              renderRecordings(section);
+            };
+            reader.readAsDataURL(blob);
+          };
+          mediaRecorder.start();
+          btn.classList.add('recording');
+          btn.textContent = '⏹ Stop Recording';
+        }).catch(e => alert('Microphone access denied: ' + e.message));
+      }
+
+      function renderRecordings(section) {
+        const el = document.getElementById('recordings-' + section);
+        if (!el || !appState.recordings?.[section]) { if(el) el.innerHTML=''; return; }
+        el.innerHTML = appState.recordings[section].map((r,i) => `<div class="rec-item">
+          <audio controls src="${r.data}"></audio>
+          <input type="text" value="${r.notes||''}" placeholder="Notes..." onchange="appState.recordings['${section}'][${i}].notes=this.value;save();" style="flex:1;font-size:.75rem;">
+          <button class="btn-icon btn-sm" onclick="appState.recordings['${section}'].splice(${i},1);save();renderRecordings('${section}');">✕</button>
+        </div>`).join('');
+      }
+
+      function addReference() {
+  appState.references.push({type:'Standard',title:'',source:'',section:'General',url:''});
+  save(); renderReferences();
+}
+
+    function renderReferences() {
+      const body = document.getElementById('ref-body');
+      if (!body) return;
+      body.innerHTML = appState.references.map((r,i) => `<tr>
+        <td>${i+1}</td>
+        <td><select onchange="appState.references[${i}].type=this.value;save();">
+          ${['Standard','Code','Client Document','Utility Data','Manufacturer Data','Field Measurement','Publication','Website','Interview'].map(o=>`<option ${r.type===o?'selected':''}>${o}</option>`).join('')}
+        </select></td>
+        <td><input type="text" value="${(r.title||'').replace(/"/g,'&quot;')}" onchange="appState.references[${i}].title=this.value;save();" style="min-width:180px;" placeholder="e.g. ASHRAE 90.1-2022"></td>
+        <td><input type="text" value="${(r.source||'').replace(/"/g,'&quot;')}" onchange="appState.references[${i}].source=this.value;save();" style="min-width:120px;" placeholder="Publisher / URL"></td>
+        <td><select onchange="appState.references[${i}].section=this.value;save();">
+          ${['General','Utility','Envelope','Lighting','HVAC','DHW','Electrical','PQ','Loads','ECM'].map(o=>`<option ${r.section===o?'selected':''}>${o}</option>`).join('')}
+        </select></td>
+        <td><button class="btn-icon btn-sm" onclick="appState.references.splice(${i},1);save();renderReferences();">✕</button></td>
+      </tr>`).join('');
+    }
+
+    function addStandardRefs() {
+      const stdRefs = [
+        {type:'Standard',title:'ASHRAE Standard 211-2018 — Standard for Commercial Building Energy Audits',source:'ASHRAE',section:'General'},
+        {type:'Standard',title:'ANSI/ASHRAE/IES Standard 90.1-2022 — Energy Standard for Buildings',source:'ASHRAE',section:'General'},
+        {type:'Standard',title:'ASHRAE Guideline 14 — Measurement of Energy, Demand, and Water Savings',source:'ASHRAE',section:'ECM'},
+        {type:'Standard',title:'IEEE 519-2022 — Recommended Practice for Harmonic Control',source:'IEEE',section:'PQ'},
+        {type:'Standard',title:'NEMA MG1 — Motors and Generators',source:'NEMA',section:'Electrical'},
+        {type:'Standard',title:'IES Lighting Handbook — Illuminance Recommendations',source:'IES',section:'Lighting'},
+        {type:'Code',title:'IECC 2021 — International Energy Conservation Code',source:'ICC',section:'Envelope'},
+        {type:'Standard',title:'ASHRAE Standard 62.1 — Ventilation for Acceptable Indoor Air Quality',source:'ASHRAE',section:'HVAC'}
+      ];
+      const existing = appState.references.map(r => r.title);
+      stdRefs.forEach(r => { if (!existing.includes(r.title)) appState.references.push(r); });
+      save(); renderReferences();
+    }
 // ========== INIT ==========
 function init() {
   loadState();
@@ -1597,13 +1756,14 @@ function init() {
   if (aiOut && appState.aiDraft) aiOut.value = appState.aiDraft;
   updateFlagButtons();
   renderPhotos();
-  ['envelope','lighting','hvac','dhw','electrical','utility','loads','pq'].forEach(sec => renderSavedAI(sec));
+  ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(s => renderRecordings(s));
   renderTransformers();
   renderPanels();
   renderLoadTable();
   renderCustomEquipment();
   renderLightingRows();
   renderHVACRows();
+  renderReferences();
   showSection('dashboard');
   updateTopbar();
   updateEnvelope();
@@ -1709,6 +1869,8 @@ function loadState() {
   if (appState.settings.aiModel === undefined) appState.settings.aiModel = '';
   if (appState.settings.aiEndpoint === undefined) appState.settings.aiEndpoint = '';
   if (!appState.aiSections) appState.aiSections = {executive:'',utility:'',envelope:'',lighting:'',hvac:'',dhw:'',electrical:'',pq:'',loads:'',findings:'',ecm:''};
+  if (!appState.recordings) appState.recordings = {};
+ if (!appState.references) appState.references = [];
   if (!appState.chartConfig) appState.chartConfig = {utility:{type:'bar',title:'Monthly Consumption',showGrid:true},eui:{type:'bar',title:'EUI Benchmark'},enduse:{type:'doughnut',title:'End-Use Breakdown'},lpd:{type:'bar',title:'LPD by Space'},ecm:{type:'bar',title:'ECM Savings'},demand:{type:'line',title:'24h Demand Profile'},xfmr:{type:'bar',title:'Transformer Utilization'},pf:{type:'doughnut',title:'Power Factor'},loadCat:{type:'doughnut',title:'Load by Category'},harmonics:{type:'bar',title:'Harmonic Spectrum'}};
   if (appState.settings.aiMaxTokens === undefined) appState.settings.aiMaxTokens = '4096';
   if (appState.settings.aiTemp === undefined) appState.settings.aiTemp = 0.7;
@@ -1946,6 +2108,15 @@ function toggleTheme() {
   document.getElementById('theme-label').textContent = isDark ? 'Dark' : 'Light';
 }
 
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  const isCollapsed = sb.classList.toggle('collapsed');
+  document.body.classList.toggle('sidebar-open', !isCollapsed);
+  const btn = document.querySelector('.sidebar-toggle');
+  if (btn) btn.style.display = isCollapsed ? 'block' : '';
+}
+
 // ========== UTILITY ==========
 function buildUtilityTable() {
   if (appState.utility.rows.length === 0) addUtilityRows(12);
@@ -2022,6 +2193,114 @@ function renderUtilityRows() {
     return row;
   }).join('');
 }
+
+    let scannedBillData = {};
+
+    async function scanUtilityBill(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('bill-scan-status');
+      const previewEl = document.getElementById('bill-scan-preview');
+      statusEl.innerHTML = '<span class="ai-loading">🤖 Scanning bill...</span>';
+
+      const dataUrl = await new Promise(res => {
+        const reader = new FileReader();
+        reader.onload = ev => res(ev.target.result);
+        reader.readAsDataURL(file);
+      });
+
+      document.getElementById('bill-scan-img').src = dataUrl;
+
+      const provider = appState.settings.aiProvider || 'gemini';
+      const apiKey = appState.settings.aiApiKey;
+      const model = appState.settings.aiModel || 'gemini-2.0-flash';
+      if (!apiKey) { statusEl.innerHTML = '<span class="badge badge-red">Configure AI in Settings</span>'; return; }
+
+      const prompt = `Extract utility bill data from this image. Respond ONLY with a JSON object (no markdown, no backticks):
+    {
+      "month": "billing period e.g. Jan 2025",
+      "kwh": number or 0,
+      "demandKW": number or 0,
+      "elecCost": number or 0,
+      "gasTherm": number or 0,
+      "gasCost": number or 0,
+      "dcTRh": number or 0,
+      "dcCost": number or 0,
+      "waterM3": number or 0,
+      "waterCost": number or 0,
+      "totalCost": number or 0,
+      "accountNumber": "if visible",
+      "provider": "utility company name if visible",
+      "notes": "any other relevant info (rate tier, PF penalty, fuel adjustment)"
+    }
+    Set values to 0 if not found on the bill.`;
+
+      try {
+        let text = '';
+        if (provider === 'gemini') {
+          const base64 = dataUrl.split(',')[1];
+          const mimeType = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({contents:[{parts:[{inlineData:{mimeType,data:base64}},{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:500}})
+          });
+          const data = await resp.json();
+          if (data.error) throw new Error(data.error.message);
+          text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        } else if (provider === 'openai') {
+          const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+            body: JSON.stringify({model:model.includes('gpt-4')?model:'gpt-4o-mini',messages:[{role:'user',content:[{type:'image_url',image_url:{url:dataUrl}},{type:'text',text:prompt}]}],max_tokens:500,temperature:0.2})
+          });
+          const data = await resp.json();
+          if (data.error) throw new Error(data.error.message);
+          text = data.choices?.[0]?.message?.content || '';
+        } else {
+          throw new Error(provider + ' does not support vision. Use Gemini or OpenAI.');
+        }
+
+        scannedBillData = JSON.parse(text.replace(/```json|```/g,'').trim());
+        const body = document.getElementById('bill-scan-body');
+        const fields = [
+          ['Month/Period','month'],['kWh','kwh'],['Demand kW','demandKW'],['Elec Cost','elecCost'],
+          ['Gas Therms','gasTherm'],['Gas Cost','gasCost'],['DC TR·h','dcTRh'],['DC Cost','dcCost'],
+          ['Water m³','waterM3'],['Water Cost','waterCost'],['Total Cost','totalCost'],
+          ['Account #','accountNumber'],['Provider','provider'],['Notes','notes']
+        ];
+        body.innerHTML = fields.filter(([,k]) => scannedBillData[k] && scannedBillData[k] !== 0 && scannedBillData[k] !== '').map(([label,key]) =>
+          `<tr><td>${label}</td><td style="font-family:var(--mono);">${scannedBillData[key]}</td><td><input type="text" value="${scannedBillData[key]}" onchange="scannedBillData['${key}']=this.value;" style="width:100px;font-size:.78rem;"></td></tr>`
+        ).join('');
+        previewEl.style.display = '';
+        statusEl.innerHTML = '<span class="badge badge-green">✓ Scanned — review and confirm</span>';
+      } catch(err) {
+        statusEl.innerHTML = `<span class="badge badge-red">✕ ${err.message}</span>`;
+      }
+      e.target.value = '';
+    }
+
+    function applyScannedBill() {
+      const d = scannedBillData;
+      appState.utility.rows.push({
+        month: d.month || 'Scanned',
+        kwh: parseFloat(d.kwh)||0,
+        ecost: parseFloat(d.elecCost)||parseFloat(d.totalCost)||0,
+        pkw: parseFloat(d.demandKW)||0,
+        gas: parseFloat(d.gasTherm)||0,
+        gcost: parseFloat(d.gasCost)||0,
+        dc: parseFloat(d.dcTRh)||0,
+        dcDemand: 0,
+        dccost: parseFloat(d.dcCost)||0,
+        water: parseFloat(d.waterM3)||0,
+        wcost: parseFloat(d.waterCost)||0,
+        steam: 0, scost: 0,
+        notes: (d.provider||'') + (d.notes?' — '+d.notes:'')
+      });
+      save();
+      rebuildUtilityTable();
+      document.getElementById('bill-scan-preview').style.display = 'none';
+      document.getElementById('bill-scan-status').innerHTML = '<span class="badge badge-green">✓ Added to utility table</span>';
+      scannedBillData = {};
+    }
 
     function calcUtility() {
       readBindings();
@@ -2709,25 +2988,25 @@ function highlightRequired() {
         equipList.innerHTML = options.map(o => `<option value="${o}">`).join('');
       }
 
-function closePhotoModal() {
-  document.getElementById('photo-modal').classList.remove('show');
-  const tagFG = document.getElementById('photo-tag')?.closest('.fg');
-    if (tagFG) tagFG.style.display = '';
-}
+        function closePhotoModal() {
+          document.getElementById('photo-modal').classList.remove('show');
+          const tagFG = document.getElementById('photo-tag')?.closest('.fg');
+            if (tagFG) tagFG.style.display = '';
+        }
 
-  document.getElementById('photo-file').addEventListener('change', function(e) {
-    const files = e.target.files;
-    if (!files.length) return;
-    const preview = document.getElementById('photo-preview');
-    preview.innerHTML = '';
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = function(ev) {
-        preview.innerHTML += `<img src="${ev.target.result}" style="max-width:120px;max-height:120px;border-radius:6px;border:1px solid var(--border);">`;
-      };
-      reader.readAsDataURL(file);
-    });
-  });
+      document.getElementById('photo-file').addEventListener('change', function(e) {
+        const files = e.target.files;
+        if (!files.length) return;
+        const preview = document.getElementById('photo-preview');
+        preview.innerHTML = '';
+        Array.from(files).forEach(file => {
+          const reader = new FileReader();
+          reader.onload = function(ev) {
+            preview.innerHTML += `<img src="${ev.target.result}" style="max-width:120px;max-height:120px;border-radius:6px;border:1px solid var(--border);">`;
+          };
+          reader.readAsDataURL(file);
+        });
+      });
     function compressImage(dataUrl, maxWidth, quality) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -2743,116 +3022,182 @@ function closePhotoModal() {
         img.src = dataUrl;
       });
     }
-       async function savePhoto() {
-            const fileInput = document.getElementById('photo-file');
-            const files = fileInput.files;
-            if (!files.length) { alert('Select at least one photo'); return; }
-            const section = currentPhotoSection;
-            const caption = document.getElementById('photo-caption').value;
-            const tag = document.getElementById('photo-tag').value;
-            const photoType = document.getElementById('photo-type').value;
-            const flag = document.getElementById('photo-flag').value;
-            const equipment = document.getElementById('photo-equipment').value;
-            const useAI = document.getElementById('photo-ai-analyze')?.checked || false;
+        async function savePhoto() {
+        const fileInput = document.getElementById('photo-file');
+        const files = fileInput.files;
+        if (!files.length) { alert('Select at least one photo'); return; }
+        const section = currentPhotoSection;
+        const caption = document.getElementById('photo-caption').value;
+        const tag = document.getElementById('photo-tag').value;
+        const photoType = document.getElementById('photo-type').value;
+        const flag = document.getElementById('photo-flag').value;
+        const equipment = document.getElementById('photo-equipment').value;
+        let loaded = 0;
+        const totalFiles = files.length;
+        for (const file of Array.from(files)) {
+          const dataUrl = await new Promise((res) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => res(ev.target.result);
+            reader.readAsDataURL(file);
+          });
+          // Compress: max 800px wide, JPEG quality 0.6
+          const compressed = await compressImage(dataUrl, 800, 0.6);
+          if (!appState.photos[section]) appState.photos[section] = [];
+          appState.photos[section].push({
+            data: compressed,
+            caption: caption,
+            tag: tag,
+            photoType: photoType,
+            flag: flag,
+            equipment: equipment,
+            date: new Date().toISOString()
+          });
+          loaded++;
+        }
+        save();
+        renderPhotos();
+        closePhotoModal();
+        updateStorageIndicator();
+      }
 
-            const statusEl = document.getElementById('photo-save-status');
-            if (statusEl) statusEl.innerHTML = '<span class="ai-loading">Processing photos...</span>';
+      function reindexPhotos(section) {
+        const secLabels = {envelope:'ENV',lighting:'LTG',hvac:'HVAC',dhw:'DHW',plugloads:'PLG',other:'OTH',electrical:'ELEC',general:'GEN'};
+        (appState.photos[section]||[]).forEach((p,i) => {
+          p.imageId = 'Image ' + (secLabels[section]||'GEN') + ':' + (i+1);
+        });
+      }
 
-            for (const file of Array.from(files)) {
-              const dataUrl = await new Promise(res => {
-                const reader = new FileReader();
-                reader.onload = ev => res(ev.target.result);
-                reader.readAsDataURL(file);
-              });
-              const compressed = await compressImage(dataUrl, 800, 0.6);
+   function renderPhotos() {
+      ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(sec => {
+        const el = document.getElementById('photos-' + sec);
+        if (!el) return;
+        const photos = appState.photos[sec] || [];
+        if (photos.length === 0) { el.innerHTML = ''; return; }
+        // Group by equipment
+        const grouped = {};
+        photos.forEach((p,i) => {
+          const equip = p.equipment || 'General';
+          if (!grouped[equip]) grouped[equip] = [];
+          grouped[equip].push({...p, idx:i});
+        });
+        let html = '';
+        for (const [equip, items] of Object.entries(grouped)) {
+          if (Object.keys(grouped).length > 1 || equip !== 'General') {
+            html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);margin:8px 0 4px;text-transform:uppercase;">${equip}</div>`;
+          }
+          html += '<div class="photo-grid">';
+          html += items.map(p => {
+            const typeClass = 'photo-type-' + (p.photoType||'overview').toLowerCase();
+            const typeLabel = p.photoType || 'Overview';
+            const flagLabel = p.flag || 'Documentation';
+            const captionText = p.caption || '';
+            return `<div class="photo-thumb">
+              <img src="${p.data}" onclick="viewPhoto('${sec}',${p.idx})">
+              <span class="photo-type-badge ${typeClass}">${typeLabel}</span>
+              <div class="photo-caption">${captionText}${flagLabel !== 'Documentation' ? ' | '+flagLabel : ''}</div>
+              <div style="position:absolute;top:2px;right:2px;display:flex;gap:2px;">
+                          <div class="photo-del" onclick="cropPhoto('${sec}',${p.idx})" title="Crop" style="opacity:.7;">✂</div>
+                          <div class="photo-del" onclick="reinferPhoto('${sec}',${p.idx})" title="Re-analyze AI" style="opacity:.7;">🤖</div>
+                          <div class="photo-del" onclick="appState.photos.${sec}.splice(${p.idx},1);reindexPhotos('${sec}');save();renderPhotos();">✕</div>
+                        </div>            
+              </div>`;
+          }).join('');
+          html += '</div>';
+        }
+        el.innerHTML = html;
+      });
+    }
 
-              // Count existing photos in this section for sequential ID
-              if (!appState.photos[section]) appState.photos[section] = [];
-              const seqNum = appState.photos[section].length + 1;
-              const secLabels = {envelope:'ENV',lighting:'LTG',hvac:'HVAC',dhw:'DHW',plugloads:'PLG',other:'OTH',electrical:'ELEC',general:'GEN'};
-              const imageId = 'Image ' + (secLabels[section]||'GEN') + ':' + seqNum;
+      function cropPhoto(section, idx) {
+        const photo = appState.photos[section]?.[idx];
+        if (!photo) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'crop-overlay';
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          canvas.className = 'crop-canvas';
+          const scale = Math.min(window.innerWidth*0.9/img.width, window.innerHeight*0.7/img.height, 1);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          let startX, startY, dragging = false;
+          const drawRect = (x1,y1,x2,y2) => {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.drawImage(img,0,0,canvas.width,canvas.height);
+            ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 2;
+            ctx.setLineDash([5,3]);
+            ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(0,0,canvas.width,y1);
+            ctx.fillRect(0,y2,canvas.width,canvas.height-y2);
+            ctx.fillRect(0,y1,x1,y2-y1);
+            ctx.fillRect(x2,y1,canvas.width-x2,y2-y1);
+          };
+          let endX, endY;
+          canvas.onmousedown = canvas.ontouchstart = function(e) {
+            e.preventDefault();
+            const r = canvas.getBoundingClientRect();
+            const cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
+            const cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+            startX = cx; startY = cy; dragging = true;
+          };
+          canvas.onmousemove = canvas.ontouchmove = function(e) {
+            if (!dragging) return;
+            e.preventDefault();
+            const r = canvas.getBoundingClientRect();
+            endX = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
+            endY = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+            drawRect(startX, startY, endX, endY);
+          };
+          canvas.onmouseup = canvas.ontouchend = function() { dragging = false; };
 
-              let aiCaption = caption;
-              let aiPhotoType = photoType;
-              let aiFlag = flag;
-              let aiEquipment = equipment;
+          const btns = document.createElement('div');
+          btns.style.cssText = 'display:flex;gap:8px;margin-top:12px;';
+          btns.innerHTML = `<button style="padding:8px 20px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">✓ Crop</button>
+            <button style="padding:8px 20px;background:#64748b;color:#fff;border:none;border-radius:6px;cursor:pointer;">✕ Cancel</button>`;
+          btns.children[0].onclick = function() {
+            if (!endX) { overlay.remove(); return; }
+            const sx = Math.min(startX,endX)/scale, sy = Math.min(startY,endY)/scale;
+            const sw = Math.abs(endX-startX)/scale, sh = Math.abs(endY-startY)/scale;
+            if (sw < 10 || sh < 10) { overlay.remove(); return; }
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = sw; cropCanvas.height = sh;
+            cropCanvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+            appState.photos[section][idx].data = cropCanvas.toDataURL('image/jpeg', 0.7);
+            save(); renderPhotos(); overlay.remove();
+          };
+          btns.children[1].onclick = function() { overlay.remove(); };
+          overlay.appendChild(canvas);
+          overlay.appendChild(btns);
+        };
+        img.src = photo.data;
+        document.body.appendChild(overlay);
+      }
 
-              // AI analysis of photo
-              if (useAI && appState.settings.aiApiKey) {
-                if (statusEl) statusEl.innerHTML = `<span class="ai-loading">🤖 AI analyzing ${imageId}...</span>`;
-                try {
-                  const aiResult = await analyzePhotoAI(compressed, section, equipment);
-                  if (aiResult) {
-                    if (!caption && aiResult.caption) aiCaption = aiResult.caption;
-                    if (aiResult.photoType) aiPhotoType = aiResult.photoType;
-                    if (aiResult.flag && aiResult.flag !== 'Documentation') aiFlag = aiResult.flag;
-                    if (!equipment && aiResult.equipment) aiEquipment = aiResult.equipment;
-                  }
-                } catch(e) { console.warn('AI photo analysis failed:', e); }
-              }
-
-              appState.photos[section].push({
-                data: compressed,
-                imageId: imageId,
-                caption: aiCaption,
-                tag: tag,
-                photoType: aiPhotoType,
-                flag: aiFlag,
-                equipment: aiEquipment,
-                date: new Date().toISOString()
-              });
-            }
-
+      async function reinferPhoto(section, idx) {
+        const photo = appState.photos[section]?.[idx];
+        if (!photo || !appState.settings.aiApiKey) { alert('Configure AI in Settings'); return; }
+        const el = document.getElementById('photos-' + section);
+        const badge = document.createElement('div');
+        badge.innerHTML = '<span class="ai-loading" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;background:var(--card-bg);padding:8px 16px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.3);">🤖 Re-analyzing...</span>';
+        document.body.appendChild(badge);
+        try {
+          const result = await analyzePhotoAI(photo.data, section, photo.equipment);
+          if (result) {
+            if (result.caption) photo.caption = result.caption;
+            if (result.photoType) photo.photoType = result.photoType;
+            if (result.flag) photo.flag = result.flag;
+            if (result.equipment) photo.equipment = result.equipment;
+            if (result.issues) photo.issues = result.issues;
             save();
             renderPhotos();
-            closePhotoModal();
-            updateStorageIndicator();
-            if (statusEl) statusEl.innerHTML = '';
-          };
-
-          function renderPhotos() {
-          ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(sec => {
-            const el = document.getElementById('photos-' + sec);
-            if (!el) return;
-            const photos = appState.photos[sec] || [];
-            if (photos.length === 0) { el.innerHTML = ''; return; }
-            const grouped = {};
-            photos.forEach((p,i) => {
-              const equip = p.equipment || 'General';
-              if (!grouped[equip]) grouped[equip] = [];
-              grouped[equip].push({...p, idx:i});
-            });
-            let html = '';
-            for (const [equip, items] of Object.entries(grouped)) {
-              if (Object.keys(grouped).length > 1 || equip !== 'General') {
-                html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);margin:8px 0 4px;text-transform:uppercase;">${equip}</div>`;
-              }
-              html += '<div class="photo-grid">';
-              html += items.map(p => {
-                const typeClass = 'photo-type-' + (p.photoType||'overview').toLowerCase();
-                const flagBadge = p.flag === 'Deficiency' ? '<span style="color:#ef4444;font-size:.65rem;"> ⚠ Deficiency</span>' : p.flag === 'Opportunity' ? '<span style="color:#f59e0b;font-size:.65rem;"> 💡 Opportunity</span>' : '';
-                return `<div class="photo-thumb">
-                  <img src="${p.data}" onclick="viewPhoto('${sec}',${p.idx})">
-                  <span class="photo-type-badge ${typeClass}">${p.photoType||'Overview'}</span>
-                  <div class="photo-caption">
-                    <b style="color:var(--accent);font-size:.65rem;">${p.imageId||'Image'}</b>${flagBadge}<br>
-                    <input type="text" value="${(p.caption||'').replace(/"/g,'&quot;')}" onchange="appState.photos.${sec}[${p.idx}].caption=this.value;save();" style="width:100%;font-size:.7rem;border:1px solid var(--border);border-radius:3px;padding:2px 4px;margin-top:2px;" placeholder="Caption...">
-                  </div>
-                  <div class="photo-del" onclick="appState.photos.${sec}.splice(${p.idx},1);reindexPhotos('${sec}');save();renderPhotos();">✕</div>
-                </div>`;
-              }).join('');
-              html += '</div>';
-            }
-            el.innerHTML = html;
-          });
-        };
-
-        function reindexPhotos(section) {
-          const secLabels = {envelope:'ENV',lighting:'LTG',hvac:'HVAC',dhw:'DHW',plugloads:'PLG',other:'OTH',electrical:'ELEC',general:'GEN'};
-          (appState.photos[section]||[]).forEach((p,i) => {
-            p.imageId = 'Image ' + (secLabels[section]||'GEN') + ':' + (i+1);
-          });
-        }
+          }
+        } catch(e) { console.warn('Re-inference failed:', e); }
+        badge.remove();
+      }
 
     function viewPhoto(sec, idx) {
       const p = appState.photos[sec]?.[idx];
@@ -3629,92 +3974,6 @@ async function fetchAvailableModels() {
     }
   }
 
-
-      async function analyzePhotoAI(imageDataUrl, section, existingEquipment) {
-        const provider = appState.settings.aiProvider || 'gemini';
-        const apiKey = appState.settings.aiApiKey;
-        const model = appState.settings.aiModel || 'gemini-2.0-flash';
-        if (!apiKey) return null;
-
-        const secContext = {
-          envelope:'building envelope, walls, roof, windows, insulation, doors, air barriers',
-          lighting:'lighting fixtures, lamps, ballasts, controls, occupancy sensors, daylighting',
-          hvac:'HVAC equipment, chillers, AHUs, RTUs, fans, pumps, ductwork, piping, controls, VFDs',
-          dhw:'water heaters, tanks, piping, recirculation pumps, mixing valves',
-          plugloads:'plug loads, computers, appliances, vending machines, kitchen equipment',
-          electrical:'transformers, panels, switchgear, breakers, meters, wiring, power quality analyzers',
-          other:'elevators, data center, kitchen, parking, custom equipment'
-        };
-
-        const prompt = `You are an ASHRAE energy auditor analyzing a photo from the ${section} section of an energy audit.
-      Context: This photo is of ${secContext[section]||'building equipment'}.
-      ${existingEquipment ? 'Equipment: ' + existingEquipment : ''}
-
-      Analyze this image and respond ONLY with a JSON object (no markdown, no backticks):
-      {
-        "caption": "Brief technical description of what you see (max 80 chars)",
-        "photoType": "Nameplate" or "Overview" or "Detail" or "Deficiency",
-        "flag": "Documentation" or "Deficiency" or "Opportunity",
-        "equipment": "Equipment name/tag if visible on nameplate or identifiable",
-        "issues": "Any ASHRAE/energy efficiency issues detected (aging, damage, missing insulation, dirty coils, leaks, wrong refrigerant, oversized, low efficiency rating, code violations)"
-      }
-
-      Rules for photoType:
-      - "Nameplate" if the photo shows a manufacturer data plate, rating label, or model/serial tag
-      - "Deficiency" if there is visible damage, dirt, leaks, missing insulation, or poor condition
-      - "Overview" if it shows the general equipment or space
-      - "Detail" if it shows a specific component close-up
-
-      Rules for flag:
-      - "Deficiency" if there is a visible problem (dirt, damage, leaks, corrosion, missing covers, exposed wiring)
-      - "Opportunity" if the equipment could be upgraded (old model, low efficiency rating visible, non-LED lamp, no VFD on motor)
-      - "Documentation" if it is a standard record photo with no issues`;
-
-        try {
-          if (provider === 'gemini') {
-            const base64 = imageDataUrl.split(',')[1];
-            const mimeType = imageDataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({
-                contents:[{parts:[
-                  {inlineData:{mimeType:mimeType,data:base64}},
-                  {text:prompt}
-                ]}],
-                generationConfig:{temperature:0.3,maxOutputTokens:300}
-              })
-            });
-            const data = await resp.json();
-            if (data.error) throw new Error(data.error.message);
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const cleaned = text.replace(/```json|```/g,'').trim();
-            return JSON.parse(cleaned);
-          } else if (provider === 'openai') {
-            const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-              method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
-              body: JSON.stringify({
-                model: model.includes('gpt-4') ? model : 'gpt-4o-mini',
-                messages:[{role:'user',content:[
-                  {type:'image_url',image_url:{url:imageDataUrl}},
-                  {type:'text',text:prompt}
-                ]}],
-                max_tokens:300, temperature:0.3
-              })
-            });
-            const data = await resp.json();
-            if (data.error) throw new Error(data.error.message);
-            const text = data.choices?.[0]?.message?.content || '';
-            return JSON.parse(text.replace(/```json|```/g,'').trim());
-          } else {
-            // Groq and custom don't support vision — return null
-            return null;
-          }
-        } catch(e) {
-          console.warn('Photo AI analysis failed:', e);
-          return null;
-        }
-      };
-
 // ========== PER-SECTION AI CHAT ==========
 async function sectionAIChat(section, autoPrompt) {
   const provider = appState.settings.aiProvider || 'gemini';
@@ -3753,14 +4012,6 @@ async function sectionAIChat(section, autoPrompt) {
     context += `Utility: ${appState.utility.rows.map(r => `${r.month}:${r.kwh}kWh/$${r.ecost}/${r.pkw}pkW`).join(', ')}\nEUI:${eui?eui.toFixed(1):'N/A'} (median:${bm.median}, ES75:${bm.es75})`;
   } else if (section === 'loads') {
     context += `Loads:\n${appState.loads.map(l => `${l.name}: ${l.category}, ${l.npKW}npKW, ${l.measKW}measKW, PF:${l.measPF}, ${l.mode}`).join('\n')}`;
-  }
-  // Add photo references
-  const sectionPhotos = appState.photos[section] || [];
-  if (sectionPhotos.length > 0) {
-    context += '\n\nPhotos documented:\n';
-    sectionPhotos.forEach(p => {
-      context += `${p.imageId||'Photo'}: ${p.equipment||'General'} — ${p.photoType||'Overview'} — ${p.caption||'no caption'}${p.flag && p.flag!=='Documentation'?' ['+p.flag+']':''}${p.issues?' Issues: '+p.issues:''}\n`;
-    });
   }
 
   // Include previous conversation
@@ -3809,30 +4060,18 @@ async function sectionAIChat(section, autoPrompt) {
   }
 }
 
-    function saveSectionAI(section) {
-      const msgsEl = document.getElementById('ai-msgs-' + section);
-      if (!msgsEl) return;
-      const aiMsgs = msgsEl.querySelectorAll('.sec-ai-msg.ai');
-      if (aiMsgs.length === 0) { alert('No AI content to save'); return; }
-      const lastAI = aiMsgs[aiMsgs.length - 1].textContent;
-      appState.aiSections[section] = lastAI;
-      save();
-      renderSavedAI(section);
-    }
-
-    function renderSavedAI(section) {
-      const savedEl = document.getElementById('ai-saved-' + section);
-      if (!savedEl) return;
-      const text = appState.aiSections[section] || '';
-      if (!text) { savedEl.innerHTML = ''; return; }
-      savedEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span class="badge badge-green">✓ Saved to report</span>
-          <button class="btn-sm btn-secondary" onclick="appState.aiSections['${section}']='';save();renderSavedAI('${section}');">🗑 Clear</button>
-        </div>
-        <textarea onchange="appState.aiSections['${section}']=this.value;save();" style="width:100%;min-height:80px;font-size:.78rem;line-height:1.5;border:1px solid var(--border);border-radius:4px;padding:6px;">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-      </div>`;
-    }
+function saveSectionAI(section) {
+  const msgsEl = document.getElementById('ai-msgs-' + section);
+  if (!msgsEl) return;
+  // Get all AI messages, take the last one
+  const aiMsgs = msgsEl.querySelectorAll('.sec-ai-msg.ai');
+  if (aiMsgs.length === 0) { alert('No AI content to save'); return; }
+  const lastAI = aiMsgs[aiMsgs.length - 1].textContent;
+  appState.aiSections[section] = lastAI;
+  save();
+  const savedEl = document.getElementById('ai-saved-' + section);
+  if (savedEl) savedEl.innerHTML = '<span class="badge badge-green">✓ Saved to report</span>';
+}
 
 // ========== AI INFERENCE ==========
 async function generateAIAnalysis(mode) {
@@ -4619,11 +4858,9 @@ appState._projectId = 'p_demo_' + Date.now();
                 html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:6px 0 12px;">
                   ${items.map(ph => `<div style="border:1px solid #ddd;border-radius:6px;overflow:hidden;">
                     <img src="${ph.data}" style="width:100%;height:140px;object-fit:cover;">
-                      <div style="padding:4px 8px;font-size:10px;background:#f8fafc;">
-                      <span style="font-weight:700;color:#0f1923;">${ph.imageId||'Image'}</span>
-                      <span style="font-weight:700;color:#0ea5e9;margin-left:4px;">${ph.photoType||'Overview'}</span>
+                    <div style="padding:4px 8px;font-size:10px;background:#f8fafc;">
+                      <span style="font-weight:700;color:#0ea5e9;">${ph.photoType||'Overview'}</span>
                       ${ph.caption ? ' — '+ph.caption : ''}
-                 
                       ${ph.flag && ph.flag!=='Documentation' ? '<span style="color:#ef4444;font-weight:700;"> ⚠ '+ph.flag+'</span>' : ''}
                     </div>
                   </div>`).join('')}
@@ -4726,6 +4963,7 @@ appState._projectId = 'p_demo_' + Date.now();
             <a href="#findings">10. Key Findings</a>
             <a href="#ecm">11. ECM Recommendations</a>
             <a href="#photos">12. Photo Documentation</a>
+            ${appState.references.length>0?'<a href="#refs">13. References</a>':''}
           </div>
 
           <!-- 1. EXECUTIVE SUMMARY -->
@@ -4879,6 +5117,11 @@ appState._projectId = 'p_demo_' + Date.now();
             const secNames = {envelope:'Building Envelope',lighting:'Lighting',hvac:'HVAC Systems',dhw:'Domestic Hot Water',plugloads:'Plug & Process Loads',other:'Other Systems',electrical:'Electrical Systems'};
             return `<h3>${secNames[sec]||sec}</h3>${sectionPhotos(sec)}`;
           }).join('')}
+
+          <!-- 13. REFERENCES -->
+          ${appState.references.length>0?`<h2 id="refs">13. References</h2>
+          <table><thead><tr><th>#</th><th>Type</th><th>Title</th><th>Source</th><th>Section</th></tr></thead>
+          <tbody>${appState.references.map((r,i)=>`<tr><td>${i+1}</td><td>${r.type}</td><td>${r.title}</td><td>${r.source}</td><td>${r.section}</td></tr>`).join('')}</tbody></table>`:''}
 
           <!-- DISCLAIMER -->
           <div class="disclaimer">
