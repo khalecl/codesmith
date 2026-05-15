@@ -1313,6 +1313,12 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
       <div class="fg"><label>Photo Type</label><select id="photo-type"><option>Overview</option><option>Nameplate</option><option>Detail</option><option>Deficiency</option></select></div>
       <div class="fg"><label>Flag</label><select id="photo-flag"><option>Documentation</option><option>Deficiency</option><option>Opportunity</option></select></div>
     </div>
+   <div class="fg" style="display:flex;align-items:center;gap:8px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;">
+        <input type="checkbox" id="photo-ai-analyze" checked> 🤖 AI auto-detect (caption, type, flag, issues)
+      </label>
+      <span id="photo-save-status" style="font-size:.75rem;"></span>
+    </div>
     <div class="fg"><label>Equipment Name</label>
       <input type="text" id="photo-equipment" list="photo-equip-list" placeholder="Select or type equipment name">
       <datalist id="photo-equip-list"></datalist>
@@ -1591,6 +1597,7 @@ function init() {
   if (aiOut && appState.aiDraft) aiOut.value = appState.aiDraft;
   updateFlagButtons();
   renderPhotos();
+  ['envelope','lighting','hvac','dhw','electrical','utility','loads','pq'].forEach(sec => renderSavedAI(sec));
   renderTransformers();
   renderPanels();
   renderLoadTable();
@@ -2736,80 +2743,116 @@ function closePhotoModal() {
         img.src = dataUrl;
       });
     }
-        async function savePhoto() {
-        const fileInput = document.getElementById('photo-file');
-        const files = fileInput.files;
-        if (!files.length) { alert('Select at least one photo'); return; }
-        const section = currentPhotoSection;
-        const caption = document.getElementById('photo-caption').value;
-        const tag = document.getElementById('photo-tag').value;
-        const photoType = document.getElementById('photo-type').value;
-        const flag = document.getElementById('photo-flag').value;
-        const equipment = document.getElementById('photo-equipment').value;
-        let loaded = 0;
-        const totalFiles = files.length;
-        for (const file of Array.from(files)) {
-          const dataUrl = await new Promise((res) => {
-            const reader = new FileReader();
-            reader.onload = (ev) => res(ev.target.result);
-            reader.readAsDataURL(file);
-          });
-          // Compress: max 800px wide, JPEG quality 0.6
-          const compressed = await compressImage(dataUrl, 800, 0.6);
-          if (!appState.photos[section]) appState.photos[section] = [];
-          appState.photos[section].push({
-            data: compressed,
-            caption: caption,
-            tag: tag,
-            photoType: photoType,
-            flag: flag,
-            equipment: equipment,
-            date: new Date().toISOString()
-          });
-          loaded++;
-        }
-        save();
-        renderPhotos();
-        closePhotoModal();
-        updateStorageIndicator();
-      }
+       async function savePhoto() {
+            const fileInput = document.getElementById('photo-file');
+            const files = fileInput.files;
+            if (!files.length) { alert('Select at least one photo'); return; }
+            const section = currentPhotoSection;
+            const caption = document.getElementById('photo-caption').value;
+            const tag = document.getElementById('photo-tag').value;
+            const photoType = document.getElementById('photo-type').value;
+            const flag = document.getElementById('photo-flag').value;
+            const equipment = document.getElementById('photo-equipment').value;
+            const useAI = document.getElementById('photo-ai-analyze')?.checked || false;
 
-   function renderPhotos() {
-      ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(sec => {
-        const el = document.getElementById('photos-' + sec);
-        if (!el) return;
-        const photos = appState.photos[sec] || [];
-        if (photos.length === 0) { el.innerHTML = ''; return; }
-        // Group by equipment
-        const grouped = {};
-        photos.forEach((p,i) => {
-          const equip = p.equipment || 'General';
-          if (!grouped[equip]) grouped[equip] = [];
-          grouped[equip].push({...p, idx:i});
-        });
-        let html = '';
-        for (const [equip, items] of Object.entries(grouped)) {
-          if (Object.keys(grouped).length > 1 || equip !== 'General') {
-            html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);margin:8px 0 4px;text-transform:uppercase;">${equip}</div>`;
-          }
-          html += '<div class="photo-grid">';
-          html += items.map(p => {
-            const typeClass = 'photo-type-' + (p.photoType||'overview').toLowerCase();
-            const typeLabel = p.photoType || 'Overview';
-            const flagLabel = p.flag || 'Documentation';
-            const captionText = p.caption || '';
-            return `<div class="photo-thumb">
-              <img src="${p.data}" onclick="viewPhoto('${sec}',${p.idx})">
-              <span class="photo-type-badge ${typeClass}">${typeLabel}</span>
-              <div class="photo-caption">${captionText}${flagLabel !== 'Documentation' ? ' | '+flagLabel : ''}</div>
-              <div class="photo-del" onclick="appState.photos.${sec}.splice(${p.idx},1);save();renderPhotos();">✕</div>
-            </div>`;
-          }).join('');
-          html += '</div>';
+            const statusEl = document.getElementById('photo-save-status');
+            if (statusEl) statusEl.innerHTML = '<span class="ai-loading">Processing photos...</span>';
+
+            for (const file of Array.from(files)) {
+              const dataUrl = await new Promise(res => {
+                const reader = new FileReader();
+                reader.onload = ev => res(ev.target.result);
+                reader.readAsDataURL(file);
+              });
+              const compressed = await compressImage(dataUrl, 800, 0.6);
+
+              // Count existing photos in this section for sequential ID
+              if (!appState.photos[section]) appState.photos[section] = [];
+              const seqNum = appState.photos[section].length + 1;
+              const secLabels = {envelope:'ENV',lighting:'LTG',hvac:'HVAC',dhw:'DHW',plugloads:'PLG',other:'OTH',electrical:'ELEC',general:'GEN'};
+              const imageId = 'Image ' + (secLabels[section]||'GEN') + ':' + seqNum;
+
+              let aiCaption = caption;
+              let aiPhotoType = photoType;
+              let aiFlag = flag;
+              let aiEquipment = equipment;
+
+              // AI analysis of photo
+              if (useAI && appState.settings.aiApiKey) {
+                if (statusEl) statusEl.innerHTML = `<span class="ai-loading">🤖 AI analyzing ${imageId}...</span>`;
+                try {
+                  const aiResult = await analyzePhotoAI(compressed, section, equipment);
+                  if (aiResult) {
+                    if (!caption && aiResult.caption) aiCaption = aiResult.caption;
+                    if (aiResult.photoType) aiPhotoType = aiResult.photoType;
+                    if (aiResult.flag && aiResult.flag !== 'Documentation') aiFlag = aiResult.flag;
+                    if (!equipment && aiResult.equipment) aiEquipment = aiResult.equipment;
+                  }
+                } catch(e) { console.warn('AI photo analysis failed:', e); }
+              }
+
+              appState.photos[section].push({
+                data: compressed,
+                imageId: imageId,
+                caption: aiCaption,
+                tag: tag,
+                photoType: aiPhotoType,
+                flag: aiFlag,
+                equipment: aiEquipment,
+                date: new Date().toISOString()
+              });
+            }
+
+            save();
+            renderPhotos();
+            closePhotoModal();
+            updateStorageIndicator();
+            if (statusEl) statusEl.innerHTML = '';
+          };
+
+          function renderPhotos() {
+          ['envelope','lighting','hvac','dhw','plugloads','other','electrical'].forEach(sec => {
+            const el = document.getElementById('photos-' + sec);
+            if (!el) return;
+            const photos = appState.photos[sec] || [];
+            if (photos.length === 0) { el.innerHTML = ''; return; }
+            const grouped = {};
+            photos.forEach((p,i) => {
+              const equip = p.equipment || 'General';
+              if (!grouped[equip]) grouped[equip] = [];
+              grouped[equip].push({...p, idx:i});
+            });
+            let html = '';
+            for (const [equip, items] of Object.entries(grouped)) {
+              if (Object.keys(grouped).length > 1 || equip !== 'General') {
+                html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);margin:8px 0 4px;text-transform:uppercase;">${equip}</div>`;
+              }
+              html += '<div class="photo-grid">';
+              html += items.map(p => {
+                const typeClass = 'photo-type-' + (p.photoType||'overview').toLowerCase();
+                const flagBadge = p.flag === 'Deficiency' ? '<span style="color:#ef4444;font-size:.65rem;"> ⚠ Deficiency</span>' : p.flag === 'Opportunity' ? '<span style="color:#f59e0b;font-size:.65rem;"> 💡 Opportunity</span>' : '';
+                return `<div class="photo-thumb">
+                  <img src="${p.data}" onclick="viewPhoto('${sec}',${p.idx})">
+                  <span class="photo-type-badge ${typeClass}">${p.photoType||'Overview'}</span>
+                  <div class="photo-caption">
+                    <b style="color:var(--accent);font-size:.65rem;">${p.imageId||'Image'}</b>${flagBadge}<br>
+                    <input type="text" value="${(p.caption||'').replace(/"/g,'&quot;')}" onchange="appState.photos.${sec}[${p.idx}].caption=this.value;save();" style="width:100%;font-size:.7rem;border:1px solid var(--border);border-radius:3px;padding:2px 4px;margin-top:2px;" placeholder="Caption...">
+                  </div>
+                  <div class="photo-del" onclick="appState.photos.${sec}.splice(${p.idx},1);reindexPhotos('${sec}');save();renderPhotos();">✕</div>
+                </div>`;
+              }).join('');
+              html += '</div>';
+            }
+            el.innerHTML = html;
+          });
+        };
+
+        function reindexPhotos(section) {
+          const secLabels = {envelope:'ENV',lighting:'LTG',hvac:'HVAC',dhw:'DHW',plugloads:'PLG',other:'OTH',electrical:'ELEC',general:'GEN'};
+          (appState.photos[section]||[]).forEach((p,i) => {
+            p.imageId = 'Image ' + (secLabels[section]||'GEN') + ':' + (i+1);
+          });
         }
-        el.innerHTML = html;
-      });
-    }
 
     function viewPhoto(sec, idx) {
       const p = appState.photos[sec]?.[idx];
@@ -3586,6 +3629,92 @@ async function fetchAvailableModels() {
     }
   }
 
+
+      async function analyzePhotoAI(imageDataUrl, section, existingEquipment) {
+        const provider = appState.settings.aiProvider || 'gemini';
+        const apiKey = appState.settings.aiApiKey;
+        const model = appState.settings.aiModel || 'gemini-2.0-flash';
+        if (!apiKey) return null;
+
+        const secContext = {
+          envelope:'building envelope, walls, roof, windows, insulation, doors, air barriers',
+          lighting:'lighting fixtures, lamps, ballasts, controls, occupancy sensors, daylighting',
+          hvac:'HVAC equipment, chillers, AHUs, RTUs, fans, pumps, ductwork, piping, controls, VFDs',
+          dhw:'water heaters, tanks, piping, recirculation pumps, mixing valves',
+          plugloads:'plug loads, computers, appliances, vending machines, kitchen equipment',
+          electrical:'transformers, panels, switchgear, breakers, meters, wiring, power quality analyzers',
+          other:'elevators, data center, kitchen, parking, custom equipment'
+        };
+
+        const prompt = `You are an ASHRAE energy auditor analyzing a photo from the ${section} section of an energy audit.
+      Context: This photo is of ${secContext[section]||'building equipment'}.
+      ${existingEquipment ? 'Equipment: ' + existingEquipment : ''}
+
+      Analyze this image and respond ONLY with a JSON object (no markdown, no backticks):
+      {
+        "caption": "Brief technical description of what you see (max 80 chars)",
+        "photoType": "Nameplate" or "Overview" or "Detail" or "Deficiency",
+        "flag": "Documentation" or "Deficiency" or "Opportunity",
+        "equipment": "Equipment name/tag if visible on nameplate or identifiable",
+        "issues": "Any ASHRAE/energy efficiency issues detected (aging, damage, missing insulation, dirty coils, leaks, wrong refrigerant, oversized, low efficiency rating, code violations)"
+      }
+
+      Rules for photoType:
+      - "Nameplate" if the photo shows a manufacturer data plate, rating label, or model/serial tag
+      - "Deficiency" if there is visible damage, dirt, leaks, missing insulation, or poor condition
+      - "Overview" if it shows the general equipment or space
+      - "Detail" if it shows a specific component close-up
+
+      Rules for flag:
+      - "Deficiency" if there is a visible problem (dirt, damage, leaks, corrosion, missing covers, exposed wiring)
+      - "Opportunity" if the equipment could be upgraded (old model, low efficiency rating visible, non-LED lamp, no VFD on motor)
+      - "Documentation" if it is a standard record photo with no issues`;
+
+        try {
+          if (provider === 'gemini') {
+            const base64 = imageDataUrl.split(',')[1];
+            const mimeType = imageDataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({
+                contents:[{parts:[
+                  {inlineData:{mimeType:mimeType,data:base64}},
+                  {text:prompt}
+                ]}],
+                generationConfig:{temperature:0.3,maxOutputTokens:300}
+              })
+            });
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error.message);
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const cleaned = text.replace(/```json|```/g,'').trim();
+            return JSON.parse(cleaned);
+          } else if (provider === 'openai') {
+            const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+              method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+              body: JSON.stringify({
+                model: model.includes('gpt-4') ? model : 'gpt-4o-mini',
+                messages:[{role:'user',content:[
+                  {type:'image_url',image_url:{url:imageDataUrl}},
+                  {type:'text',text:prompt}
+                ]}],
+                max_tokens:300, temperature:0.3
+              })
+            });
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error.message);
+            const text = data.choices?.[0]?.message?.content || '';
+            return JSON.parse(text.replace(/```json|```/g,'').trim());
+          } else {
+            // Groq and custom don't support vision — return null
+            return null;
+          }
+        } catch(e) {
+          console.warn('Photo AI analysis failed:', e);
+          return null;
+        }
+      };
+
 // ========== PER-SECTION AI CHAT ==========
 async function sectionAIChat(section, autoPrompt) {
   const provider = appState.settings.aiProvider || 'gemini';
@@ -3624,6 +3753,14 @@ async function sectionAIChat(section, autoPrompt) {
     context += `Utility: ${appState.utility.rows.map(r => `${r.month}:${r.kwh}kWh/$${r.ecost}/${r.pkw}pkW`).join(', ')}\nEUI:${eui?eui.toFixed(1):'N/A'} (median:${bm.median}, ES75:${bm.es75})`;
   } else if (section === 'loads') {
     context += `Loads:\n${appState.loads.map(l => `${l.name}: ${l.category}, ${l.npKW}npKW, ${l.measKW}measKW, PF:${l.measPF}, ${l.mode}`).join('\n')}`;
+  }
+  // Add photo references
+  const sectionPhotos = appState.photos[section] || [];
+  if (sectionPhotos.length > 0) {
+    context += '\n\nPhotos documented:\n';
+    sectionPhotos.forEach(p => {
+      context += `${p.imageId||'Photo'}: ${p.equipment||'General'} — ${p.photoType||'Overview'} — ${p.caption||'no caption'}${p.flag && p.flag!=='Documentation'?' ['+p.flag+']':''}${p.issues?' Issues: '+p.issues:''}\n`;
+    });
   }
 
   // Include previous conversation
@@ -3672,18 +3809,30 @@ async function sectionAIChat(section, autoPrompt) {
   }
 }
 
-function saveSectionAI(section) {
-  const msgsEl = document.getElementById('ai-msgs-' + section);
-  if (!msgsEl) return;
-  // Get all AI messages, take the last one
-  const aiMsgs = msgsEl.querySelectorAll('.sec-ai-msg.ai');
-  if (aiMsgs.length === 0) { alert('No AI content to save'); return; }
-  const lastAI = aiMsgs[aiMsgs.length - 1].textContent;
-  appState.aiSections[section] = lastAI;
-  save();
-  const savedEl = document.getElementById('ai-saved-' + section);
-  if (savedEl) savedEl.innerHTML = '<span class="badge badge-green">✓ Saved to report</span>';
-}
+    function saveSectionAI(section) {
+      const msgsEl = document.getElementById('ai-msgs-' + section);
+      if (!msgsEl) return;
+      const aiMsgs = msgsEl.querySelectorAll('.sec-ai-msg.ai');
+      if (aiMsgs.length === 0) { alert('No AI content to save'); return; }
+      const lastAI = aiMsgs[aiMsgs.length - 1].textContent;
+      appState.aiSections[section] = lastAI;
+      save();
+      renderSavedAI(section);
+    }
+
+    function renderSavedAI(section) {
+      const savedEl = document.getElementById('ai-saved-' + section);
+      if (!savedEl) return;
+      const text = appState.aiSections[section] || '';
+      if (!text) { savedEl.innerHTML = ''; return; }
+      savedEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span class="badge badge-green">✓ Saved to report</span>
+          <button class="btn-sm btn-secondary" onclick="appState.aiSections['${section}']='';save();renderSavedAI('${section}');">🗑 Clear</button>
+        </div>
+        <textarea onchange="appState.aiSections['${section}']=this.value;save();" style="width:100%;min-height:80px;font-size:.78rem;line-height:1.5;border:1px solid var(--border);border-radius:4px;padding:6px;">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      </div>`;
+    }
 
 // ========== AI INFERENCE ==========
 async function generateAIAnalysis(mode) {
@@ -4470,9 +4619,11 @@ appState._projectId = 'p_demo_' + Date.now();
                 html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:6px 0 12px;">
                   ${items.map(ph => `<div style="border:1px solid #ddd;border-radius:6px;overflow:hidden;">
                     <img src="${ph.data}" style="width:100%;height:140px;object-fit:cover;">
-                    <div style="padding:4px 8px;font-size:10px;background:#f8fafc;">
-                      <span style="font-weight:700;color:#0ea5e9;">${ph.photoType||'Overview'}</span>
+                      <div style="padding:4px 8px;font-size:10px;background:#f8fafc;">
+                      <span style="font-weight:700;color:#0f1923;">${ph.imageId||'Image'}</span>
+                      <span style="font-weight:700;color:#0ea5e9;margin-left:4px;">${ph.photoType||'Overview'}</span>
                       ${ph.caption ? ' — '+ph.caption : ''}
+                 
                       ${ph.flag && ph.flag!=='Documentation' ? '<span style="color:#ef4444;font-weight:700;"> ⚠ '+ph.flag+'</span>' : ''}
                     </div>
                   </div>`).join('')}
