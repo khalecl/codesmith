@@ -3888,9 +3888,9 @@ async function generate(spec, onStream) {
         { role: 'system', content: systemContent },
         { role: 'user', content: 'Design the architecture.' },
       ],
-      tier: 'worker',
+      tier: 'orchestrator',
       temperature: 0.2,
-      maxTokens: 6000,
+      maxTokens: 8000,
     })) {
       if (ev.type === 'token') {
         fullText += ev.delta;
