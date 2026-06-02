@@ -64,6 +64,7 @@
 	    document.head.appendChild(s1);
   });
 </script>
+
 <script>
   // Tailwind config must be set before the runtime script renders anything.
   tailwind.config = {
@@ -2072,7 +2073,6 @@
     </div>
   </div>
 </div>
-
 <!-- =========================================================================
      Script
      ========================================================================= -->
@@ -10585,67 +10585,60 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			}
 
 			// Parse edit instructions from response
-				const edits = CodeSmith.pair.parseEdits(fullText);
-				if (edits.length > 0) {
-				for (let i = 0; i < edits.length; i++) {
-					const edit = edits[i];
-					const card = _createEditCard(edit, i, name);
-					aiCol.appendChild(card);
-						}
-				if (edits.length > 1) {
-					const applyAllBtn = document.createElement('button');
-					applyAllBtn.className = 'edit-apply-btn';
-					applyAllBtn.style.cssText = 'margin:4px 0;width:100%;padding:6px;font-size:11px;';
-					applyAllBtn.textContent = '✓ Apply all ' + edits.length + ' edits';
-					applyAllBtn.addEventListener('click', () => {
-								const sorted = [...edits].sort((a, b) => (b.startLine || b.afterLine || 0) - (a.startLine || a.afterLine || 0));
-								let applied = 0, failed = 0;
-								const failures = [];
-								for (const e of sorted) {
-									// Validate oldCode against current file content
-									const file2 = CodeSmith.explorer.getFile(name);
-									if (e.type === 'replace' && e.oldCode && e.startLine && e.endLine) {
-									const lines = file2.content.split('\n');
-									const actualOld = lines.slice(e.startLine - 1, e.endLine).join('\n');
-									if (actualOld.trim() !== e.oldCode.trim()) {
+					const edits = CodeSmith.pair.parseEdits(fullText);
+					if (edits.length > 0) {
+					for (let i = 0; i < edits.length; i++) {
+						const edit = edits[i];
+						const card = _createEditCard(edit, i, name);
+						aiCol.appendChild(card);
+							}
+					if (edits.length > 1) {
+						const applyAllBtn = document.createElement('button');
+						applyAllBtn.className = 'edit-apply-btn';
+						applyAllBtn.style.cssText = 'margin:4px 0;width:100%;padding:6px;font-size:11px;';
+						applyAllBtn.textContent = '✓ Apply all ' + edits.length + ' edits';
+						applyAllBtn.addEventListener('click', async () => {
+							// Group edits by file
+							const fileEdits = {};
+							for (const e of edits) {
+								if (!fileEdits[e.file]) fileEdits[e.file] = [];
+								fileEdits[e.file].push(e);
+							}
+							let applied = 0, failed = 0;
+							const failures = [];
+							for (const [filename, fileEditsList] of Object.entries(fileEdits)) {
+								const sortedEdits = fileEditsList.sort((a, b) => (a.startLine || a.afterLine || 0) - (b.startLine || b.afterLine || 0));
+								let content = CodeSmith.explorer.getFile(filename).content;
+								for (const edit of sortedEdits) {
+									const result = CodeSmith.explorer.applyEdit(filename, edit);
+									if (result.ok) {
+										content = result.newContent;
+										applied++;
+									} else {
 										failed++;
-										failures.push('Edit ' + (sorted.indexOf(e) + 1) + ': line content mismatch');
-										continue;
+										failures.push(result.error);
 									}
-									}
-									const r = CodeSmith.explorer.applyEdit(name, e);
-									if (r.ok) applied++;
-									else { failed++; failures.push(r.error); }
 								}
-								const file3 = CodeSmith.explorer.getFile(name);
-								if (file3 && CodeSmith.monaco.isInitialized()) {
-									CodeSmith.monaco.updateContent(name, file3.content);
+								if (CodeSmith.monaco.isInitialized()) {
+									CodeSmith.monaco.updateContent(filename, content);
 								}
-								_explorerRenderTree();
-								_renderEditHistory();
-								applyAllBtn.textContent = applied + ' applied' + (failed ? ', ' + failed + ' failed' : '');
-								applyAllBtn.disabled = true;
-								aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
-								if (failures.length > 0) {
-									const warn = document.createElement('div');
-									warn.style.cssText = 'margin:6px 0;padding:8px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.3);border-radius:6px;font-size:11px;color:#ff6b6b;';
-									warn.textContent = '⚠ Failed edits: ' + failures.join('; ');
-									aiCol.appendChild(warn);
-								}
-								});
-					//const file2 = CodeSmith.explorer.getFile(name);
-					//if (file2 && CodeSmith.monaco.isInitialized()) {
-					//	CodeSmith.monaco.updateContent(name, file2.content);
-					//}
-					//_explorerRenderTree();
-					//_renderEditHistory();
-					//applyAllBtn.disabled = true;
-					//aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
-					//});
-					aiCol.insertBefore(applyAllBtn, aiCol.children[1]);
-				}
-				chat.scrollTop = chat.scrollHeight;
-				} else if (fullText.includes('```')) {
+							}
+							_explorerRenderTree();
+							_renderEditHistory();
+							applyAllBtn.textContent = applied + ' applied' + (failed ? ', ' + failed + ' failed' : '');
+							applyAllBtn.disabled = true;
+							aiCol.querySelectorAll('.edit-card').forEach(c => c.classList.add('edit-applied'));
+							if (failures.length > 0) {
+								const warn = document.createElement('div');
+								warn.style.cssText = 'margin:6px 0;padding:8px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.3);border-radius:6px;font-size:11px;color:#ff6b6b;';
+								warn.textContent = '⚠ Failed edits: ' + failures.join('; ');
+								aiCol.appendChild(warn);
+							}
+						});
+						aiCol.insertBefore(applyAllBtn, aiCol.children[1]);
+					}
+					chat.scrollTop = chat.scrollHeight;
+					} else if (fullText.includes('```')) {
 				const codeBlocks = [...fullText.matchAll(/```(?:\w+)?\n([\s\S]*?)```/g)].map(m => m[1]);
 				if (codeBlocks.length > 0) {
 					const hint = document.createElement('div');
