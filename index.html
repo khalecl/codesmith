@@ -2060,6 +2060,7 @@
         <button id="onb-warmup" class="btn" style="font-size:13px;">Warm up Python sandbox</button>
         <div id="onb-warmup-status" style="font-size:11px;color:#5b6474;margin-top:8px;"></div>
       </div>
+	  
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
         <button id="onb-back-3" class="btn btn-ghost" style="font-size:12px;">← Back</button>
         <button id="onb-finish" class="btn btn-primary" style="font-size:12px;">Get started</button>
@@ -2630,27 +2631,31 @@ const Sandbox = (() => {
     let stderrBuf = '';
     let stdoutTruncated = false;
     let stderrTruncated = false;
-
+    // Use array buffers for O(1) append, join once at end
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let stdoutLen = 0;
+    let stderrLen = 0;
     // Capture stdout/stderr
     _pyodide.setStdout({
       batched: (text) => {
-        if (stdoutBuf.length < STDOUT_LIMIT) {
-          stdoutBuf += text + '\n';
-          if (stdoutBuf.length >= STDOUT_LIMIT) {
-            stdoutBuf = stdoutBuf.slice(0, STDOUT_LIMIT) + '\n[output truncated at 100KB]';
-            stdoutTruncated = true;
-          }
+        if (stdoutLen >= STDOUT_LIMIT) return;
+        stdoutChunks.push(text);
+        stdoutLen += text.length + 1; // +1 for \n
+        if (stdoutLen >= STDOUT_LIMIT) {
+          stdoutChunks.push('[output truncated at 100KB]');
+          stdoutTruncated = true;
         }
       }
     });
     _pyodide.setStderr({
       batched: (text) => {
-        if (stderrBuf.length < STDOUT_LIMIT) {
-          stderrBuf += text + '\n';
-          if (stderrBuf.length >= STDOUT_LIMIT) {
-            stderrBuf = stderrBuf.slice(0, STDOUT_LIMIT) + '\n[output truncated at 100KB]';
-            stderrTruncated = true;
-          }
+        if (stderrLen >= STDOUT_LIMIT) return;
+        stderrChunks.push(text);
+        stderrLen += text.length + 1;
+        if (stderrLen >= STDOUT_LIMIT) {
+          stderrChunks.push('[output truncated at 100KB]');
+          stderrTruncated = true;
         }
       }
     });
@@ -2692,7 +2697,7 @@ const Sandbox = (() => {
         }
 
         return {
-          ok: true, stdout: stdoutBuf, stderr: stderrBuf, result: jsonResult,
+          ok: true, stdout: stdoutChunks.join('\n'), stderr: stderrChunks.join('\n'), result: jsonResult,
           error: null, durationMs: performance.now() - t0,
           stdoutTruncated,
         };
@@ -2722,7 +2727,7 @@ tb
         }
 
         return {
-          ok: false, stdout: stdoutBuf, stderr: stderrBuf, result: null,
+          ok: false, stdout: stdoutChunks.join('\n'), stderr: stderrChunks.join('\n'), result: null,
           error: { type: errorType, message: errorMessage, traceback },
           durationMs: performance.now() - t0,
           stdoutTruncated,
@@ -2736,7 +2741,7 @@ tb
         // Attempt clean stop
         try { _pyodide.runPython('raise KeyboardInterrupt'); } catch {}
         resolve({
-          ok: false, stdout: stdoutBuf, stderr: stderrBuf, result: null,
+          ok: false, stdout: stdoutChunks.join('\n'), stderr: stderrChunks.join('\n'), result: null,
           error: { type: 'TimeoutError', message: `Execution timed out after ${timeoutMs}ms`, traceback: '' },
           durationMs: timeoutMs,
           stdoutTruncated,
@@ -3098,9 +3103,10 @@ const LLM = (() => {
           const { done, value } = await reader.read();
           if (done) break;
 
+          // Avoid repeated string splitting by tracking line boundaries
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';  // keep incomplete line
+          let lineStart = 0;
+          const len = buffer.length;
 
           for (const line of lines) {
             const trimmed = line.trim();
@@ -3532,36 +3538,36 @@ CodeSmith.builder = Builder;
 		  // Extensible fields — _mergeSpec adds any unknown keys here
 		});
 
-	const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
+		const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
 
-			Your FIRST question (if not already in spec) MUST be: "Should this be a Python program or an HTML/JavaScript web app?"
-			Store the answer in spec.target_type as "python" or "webapp".
+				Your FIRST question (if not already in spec) MUST be: "Should this be a Python program or an HTML/JavaScript web app?"
+				Store the answer in spec.target_type as "python" or "webapp".
 
-			If target_type is "webapp", subsequent questions should ask about:
-			- Single page or multi-page
-			- Needs a backend? (we only build pure-frontend apps; if yes, suggest Python instead)
-			- LocalStorage / IndexedDB persistence?
-			- External libraries via CDN allowed?
+				If target_type is "webapp", subsequent questions should ask about:
+				- Single page or multi-page
+				- Needs a backend? (we only build pure-frontend apps; if yes, suggest Python instead)
+				- LocalStorage / IndexedDB persistence?
+				- External libraries via CDN allowed?
 
-	RULES:
-			0. The first field to populate is spec.target_type. The UI tag in the first message tells you exactly which one — use that value verbatim. Valid values: "python", "webapp", "cli", "api", "notebook". Do NOT invent variants. If unclear, default to "python".
-			0b. Treat each target_type differently:
-			- "python": library/package with public functions
-			- "webapp": single-page HTML/JS app, no backend, browser-only
-			- "cli": Python with argparse entry point, runnable as [python tool.py [args]]
-			- "api": FastAPI app with routes, runnable with [uvicorn main:app]
-			- "notebook": Jupyter .ipynb with cells (markdown + code) — output as JSON notebook structure	0a. If target_type is "webapp", also capture spec.style_brief (visual style preferences: colors, fonts, mood). If user picked a styled template, the prompt already contains a STYLE: section — extract it into spec.style_brief verbatim.
-	1. Read the spec state below.
-	2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
-	3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
-	4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
-	5. NEVER ask more than 5 total questions. After 5, output <ready_for_skeleton> with best guesses.
-	6. Keep questions under 25 words. No implementation details.
+		RULES:
+				0. The first field to populate is spec.target_type. The UI tag in the first message tells you exactly which one — use that value verbatim. Valid values: "python", "webapp", "cli", "api", "notebook". Do NOT invent variants. If unclear, default to "python".
+				0b. Treat each target_type differently:
+				- "python": library/package with public functions
+				- "webapp": single-page HTML/JS app, no backend, browser-only
+				- "cli": Python with argparse entry point, runnable as [python tool.py [args]]
+				- "api": FastAPI app with routes, runnable with [uvicorn main:app]
+				- "notebook": Jupyter .ipynb with cells (markdown + code) — output as JSON notebook structure	0a. If target_type is "webapp", also capture spec.style_brief (visual style preferences: colors, fonts, mood). If user picked a styled template, the prompt already contains a STYLE: section — extract it into spec.style_brief verbatim.
+		1. Read the spec state below.
+		2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
+		3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
+		4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
+		5. NEVER ask more than 5 total questions. After 5, output <ready_for_skeleton> with best guesses.
+		6. Keep questions under 25 words. No implementation details.
 
-	IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
+		IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
 
-	Current spec:
-	{spec_json}`;
+		Current spec:
+		{spec_json}`;
 
 const StageA = (() => {
   let _spec = null;
@@ -3805,24 +3811,7 @@ CodeSmith.stageA = StageA;
  *    topology, produces Mermaid flowchart definition.
  * ==========================================================================*/
 
-	const STAGE_B_PYTHON = `You are a senior software architect. Design a modular Python architecture for this specification.
 
-	OUTPUT RULES:
-	- Return ONLY a JSON object. Nothing else. No markdown fences, no explanation.
-	- The JSON must parse with JSON.parse() directly.
-	- Use double quotes for all strings. No trailing commas.
-	- Keep it simple: prefer 2-5 modules over 7+.
-
-	JSON schema:
-	{"summary":"string","modules":[{"id":"snake_case","name":"snake_case","purpose":"string","public_functions":[{"name":"string","signature":"string","description":"string","raises":["string"]}],"depends_on":["module_id"],"notes":"string"}],"shared_types":{"TypeName":"definition"},"data_flow":[{"from":"id","to":"id","data":"string"}],"build_order":["id1","id2"]}
-
-	Rules:
-	- snake_case ids, topological build_order, no cycles
-	- Complete type hints on signatures
-	- shared_types for cross-module data
-
-	Specification:
-	{spec_json}`;
 		const STAGE_B_SYSTEM = `You are a senior software architect. Design a modular Python architecture for this specification.
 
 		OUTPUT RULES:
@@ -4328,7 +4317,7 @@ const StageC = (() => {
 			for (let i = 0; i < ready.length; i++) {
 			const modId = ready[i];
 			const result = results[i];
-			if (!_scModuleData) _scModuleData = {};
+			// _scModuleData is initialized before use in _scStartBuild
 			if (result.error) {
 				yield { type: 'error', stage: 'worker', moduleId: modId, error: result.error };
 				_moduleStates[modId] = 'failed';
@@ -4972,7 +4961,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 			"startLine": 5,
 			"endLine": 5,
 			"afterLine": null,
-			"oldCode": "exact text being replaced (must match line ${'startLine'} to ${'endLine'} verbatim)",
+			"oldCode": "exact text being replaced (must match line" ${'startLine'} + "to" + ${'endLine'} "verbatim)",
 			"newCode": "replacement text (omit for delete)",
 			"reason": "why this edit"
 			}
@@ -5052,17 +5041,32 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 					tier: 'worker', temperature: 0.2, maxTokens: 20000,
 				});
 				const parsed = _parseJSON(result.text);
-				if (!parsed || !parsed.code || parsed.code.trim().length < 20) {
-					return { error: new Error('Empty/short code from worker') };
-				}
-				let outputFilename;
-				if (isWebapp) {
-					outputFilename = mod.name || (mod.id + (mod.kind === 'html' ? '.html' : mod.kind === 'css' ? '.css' : '.js'));
-				} else {
-					const safeName = _sanitizeModuleName(mod.name || mod.id);
-					mod.name = safeName;
-					outputFilename = safeName + '.py';
-				}
+						if (!parsed || !parsed.code || parsed.code.trim().length < 20) {
+							return { error: new Error('Empty/short code from worker') };
+						}
+						// Validate webapp HTML structure
+						if (isWebapp && mod.kind === 'html') {
+							const c = parsed.code;
+							const issues = [];
+							if (!/<!DOCTYPE html>/i.test(c)) issues.push('missing <!DOCTYPE html>');
+							if (!/<html[\s>]/i.test(c) || !/<\/html>/i.test(c)) issues.push('missing <html> tags');
+							if (!/<body[\s>]/i.test(c) || !/<\/body>/i.test(c)) issues.push('missing <body> tags');
+							if (!/<script\s+src=/i.test(c)) issues.push('no <script src> tags — modules will not load');
+							if (issues.length > 0) return { error: new Error('Generated HTML is malformed: ' + issues.join('; ')) };
+						}
+						if (isWebapp && mod.kind === 'js') {
+							if (!/window\.App/i.test(parsed.code)) {
+								return { error: new Error('JS module does not reference window.App — will break collaboration') };
+							}
+						}
+						let outputFilename;
+						if (isWebapp) {
+							outputFilename = mod.name || (mod.id + (mod.kind === 'html' ? '.html' : mod.kind === 'css' ? '.css' : '.js'));
+						} else {
+							const safeName = _sanitizeModuleName(mod.name || mod.id);
+							mod.name = safeName;
+							outputFilename = safeName + '.py';
+						}
 				try {
 					await CodeSmith.sandbox.writeFile('/workdir/' + outputFilename, parsed.code);
 					if (parsed.tests && !isWebapp) {
@@ -5118,17 +5122,17 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
   }
 
 	function _sanitizeModuleName(name) {
-    if (!name) return 'module';
-    let clean = String(name).trim().toLowerCase()
-      .replace(/[\s-]+/g, '_')
-      .replace(/[^a-z0-9_]/g, '')
-      .replace(/^[0-9]/, '_$&');
-    if (!clean || !/^[a-z_]/.test(clean)) clean = 'mod_' + clean;
-	// Prevent path traversal
-    clean = clean.replace(/\.\./g, '').replace(/[\/\\]/g, '');
-    if (clean.length > 60) clean = clean.slice(0, 60);
-    return clean || 'module';
-  }
+		if (!name) return 'module';
+		let clean = String(name).trim().toLowerCase()
+		.replace(/[\s-]+/g, '_')
+		.replace(/[^a-z0-9_]/g, '')
+		.replace(/^[0-9]/, '_$&');
+		if (!clean || !/^[a-z_]/.test(clean)) clean = 'mod_' + clean;
+		// Prevent path traversal
+		clean = clean.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+		if (clean.length > 60) clean = clean.slice(0, 60);
+		return clean || 'module';
+	}
 	
   function _parseJSON(text) {
     if (!text) throw new Error('Empty response');
@@ -5256,50 +5260,81 @@ CodeSmith.stageC = StageC;
 		_files[name].modified = newContent !== _files[name].original;
 	}
 
-		function applyEdit(filename, edit) {
-			const file = _files[filename];
-			if (!file) return { ok: false, error: 'File not found' };
-			const before = file.content;
-			const lines = file.content.split('\n');
+				function applyEdit(filename, edit) {
+						const file = _files[filename];
+						if (!file) return { ok: false, error: 'File not found' };
+						const before = file.content;
+						const lines = file.content.split('\n');
 
-			if (edit.type === 'replace') {
-			const start = Math.max(0, (edit.startLine || 1) - 1);
-			const end = Math.min(lines.length, edit.endLine || edit.startLine);
-			const newLines = (edit.newCode || '').split('\n');
-			lines.splice(start, end - start, ...newLines);
-			} else if (edit.type === 'add') {
-			const insertAt = Math.min(lines.length, edit.afterLine || lines.length);
-			const newLines = (edit.newCode || '').split('\n');
-			lines.splice(insertAt, 0, ...newLines);
-			} else if (edit.type === 'delete') {
-			const start = Math.max(0, (edit.startLine || 1) - 1);
-			const end = Math.min(lines.length, edit.endLine || edit.startLine);
-			lines.splice(start, end - start);
-			} else {
-			return { ok: false, error: 'Unknown edit type: ' + edit.type };
-			}
+						if (edit.type === 'replace') {
+						const start = Math.max(0, (edit.startLine || 1) - 1);
+						const end = Math.min(lines.length, edit.endLine || edit.startLine);
+						// Validate oldCode matches if provided
+						if (edit.oldCode) {
+							const actualOld = lines.slice(start, end).join('\n');
+							if (actualOld.trim() !== edit.oldCode.trim()) {
+								// Try to find the oldCode by searching
+								let foundIndex = -1;
+								const oldLines = edit.oldCode.split('\n');
+								for (let i = 0; i <= lines.length - oldLines.length; i++) {
+									let match = true;
+									for (let j = 0; j < oldLines.length && match; j++) {
+										if (lines[i + j].trim() !== oldLines[j].trim()) match = false;
+									}
+									if (match) { foundIndex = i; break; }
+								}
+								if (foundIndex >= 0) {
+									lines.splice(foundIndex, oldLines.length, ...(edit.newCode || '').split('\n'));
+								} else {
+									return { ok: false, error: 'oldCode mismatch at line ' + (edit.startLine || 1) + ' — content may have shifted from previous edits' };
+								}
+							} else {
+								const newLines = (edit.newCode || '').split('\n');
+								lines.splice(start, end - start, ...newLines);
+							}
+						} else {
+							const newLines = (edit.newCode || '').split('\n');
+							lines.splice(start, end - start, ...newLines);
+						}
+						} else if (edit.type === 'add') {
+						const insertAt = Math.min(lines.length, edit.afterLine || lines.length);
+						const newLines = (edit.newCode || '').split('\n');
+						lines.splice(insertAt, 0, ...newLines);
+						} else if (edit.type === 'delete') {
+						const start = Math.max(0, (edit.startLine || 1) - 1);
+						const end = Math.min(lines.length, edit.endLine || edit.startLine);
+						lines.splice(start, end - start);
+						} else {
+						return { ok: false, error: 'Unknown edit type: ' + edit.type };
+						}
 
-			file.content = lines.join('\n');
-			file.modified = true;
-			_editHistory.push({
-			filename, before, after: file.content,
-			label: (edit.reason || edit.type), timestamp: Date.now(), edit,
-			});
-			if (_editHistory.length > 50) _editHistory.shift();
-			return { ok: true, newContent: file.content };
-		}
+						file.content = lines.join('\n');
+						file.modified = true;
+						_editHistory.push({
+						filename, before, after: file.content,
+						label: (edit.reason || edit.type), timestamp: Date.now(), edit,
+						});
+						if (_editHistory.length > 50) _editHistory.shift();
+						return { ok: true, newContent: file.content };
+					}
 
 		function getEditHistory() { return _editHistory.slice(); }
 
-		function undoLastEdit() {
-			const last = _editHistory.pop();
-			if (!last) return null;
-			const f = _files[last.filename];
-			if (!f) return null;
-			f.content = last.before;
-			f.modified = f.content !== f.original;
-			return last;
-		}
+			function undoLastEdit() {
+					const last = _editHistory.pop();
+					if (!last) return null;
+					const f = _files[last.filename];
+					if (!f) return null;
+					f.content = last.before;
+					f.modified = f.content !== f.original;
+					// Mark as undone for potential reapply
+					last.undone = true;
+					last.undoneAt = Date.now();
+					// Keep in history for reapply
+					_editHistory.push(last);
+					if (_editHistory.length > 50) _editHistory.shift();
+					return last;
+			}
 		function deleteFile(name) {
 			delete _files[name];
 			_openTabs = _openTabs.filter(n => n !== name);
@@ -5375,12 +5410,23 @@ CodeSmith.stageC = StageC;
 		return map[ext] || 'text';
 	}
 
-		return {
-			addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
-			getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
-			getEditHistory, undoLastEdit,
-			clearAll, deleteFile, analyzeCode,
-		};
+			return {
+				addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
+				getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
+				getEditHistory, undoLastEdit, reapplyEdit,
+				clearAll, deleteFile, analyzeCode,
+			};
+
+		function reapplyEdit(historyIndex) {
+				const entry = _editHistory[historyIndex];
+				if (!entry || !entry.undone) return { ok: false, error: 'Edit not available for reapply' };
+				const result = applyEdit(entry.filename, entry.edit);
+				if (result.ok) {
+					entry.undone = false;
+					delete entry.undoneAt;
+				}
+				return result;
+			}
 	})();
 CodeSmith.explorer = Explorer;
 
@@ -5506,8 +5552,12 @@ CodeSmith.explorer = Explorer;
 			    const docsSection = docsContext ? `\n\nREFERENCE DOCS (use latest APIs from these):\n${docsContext.slice(0, 6000)}` : '';
 					 // Smart routing
 						const userModelChoice = document.getElementById('explorer-model-select')?.value || 'auto';
-						const routing = CodeSmith.router.route(question, userModelChoice);
-					
+							let routing;
+							try {
+								routing = CodeSmith.router.route(question, userModelChoice);
+							} catch (e) {
+								routing = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
+							}					
 						// Project context from knowledge graph
 						let projectContext = '';
 						try { projectContext = CodeSmith.knowledge.getProjectContext(); } catch {}
@@ -6361,6 +6411,13 @@ CodeSmith.explorer = Explorer;
 const UI = (() => {
   // ---- tiny DOM helpers ---------------------------------------------------
   const $ = (sel) => document.querySelector(sel);
+  // Clear DOM query cache on dynamic content changes
+		document.addEventListener('DOMContentLoaded', () => {
+			const observer = new MutationObserver(() => {
+			if (typeof $ !== 'undefined' && $.clear) $.clear();
+			});
+			observer.observe(document.body, { childList: true, subtree: true });
+		});
 	function approveTestsModal(moduleId, testsCode) {
 		return new Promise((resolve) => {
 		const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
@@ -8041,13 +8098,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 					// Always render spec card with current data
 					    _renderSpecCard(CodeSmith.stageA.getSpec(), {});
 					}
-			      } else if (target === 'b' && _currentStep === 'c') {
-		            _showStep('b');
-		          } else {
-		            _showStep(target);
-		          }
-		        })
-		      };
+				} else if (target === 'b' && _currentStep === 'c') {
+			            _showStep('b');
+			          } else {
+			            _showStep(target);
+			          }
+			        });
+			      }
 		    }
 		  // Quick build button
 		$('#btn-quick-build').addEventListener('click', () => {
@@ -8917,13 +8974,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				_scLog('BUILD COMPLETE — ' + ev.modules + ' modules', 'log-pass');
 				$('#btn-sc-download-all').hidden = false;
 				// Add Run button
-				const runBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;', id: 'btn-sc-run' }, '▶ Run it');
-				runBtn.addEventListener('click', () => {
-				  const skel = CodeSmith.stageB.getSkeleton();
-				  const lastMod = skel && skel.build_order ? skel.build_order[skel.build_order.length - 1] : null;
-				  const mod = skel ? skel.modules.find(m => m.id === lastMod) : null;
-				  if (mod) runInBrowser(mod.name);
-				});
+					const runBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;', id: 'btn-sc-run' }, '▶ Run it');
+					runBtn.addEventListener('click', () => {
+					  const skel = CodeSmith.stageB.getSkeleton();
+					  const lastMod = skel && skel.build_order ? skel.build_order[skel.build_order.length - 1] : null;
+					  const mod = skel ? skel.modules.find(m => m.id === lastMod) : null;
+					  if (mod) runInBrowser(mod.name + '.py');
+					});
 				const controls = document.querySelector('.stage-c-controls');
 				if (controls && !$('#btn-sc-run')) controls.appendChild(runBtn);
 				break;
@@ -9687,12 +9744,12 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		const terminal = $('#run-terminal');
 		terminal.textContent = '$ python ' + entryModule + '.py\n';
 
-		const code = `
-	import sys, os
-	sys.path.insert(0, '/workdir')
-	os.chdir('/workdir')
-	exec(open('/workdir/${entryModule}.py').read())
-	`;
+			const code = `
+				import sys, os
+				sys.path.insert(0, '/workdir')
+				os.chdir('/workdir')
+				exec(open('/workdir/' + ${JSON.stringify(entryModule)}).read())
+				`;
 		const result = await CodeSmith.sandbox.runPython(code, { sessionGlobals: false, timeoutMs: 30000 });
 		if (result.stdout) terminal.textContent += result.stdout;
 		if (result.stderr) terminal.textContent += '\n[stderr]\n' + result.stderr;
@@ -9729,7 +9786,17 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		// INSERT THESE FUNCTIONS INSIDE the UI module, before its return { ... }
 
 		function wireExplorer() {
-		  const $ = (sel) => document.querySelector(sel);
+		    const $ = (() => {
+									const cache = new Map();
+									const _ = (sel) => {
+									if (!cache.has(sel)) {
+										cache.set(sel, document.querySelector(sel));
+									}
+									return cache.get(sel);
+									};
+									_.clear = () => cache.clear();
+									return _;
+								})();
 		  const urlBtn = $('#btn-explorer-url');
 			if (urlBtn) urlBtn.addEventListener('click', async () => {
 			const url = prompt('Paste URL — supports:\n• GitHub file: https://github.com/user/repo/blob/main/file.py\n• GitHub repo: https://github.com/user/repo\n• Raw URL: https://example.com/script.js\n• HTML page: https://example.com/page.html');
@@ -9949,8 +10016,13 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				    const queryText = map[q] || q;
 						$('#pair-input').value = queryText;
 						// Show routing preview
-						const routing = CodeSmith.router.route(queryText, $('#explorer-model-select')?.value || 'auto');
-						const routeEl = $('#route-indicator');
+							let routing;
+							try {
+								routing = CodeSmith.router.route(question, userModelChoice);
+							} catch (e) {
+								routing = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
+							}
+							const routeEl = $('#route-indicator');
 						if (routeEl) {
 							const modelName = CodeSmith.llm.getModelForTier(routing.tier);
 							const displayName = typeof modelName === 'string' ? modelName.split('/').pop() : routing.tier;
@@ -10309,49 +10381,72 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			container.appendChild(impSection);
 		  }
 		}
-		function _renderEditHistory() {
-			let panel = document.getElementById('edit-history-panel');
-			if (!panel) {
-			panel = document.createElement('div');
-			panel.id = 'edit-history-panel';
-			panel.style.cssText = 'border-top:1px solid rgba(255,255,255,0.06);max-height:140px;overflow-y:auto;background:#0f1319;';
-			const pairChat = document.getElementById('pair-chat');
-			if (pairChat && pairChat.parentElement) {
-				pairChat.parentElement.insertBefore(panel, pairChat.nextSibling);
+			function _renderEditHistory() {
+				let panel = document.getElementById('edit-history-panel');
+				if (!panel) {
+				panel = document.createElement('div');
+				panel.id = 'edit-history-panel';
+				panel.style.cssText = 'border-top:1px solid rgba(255,255,255,0.06);max-height:140px;overflow-y:auto;background:#0f1319;';
+				const pairChat = document.getElementById('pair-chat');
+				if (pairChat && pairChat.parentElement) {
+					pairChat.parentElement.insertBefore(panel, pairChat.nextSibling);
+				}
+				}
+				panel.replaceChildren();
+				const history = CodeSmith.explorer.getEditHistory();
+				if (history.length === 0) { panel.style.display = 'none'; return; }
+				panel.style.display = 'block';
+				const header = document.createElement('div');
+				header.style.cssText = 'padding:4px 10px;font-size:10px;color:#5b6474;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;display:flex;align-items:center;';
+				header.textContent = 'Edit History (' + history.length + ')';
+				const undoBtn = document.createElement('button');
+				undoBtn.className = 'btn btn-ghost';
+				undoBtn.style.cssText = 'margin-left:auto;font-size:10px;padding:1px 6px;';
+				undoBtn.textContent = '↶ Undo last';
+				undoBtn.addEventListener('click', () => {
+				const last = CodeSmith.explorer.undoLastEdit();
+				if (last && CodeSmith.monaco.isInitialized()) {
+					CodeSmith.monaco.updateContent(last.filename, last.before);
+				}
+				_renderEditHistory();
+				_explorerRenderTree();
+				});
+				header.appendChild(undoBtn);
+				panel.appendChild(header);
+				for (const h of history.slice().reverse()) {
+				const row = document.createElement('div');
+				row.style.cssText = 'padding:3px 10px;font-size:11px;color:#8b92a1;display:flex;gap:6px;align-items:center;';
+				const time = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+				
+				// Add reapply button for undone edits
+				const isUndone = h.undone;
+				const statusIcon = isUndone ? '<span style="color:#f59e0b;">↶</span>' : '<span style="color:#4ade80;">✓</span>';
+				
+				row.innerHTML = '<span style="color:#5b6474;font-family:monospace;font-size:10px;">' + time +
+								'</span>' + statusIcon +
+								'<span style="font-family:monospace;font-size:10px;">' + h.filename + '</span>' +
+								'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + h.label + '</span>';
+				
+				// Add reapply button for undone edits
+				if (isUndone) {
+					const reapplyBtn = document.createElement('button');
+					reapplyBtn.className = 'btn btn-ghost';
+					reapplyBtn.style.cssText = 'font-size:9px;padding:1px 6px;';
+					reapplyBtn.textContent = 'Reapply';
+					reapplyBtn.addEventListener('click', () => {
+						const result = CodeSmith.explorer.applyEdit(h.filename, h.edit);
+						if (result.ok && CodeSmith.monaco.isInitialized()) {
+							CodeSmith.monaco.updateContent(h.filename, result.newContent);
+						}
+						_renderEditHistory();
+						_explorerRenderTree();
+					});
+					row.appendChild(reapplyBtn);
+				}
+				
+				panel.appendChild(row);
+				}
 			}
-			}
-			panel.replaceChildren();
-			const history = CodeSmith.explorer.getEditHistory();
-			if (history.length === 0) { panel.style.display = 'none'; return; }
-			panel.style.display = 'block';
-			const header = document.createElement('div');
-			header.style.cssText = 'padding:4px 10px;font-size:10px;color:#5b6474;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;display:flex;align-items:center;';
-			header.textContent = 'Edit History (' + history.length + ')';
-			const undoBtn = document.createElement('button');
-			undoBtn.className = 'btn btn-ghost';
-			undoBtn.style.cssText = 'margin-left:auto;font-size:10px;padding:1px 6px;';
-			undoBtn.textContent = '↶ Undo last';
-			undoBtn.addEventListener('click', () => {
-			const last = CodeSmith.explorer.undoLastEdit();
-			if (last && CodeSmith.monaco.isInitialized()) {
-				CodeSmith.monaco.updateContent(last.filename, last.before);
-			}
-			_renderEditHistory();
-			_explorerRenderTree();
-			});
-			header.appendChild(undoBtn);
-			panel.appendChild(header);
-			for (const h of history.slice().reverse()) {
-			const row = document.createElement('div');
-			row.style.cssText = 'padding:3px 10px;font-size:11px;color:#8b92a1;display:flex;gap:6px;';
-			const time = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-			row.innerHTML = '<span style="color:#5b6474;font-family:monospace;font-size:10px;">' + time +
-							'</span><span style="color:#4ade80;">✓</span>' +
-							'<span style="font-family:monospace;font-size:10px;">' + h.filename + '</span>' +
-							'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + h.label + '</span>';
-			panel.appendChild(row);
-			}
-		}
 		function _explorerResetAnalysis() {
 		  const $ = (sel) => document.querySelector(sel);
 		  const container = $('#explorer-analysis');
@@ -10605,24 +10700,29 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 								fileEdits[e.file].push(e);
 							}
 							let applied = 0, failed = 0;
-							const failures = [];
-							for (const [filename, fileEditsList] of Object.entries(fileEdits)) {
-								const sortedEdits = fileEditsList.sort((a, b) => (a.startLine || a.afterLine || 0) - (b.startLine || b.afterLine || 0));
-								let content = CodeSmith.explorer.getFile(filename).content;
-								for (const edit of sortedEdits) {
-									const result = CodeSmith.explorer.applyEdit(filename, edit);
-									if (result.ok) {
-										content = result.newContent;
-										applied++;
-									} else {
-										failed++;
-										failures.push(result.error);
+								const failures = [];
+								for (const [filename, fileEditsList] of Object.entries(fileEdits)) {
+									// Sort edits bottom-up to preserve line numbers during application
+									const sortedEdits = fileEditsList.sort((a, b) => {
+										const aLine = a.startLine || a.afterLine || 0;
+										const bLine = b.startLine || b.afterLine || 0;
+										return bLine - aLine; // descending: apply from bottom to top
+									});
+									let content = CodeSmith.explorer.getFile(filename).content;
+									for (const edit of sortedEdits) {
+										const result = CodeSmith.explorer.applyEdit(filename, edit);
+										if (result.ok) {
+											content = result.newContent;
+											applied++;
+										} else {
+											failed++;
+											failures.push(result.error);
+										}
+									}
+									if (CodeSmith.monaco.isInitialized()) {
+										CodeSmith.monaco.updateContent(filename, content);
 									}
 								}
-								if (CodeSmith.monaco.isInitialized()) {
-									CodeSmith.monaco.updateContent(filename, content);
-								}
-							}
 							_explorerRenderTree();
 							_renderEditHistory();
 							applyAllBtn.textContent = applied + ' applied' + (failed ? ', ' + failed + ' failed' : '');
@@ -10747,60 +10847,155 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 						}
 					}
 
-		  // Actions
-		  const actions = document.createElement('div');
-		  actions.className = 'edit-card-actions';
+			  // Actions
+			  const actions = document.createElement('div');
+			  actions.className = 'edit-card-actions';
 
-		  const applyBtn = document.createElement('button');
-		  applyBtn.className = 'edit-apply-btn';
-		  applyBtn.textContent = '✓ Apply';
-			applyBtn.addEventListener('click', () => {
-		    if (edit.suspicious && !confirm('This edit has warnings (' + (edit.warnings || []).join('; ') + '). Apply anyway?')) return;
-				const result = CodeSmith.explorer.applyEdit(filename, edit);
-				if (result.ok) {
-				card.classList.add('edit-applied');
-				applyBtn.textContent = '✓ Applied';
+			  const applyBtn = document.createElement('button');
+			  applyBtn.className = 'edit-apply-btn';
+			  applyBtn.textContent = '✓ Apply';
+			  applyBtn.dataset.editIndex = String(index);
+			  
+			  // Store original edit for potential reapply
+			  const originalEdit = { ...edit };
+			  let currentEdit = { ...edit };
+			  
+				applyBtn.addEventListener('click', () => {
+			    if (edit.suspicious && !confirm('This edit has warnings (' + (edit.warnings || []).join('; ') + '). Apply anyway?')) return;
+					
+					// Get fresh file content in case previous edits changed it
+					const file = CodeSmith.explorer.getFile(filename);
+					const freshContent = file ? file.content : '';
+					const currentLines = freshContent.split('\n');
+					
+					// Recalculate line numbers based on current file state vs original
+					// Track how line numbers have shifted from previous applied edits
+					const appliedEdits = CodeSmith.explorer.getEditHistory().filter(h => h.filename === filename);
+					let lineShift = 0;
+					for (const h of appliedEdits) {
+						if (h.timestamp > (card.dataset.appliedAt || 0)) {
+							const hLines = h.before.split('\n').length;
+							const hNewLines = h.after.split('\n').length;
+							lineShift += (hNewLines - hLines);
+						}
+					}
+					
+					// Adjust edit to current line numbers
+					const adjustedEdit = { ...currentEdit };
+					if (adjustedEdit.startLine) adjustedEdit.startLine += lineShift;
+					if (adjustedEdit.endLine) adjustedEdit.endLine += lineShift;
+					if (adjustedEdit.afterLine) adjustedEdit.afterLine += lineShift;
+					
+					const result = CodeSmith.explorer.applyEdit(filename, adjustedEdit);
+					if (result.ok) {
+					card.classList.add('edit-applied');
+					card.dataset.appliedAt = String(Date.now());
+					applyBtn.textContent = '↶ Undo';
+					applyBtn.classList.remove('edit-apply-btn');
+					applyBtn.classList.add('edit-undo-btn');
+					applyBtn.style.background = 'rgba(245,158,11,0.15)';
+					applyBtn.style.color = '#f59e0b';
+					if (CodeSmith.monaco.isInitialized()) {
+						CodeSmith.monaco.updateContent(filename, result.newContent);
+					}
+					_explorerRenderTree();
+					_renderEditHistory();
+					try { CodeSmith.snapshots.take(filename, result.newContent, 'After: ' + (edit.reason || edit.type).slice(0, 40)); } catch {}
+					const toast = document.createElement('div');
+					toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#4ade80;color:#0b0d10;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;';
+					toast.textContent = '✓ Edit applied to ' + filename;
+					document.body.appendChild(toast);
+					setTimeout(() => toast.remove(), 2000);
+					} else {
+					applyBtn.textContent = '✗ ' + result.error;
+					applyBtn.style.color = '#ff6b6b';
+					// Allow retry
+					setTimeout(() => {
+						applyBtn.textContent = '✓ Apply';
+						applyBtn.style.color = '';
+					}, 3000);
+					}
+				});
+			  actions.appendChild(applyBtn);
+
+			  const showBtn = document.createElement('button');
+			  showBtn.className = 'edit-show-btn';
+			  showBtn.textContent = '→ Show';
+			  showBtn.addEventListener('click', () => {
+				// Get current file state to find accurate line numbers
+				const file = CodeSmith.explorer.getFile(filename);
+				if (!file) return;
+				
+				// Try to find the content by searching for oldCode text
+				const lines = file.content.split('\n');
+				let targetStart = currentEdit.startLine || currentEdit.afterLine || 1;
+				let targetEnd = currentEdit.endLine || targetStart;
+				
+				// If we have oldCode, try to find it in current file for accurate positioning
+				if (currentEdit.oldCode && currentEdit.oldCode.trim()) {
+					const oldLines = currentEdit.oldCode.split('\n');
+					const firstOldLine = oldLines[0].trim();
+					// Search for the content in current file
+					for (let i = 0; i < lines.length; i++) {
+						if (lines[i].trim() === firstOldLine) {
+							// Verify subsequent lines match
+							let match = true;
+							for (let j = 1; j < oldLines.length && match; j++) {
+								if (i + j >= lines.length || lines[i + j].trim() !== oldLines[j].trim()) {
+									match = false;
+								}
+							}
+							if (match) {
+								targetStart = i + 1;
+								targetEnd = i + oldLines.length;
+								break;
+							}
+						}
+					}
+				}
+				
+				// Use Monaco editor to reveal and highlight
 				if (CodeSmith.monaco.isInitialized()) {
-					CodeSmith.monaco.updateContent(filename, result.newContent);
+					const editor = CodeSmith.monaco.getEditor();
+					if (editor) {
+						editor.revealLineInCenter(Math.min(targetStart, lines.length));
+						editor.setPosition({ lineNumber: targetStart, column: 1 });
+						editor.focus();
+						
+						// Set selection to highlight the target range
+						if (currentEdit.type === 'replace' || currentEdit.type === 'delete') {
+							editor.setSelection({
+								startLineNumber: targetStart,
+								startColumn: 1,
+								endLineNumber: targetEnd,
+								endColumn: lines[targetEnd - 1]?.length + 1 || 1
+							});
+						} else if (currentEdit.type === 'add') {
+							editor.setPosition({ lineNumber: targetStart, column: 1 });
+						}
+						return;
+					}
 				}
-				_explorerRenderTree();
-				_renderEditHistory();
-				try { CodeSmith.snapshots.take(filename, result.newContent, 'After: ' + (edit.reason || edit.type).slice(0, 40)); } catch {}
-				const toast = document.createElement('div');
-				toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#4ade80;color:#0b0d10;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;';
-				toast.textContent = '✓ Edit applied to ' + filename;
-				document.body.appendChild(toast);
-				setTimeout(() => toast.remove(), 2000);
-				} else {
-				applyBtn.textContent = '✗ ' + result.error;
-				applyBtn.style.color = '#ff6b6b';
+				
+				// Fallback to DOM query if Monaco not available
+				const row = document.querySelector(`.code-line-row[data-line="${targetStart}"]`);
+				if (row) {
+				  // Clear previous highlights
+				  document.querySelectorAll('.code-line-row.edit-target').forEach(r => r.classList.remove('edit-target'));
+				  // Highlight target lines
+				  if (currentEdit.type === 'replace' || currentEdit.type === 'delete') {
+					for (let l = targetStart; l <= targetEnd; l++) {
+					  const r = document.querySelector(`.code-line-row[data-line="${l}"]`);
+					  if (r) r.classList.add(currentEdit.type === 'delete' ? 'delete-target' : 'edit-target');
+					}
+				  } else if (currentEdit.type === 'add') {
+					row.classList.add('add-marker');
+				  }
+				  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
 				}
-			});
-		  actions.appendChild(applyBtn);
-
-		  const showBtn = document.createElement('button');
-		  showBtn.className = 'edit-show-btn';
-		  showBtn.textContent = '→ Show';
-		  showBtn.addEventListener('click', () => {
-			const targetLine = edit.startLine || edit.afterLine || 1;
-			const row = document.querySelector(`.code-line-row[data-line="${targetLine}"]`);
-			if (row) {
-			  // Clear previous highlights
-			  document.querySelectorAll('.code-line-row.edit-target').forEach(r => r.classList.remove('edit-target'));
-			  // Highlight target lines
-			  if (edit.type === 'replace' || edit.type === 'delete') {
-				for (let l = edit.startLine; l <= edit.endLine; l++) {
-				  const r = document.querySelector(`.code-line-row[data-line="${l}"]`);
-				  if (r) r.classList.add(edit.type === 'delete' ? 'delete-target' : 'edit-target');
-				}
-			  } else if (edit.type === 'add') {
-				row.classList.add('add-marker');
-			  }
-			  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-			}
-		  });
-		  actions.appendChild(showBtn);
-		  card.appendChild(actions);
+			  });
+			  actions.appendChild(showBtn);
+			  card.appendChild(actions);
 
 		  return card;
 		}
@@ -10999,13 +11194,14 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			      document.body.classList.remove('zen-mode');
 			    }
 			  });
-		  // Ctrl+` shortcut for terminal
-		  document.addEventListener('keydown', (ev) => {
-		    if ((ev.ctrlKey || ev.metaKey) && ev.key === '`') {
-		      ev.preventDefault();
-		      $('#btn-toggle-terminal').click();
-		    }
-		  });
+			  // Ctrl+Backtick shortcut for terminal
+			  document.addEventListener('keydown', (ev) => {
+			    if ((ev.ctrlKey || ev.metaKey) && ev.key === '`') {
+			      ev.preventDefault();
+			      const btn = document.getElementById('btn-toggle-terminal');
+			      if (btn) btn.click();
+			    }
+			  });
 		}
 		 
 		let _diagDebounce = null;
