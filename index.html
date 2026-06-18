@@ -313,22 +313,93 @@
     flex-direction: column; gap: 8px;
   }
 
-  /* Sidebar collapse */
-  .sidebar { width: 280px; transition: width 120ms ease-out; }
-			/* Build mode: full-screen wizard */
-		body.build-mode #split-left { display: none; }
-		body.build-mode #split-right { flex: 1; border-left: none; }
-		body.build-mode .hairline-t:has(#composer) { display: none; }
-		
-		/* Sidebar truncation fix */
-		.sidebar:not(.collapsed) { min-width: 260px; }
-		.sess-title, .art-name {
-		  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-		}
-		
-		/* Stage A: remove hardcoded bubble width cap */
-		.stage-a-messages .bubble { max-width: 100% !important; }
-  .sidebar.collapsed { width: 0; border-right-width: 0 !important; overflow: hidden; }
+			/* Sidebar collapse */
+			.sidebar { width: 280px; transition: width 120ms ease-out; }
+				/* Build mode: full-screen wizard */
+			body.build-mode #split-left { display: none; }
+			body.build-mode #split-right { flex: 1; border-left: none; }
+			body.build-mode .hairline-t:has(#composer) { display: none; }
+			
+			/* Sidebar truncation fix */
+			.sidebar:not(.collapsed) { min-width: 260px; }
+			.sess-title, .art-name {
+			  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+			}
+			
+			/* Stage A: remove hardcoded bubble width cap */
+			.stage-a-messages .bubble { max-width: 100% !important; }
+	  .sidebar.collapsed { width: 0; border-right-width: 0 !important; overflow: hidden; }
+
+	  /* ---- Mobile optimizations ---- */
+	  @media (max-width: 768px) {
+	    /* Collapse sidebar by default on mobile */
+	    .sidebar { position: fixed; left: 0; top: 48px; bottom: 24px; z-index: 40; height: auto; }
+	    .sidebar.collapsed { width: 0; }
+	    
+	    /* Full-width bubbles, smaller padding */
+	    .bubble { max-width: 92vw !important; padding: 8px 10px; font-size: 13px; }
+	    .bubble-user, .bubble-assistant { border-radius: 8px; }
+	    
+	    /* Compact composer as bottom sheet */
+	    .hairline-t:has(#composer) {
+	      position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+	      background: #141820; padding: 6px 10px;
+	      border-top: 1px solid rgba(255,255,255,0.08);
+	      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+	    }
+	    #composer { min-height: 36px; font-size: 14px; }
+	    
+	    /* Hide status strip on mobile, show minimal indicator instead */
+	    .status-strip { display: none; }
+	    #mobile-status-indicator {
+	      position: fixed; bottom: 0; left: 0; right: 0; height: 24px;
+	      background: #0f1319; border-top: 1px solid rgba(255,255,255,0.06);
+	      display: flex; align-items: center; justify-content: center;
+	      font-size: 10px; color: #5b6474; z-index: 25;
+	    }
+	    
+	    /* Smaller header */
+	    header { height: 40px !important; padding: 0 8px !important; }
+	    header .font-semibold { font-size: 13px; }
+	    
+	    /* Compact stepper */
+	    .build-stepper { padding: 6px 8px; }
+	    .step-item { padding: 4px 8px; font-size: 11px; }
+	    .step-item span:last-child { display: none; } /* hide text, show only letter */
+	    .step-num { width: 24px; height: 24px; font-size: 11px; }
+	    
+	    /* Full-width panels in build mode */
+	    .stage-a-layout, .stage-c-layout { flex-direction: column !important; }
+	    .stage-a-chat, .stage-a-spec, .stage-c-modules, .stage-c-center, .stage-c-log {
+	      width: 100% !important proud; min-width: 0 !important; border: none !important;
+	    }
+	    .stage-a-spec { max-height: 40vh; overflow-y: auto; }
+	    
+	    /* Explorer: stack panels vertically */
+	    .explorer-layout { flex-direction: column !important; }
+	    .explorer-tree, .explorer-ai {
+	      width: 100% !important; min-width: 0 !important; max-width: none !important;
+	      border: none !important; height: 200px; min-height: 0;
+	    }
+	    .explorer-editor { min-height: 300px; }
+	    
+	    /* Touch-friendly buttons */
+	    .btn, .iconbtn { min-height: 36px; min-width: 36px; }
+	    .iconbtn { width: 36px; height: 36px; }
+	    
+	    /* Larger tap targets for session items */
+	    .sess-item { padding: 10px 12px; min-height: 44px; }
+	    
+	    /* Modal full-screen on mobile */
+	    .modal { width: calc(100vw - 16px) !important; max-height: calc(100vh - 32px); }
+	    
+	    /* Hide some chrome */
+	    #composer-help { display: none; }
+	  }
+	  
+	  @media (min-width: 769px) {
+	    #mobile-status-indicator { display: none; }
+	  }
 
   /* Inline test-connection result */
   .conn-ok  { color: #4ade80; }
@@ -1836,6 +1907,11 @@
     <span class="ml-auto font-mono text-muted/70" id="st-session-id">—</span>
 	<div style="position:fixed;bottom:28px;right:8px;font-size:10px;color:#5b6474;font-family:monospace;z-index:5;pointer-events:auto;">
 	Built with <a href="https://khalecl.github.io/codesmith/" target="_blank" rel="noopener" style="color:#4f8cff;text-decoration:none;">CodeSmith</a> by <a href="https://github.com/khalecl" target="_blank" rel="noopener" style="color:#8b92a1;text-decoration:none;">Khaled Diab</a>
+	</div>
+		<!-- Mobile status indicator (shown only on small screens) -->
+	<div id="mobile-status-indicator" style="display:none;">
+	  <span id="mob-st-orch" style="color:#5b6474;">●</span>
+	  <span id="mob-st-py" style="color:#5b6474;margin-left:8px;">●</span>
 	</div>
   </footer>
 </div>
@@ -6661,23 +6737,32 @@ function renderChat() {
 	updatePageTitle();
   }
 
-function renderStatusStrip() {
-    const orchDot  = $('#st-orch-dot');
-    const orchText = $('#st-orch-text');
-	const orchModel = CodeSmith.llm.getModelForTier('orchestrator');
-	const orchDisplay = typeof orchModel === 'object' ? orchModel.model + ' (custom)' : orchModel;
-	$('#st-orch-text').title = orchDisplay;
-	const hasKey = !!(CodeSmith.state.settings && CodeSmith.state.settings.apiKey);
-    orchDot.classList.remove('red','green','gray','amber');
-    if (hasKey) { orchDot.classList.add('green'); orchText.textContent = 'ready'; }
-    else        { orchDot.classList.add('red');   orchText.textContent = 'no key'; }
+	function renderStatusStrip() {
+	    const orchDot  = $('#st-orch-dot');
+	    const orchText = $('#st-orch-text');
+		const orchModel = CodeSmith.llm.getModelForTier('orchestrator');
+		const orchDisplay = typeof orchModel === 'object' ? orchModel.model + ' (custom)' : orchModel;
+		$('#st-orch-text').title = orchDisplay;
+		const hasKey = !!(CodeSmith.state.settings && CodeSmith.state.settings.apiKey);
+	    orchDot.classList.remove('red','green','gray','amber');
+	    if (hasKey) { orchDot.classList.add('green'); orchText.textContent = 'ready'; }
+	    else        { orchDot.classList.add('red');   orchText.textContent = 'no key'; }
 
-    // Token budget (Day 3)
-    const budget = CodeSmith.llm ? CodeSmith.llm.getBudget() : { tokensIn: 0, tokensOut: 0 };
-    const total = budget.tokensIn + budget.tokensOut;
-    const cap = (CodeSmith.state.settings && CodeSmith.state.settings.tokenBudgetCap) || 100000;
-    $('#st-tokens').textContent = total.toLocaleString() + ' / ' + cap.toLocaleString();
-  }
+	    // Token budget (Day 3)
+	    const budget = CodeSmith.llm ? CodeSmith.llm.getBudget() : { tokensIn: 0, tokensOut: 0 };
+	    const total = budget.tokensIn + budget.tokensOut;
+	    const cap = (CodeSmith.state.settings && CodeSmith.state.settings.tokenBudgetCap) || 100000;
+	    $('#st-tokens').textContent = total.toLocaleString() + ' / ' + cap.toLocaleString();
+		
+		// Update mobile indicator
+		const mobOrch = document.getElementById('mob-st-orch');
+		const mobPy = document.getElementById('mob-st-py');
+		if (mobOrch) mobOrch.style.color = hasKey ? '#4ade80' : '#ff6b6b';
+		if (mobPy) {
+		  const pyLoaded = $('#st-pyodide-dot')?.classList.contains('green');
+		  mobPy.style.color = pyLoaded ? '#4ade80' : '#5b6474';
+		}
+	  }
 
   function renderComposerHelp() {
     const s = CodeSmith.state.settings || {};
@@ -7001,6 +7086,14 @@ function wireComposer() {
         handleSendOrStop();
       }
     });
+    // Mobile: auto-focus composer when tapping in chat area
+    if (window.innerWidth <= 768) {
+      $('#chat-scroll').addEventListener('click', (ev) => {
+        if (ev.target === $('#chat-scroll') || ev.target === $('#chat-list')) {
+          ta.focus();
+        }
+      });
+    }
     $('#btn-send').addEventListener('click', () => {
       handleSendOrStop();
     });
@@ -7331,33 +7424,43 @@ function wireComposer() {
 		});
     $('#btn-test-conn').addEventListener('click', runTestConnection);
     $('#btn-fetch-models').addEventListener('click', runFetchModels);
-	$('#btn-toggle-sidebar').addEventListener('click', () => {
-		const sb = $('#sidebar');
-		sb.classList.toggle('collapsed');
-		const backdrop = $('#sidebar-backdrop');
-		if (backdrop && window.innerWidth <= 768) {
-			backdrop.style.display = sb.classList.contains('collapsed') ? 'none' : 'block';
-		}
-		});
-		const sidebarBackdrop = $('#sidebar-backdrop');
-		if (sidebarBackdrop) {
-		sidebarBackdrop.addEventListener('click', () => {
+		$('#btn-toggle-sidebar').addEventListener('click', () => {
+			const sb = $('#sidebar');
+			sb.classList.toggle('collapsed');
+			const backdrop = $('#sidebar-backdrop');
+			if (backdrop && window.innerWidth <= 768) {
+				backdrop.style.display = sb.classList.contains('collapsed') ? 'none' : 'block';
+			}
+			});
+			const sidebarBackdrop = $('#sidebar-backdrop');
+			if (sidebarBackdrop) {
+			sidebarBackdrop.addEventListener('click', () => {
+				$('#sidebar').classList.add('collapsed');
+				sidebarBackdrop.style.display = 'none';
+			});
+			}
+			// Auto-collapse sidebar on mobile after session select
+			if (window.innerWidth <= 768) {
 			$('#sidebar').classList.add('collapsed');
-			sidebarBackdrop.style.display = 'none';
-		});
-		}
-		// Auto-collapse sidebar on mobile after session select
-		if (window.innerWidth <= 768) {
-		$('#sidebar').classList.add('collapsed');
-		}
-		// Close sidebar when picking a session on mobile
-		document.addEventListener('click', (ev) => {
-		if (window.innerWidth <= 768 && ev.target.closest('.sess-item')) {
-			$('#sidebar').classList.add('collapsed');
-			const bd = $('#sidebar-backdrop');
-			if (bd) bd.style.display = 'none';
-		}
-		});
+			}
+			// Close sidebar when picking a session on mobile
+			document.addEventListener('click', (ev) => {
+			if (window.innerWidth <= 768 && ev.target.closest('.sess-item')) {
+				$('#sidebar').classList.add('collapsed');
+				const bd = $('#sidebar-backdrop');
+				if (bd) bd.style.display = 'none';
+			}
+			});
+			// Mobile: close sidebar on swipe left
+			let touchStartX = 0;
+			document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+			document.addEventListener('touchend', (e) => {
+				const touchEndX = e.changedTouches[0].screenX;
+				const diff = touchStartX - touchEndX;
+				if (diff > 50 && window.innerWidth <= 768 && !$('#sidebar').classList.contains('collapsed')) {
+					$('#sidebar').classList.add('collapsed');
+				}
+			});
     wireComposer();
 	const clearSessBtn = $('#btn-clear-sessions');
 	    if (clearSessBtn) clearSessBtn.addEventListener('click', async () => {
@@ -7621,36 +7724,50 @@ function wireComposer() {
   let _buildMode = 'chat';
   let _currentBuild = null; // { spec, workerResult, attempt, status, output, moduleName }
 
-	function wireMode() {
-		for (const btn of document.querySelectorAll('.mode-btn')) {
-		    btn.addEventListener('click', () => {
-		      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-		      btn.classList.add('active');
-		     _buildMode = btn.dataset.mode;
-				$('#split-right').hidden = _buildMode !== 'build' && _buildMode !== 'explore';
-				document.body.classList.toggle('build-mode', _buildMode === 'build' || _buildMode === 'explore');
-				if (_buildMode === 'explore') {
-				// Hide build panels, show explorer
-				$('#stage-a-panel').hidden = true;
-				$('#stage-a-panel').style.display = 'none';
-				$('#stage-b-panel').hidden = true;
-				$('#stage-c-panel').hidden = true;
-				$('#stage-c-panel').style.display = 'none';
-				$('#stage-e-panel').hidden = false;
-				$('#stage-e-panel').style.display = 'flex';
-				document.querySelector('.build-stepper').style.display = 'none';
-				} else {
-				$('#stage-e-panel').hidden = true;
-				$('#stage-e-panel').style.display = 'none';
-				document.querySelector('.build-stepper').style.display = '';
-				}
-				if (_buildMode === 'build') {
-		        _showStep(_currentStep);
-		        // Auto-focus Stage A input if we're on Stage A
-		        if (_currentStep === 'a') setTimeout(() => $('#stage-a-input').focus(), 100);
-		      }
-		    });
-		}
+		function wireMode() {
+			for (const btn of document.querySelectorAll('.mode-btn')) {
+			    btn.addEventListener('click', () => {
+			      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+			      btn.classList.add('active');
+			     _buildMode = btn.dataset.mode;
+					$('#split-right').hidden = _buildMode !== 'build' && _buildMode !== 'explore';
+					document.body.classList.toggle('build-mode', _buildMode === 'build' || _buildMode === 'explore');
+					if (_buildMode === 'explore') {
+					// Hide build panels, show explorer
+					$('#stage-a-panel').hidden = true;
+					$('#stage-a-panel').style.display = 'none';
+					$('#stage-b-panel').hidden = true;
+					$('#stage-c-panel').hidden = true;
+					$('#stage-c-panel').style.display = 'none';
+					$('#stage-e-panel').hidden = false;
+					$('#stage-e-panel').style.display = 'flex';
+					document.querySelector('.build-stepper').style.display = 'none';
+					} else {
+					$('#stage-e-panel').hidden = true;
+					$('#stage-e-panel').style.display = 'none';
+					document.querySelector('.build-stepper').style.display = '';
+					}
+					if (_buildMode === 'build') {
+			        _showStep(_currentStep);
+			        // Auto-focus Stage A input if we're on Stage A
+			        if (_currentStep === 'a') setTimeout(() => $('#stage-a-input').focus(), 100);
+			      }
+			    });
+			}
+			// Mobile: add floating action button for quick mode switch
+			if (window.innerWidth <= 768) {
+				const fab = document.createElement('button');
+				fab.id = 'mobile-mode-fab';
+				fab.innerHTML = '⚡';
+				fab.style.cssText = 'position:fixed;bottom:72px;right:16px;width:48px;height:48px;border-radius:50%;background:#4f8cff;color:#0b0d10;border:none;font-size:20px;z-index:45;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(79,140,255,0.4);';
+				fab.addEventListener('click', () => {
+					const modes = ['chat', 'build', 'explore'];
+					const currentIdx = modes.indexOf(_buildMode);
+					const nextMode = modes[(currentIdx + 1) % modes.length];
+					document.querySelector('.mode-btn[data-mode="' + nextMode + '"]')?.click();
+				});
+				document.body.appendChild(fab);
+			}
 
 		// Build tabs (Day 4 - Stage C tabs)
 		for (const tab of document.querySelectorAll('.build-tab')) {
@@ -11498,10 +11615,32 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 	})();
 CodeSmith.ui = UI;
 
+
 /* ============================================================================
  * 5. BOOT
  * ==========================================================================*/
 (async function boot() {
+		/* ============================================================================
+	 * MOBILE INITIALIZATION
+	 * ==========================================================================*/
+	// Detect mobile and apply initial optimizations
+	if (window.innerWidth <= 768) {
+	  document.body.classList.add('mobile-view');
+	  // Ensure sidebar is collapsed on load
+	  const sidebar = document.getElementById('sidebar');
+	  if (sidebar) sidebar.classList.add('collapsed');
+	}
+	
+	// Handle orientation changes
+	window.addEventListener('resize', () => {
+	  const isMobile = window.innerWidth <= 768;
+	  document.body.classList.toggle('mobile-view', isMobile);
+	  if (!isMobile) {
+	  // Reset mobile-specific states when going back to desktop
+	    const sidebar = document.getElementById('sidebar');
+	    if (sidebar) sidebar.classList.remove('collapsed');
+	  }
+	});
   try {
 		// Canonical source notice (non-blocking)
 		try {
