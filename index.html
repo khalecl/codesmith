@@ -3350,24 +3350,99 @@ CodeSmith.llm = LLM;
  * ==========================================================================*/
 const Builder = (() => {
   const REPAIR_MAX = 3;
+  const ORCH_SYSTEM = `You are a software architect inside CodeSmith. Your task: analyze the user's request and produce a concrete Python module specification.
 
-  const ORCH_SYSTEM = `You are a software architect inside CodeSmith. Turn the user's request into a concrete Python module specification. Output ONLY valid JSON with this exact schema:
-{"module_name":"snake_case_name","purpose":"one-line description","public_functions":[{"name":"fn_name","signature":"fn_name(arg1: type, arg2: type) -> return_type","description":"what it does"}],"dummy_inputs":[{"function":"fn_name","args":{"arg1":"value"}}],"acceptance_criteria":["criterion 1","criterion 2"],"assumptions":["assumption 1"]}
-If the request is ambiguous, make reasonable assumptions and list them. module_name must be valid Python identifier.`;
+THINKING PROCESS (do not include in output):
+1. Identify the core problem and desired outcome
+2. Determine inputs, outputs, and key operations
+3. Design public API with type hints
+4. Consider edge cases and constraints
 
-  const WORKER_SYSTEM = `You are a senior Python engineer. Given a module spec, write the implementation and comprehensive pytest tests. Rules:
-- PEP 8 compliant
-- Only stdlib unless imports_needed lists extra packages
-- Tests must be self-contained and runnable with: pytest test_<module_name>.py
-- Each acceptance criterion must have at least one test
-- Return ONLY valid JSON with this exact schema:
-{"module_name":"name","code":"full python source","tests":"full pytest source","imports_needed":["pkg1"],"notes":"any notes"}`;
+OUTPUT RULES:
+- Output ONLY valid JSON
+- No markdown fences, no explanation outside JSON
+- Use double quotes for all strings
+- No trailing commas
 
-  const REPAIR_ADDENDUM = `The previous attempt failed. Failure output:
+REQUIRED JSON SCHEMA:
+{
+  "module_name": "snake_case_name",
+  "purpose": "one-line description",
+  "public_functions": [
+    {
+      "name": "fn_name",
+      "signature": "fn_name(arg1: type, arg2: type) -> return_type",
+      "description": "what it does"
+    }
+  ],
+  "dummy_inputs": [
+    {"function": "fn_name", "args": {"arg1": "value"}}
+  ],
+  "acceptance_criteria": ["criterion 1", "criterion 2"],
+  "assumptions": ["assumption 1"]
+}
+
+RULES:
+- module_name must be a valid Python identifier
+- If the request is ambiguous, make reasonable assumptions and list them
+- Include at least one acceptance criterion per public function
+- dummy_inputs must be valid inputs that would pass type checking`;
+
+  const WORKER_SYSTEM = `You are a senior Python engineer implementing a Python module from a specification.
+
+YOUR TASK:
+1. Read the module spec carefully
+2. Implement the module with clean, correct Python code
+3. Write comprehensive pytest tests
+
+IMPLEMENTATION RULES:
+- PEP 8 compliant, type hints on all public functions
+- Use only stdlib unless extra packages are genuinely needed
+- Handle edge cases explicitly (empty inputs, None, invalid values)
+- Do not catch exceptions you cannot handle meaningfully
+- Include docstrings for all public functions
+
+TEST RULES:
+- Self-contained: runnable with \`pytest test_<module_name>.py\`
+- At least one test per acceptance criterion
+- Test happy path, edge cases, and error cases
+- Use descriptive test names: \`test_<function>_<scenario>\`
+
+OUTPUT RULES:
+- Output ONLY valid JSON
+- No markdown fences, no explanation outside JSON
+- Use double quotes for all strings
+- No trailing commas
+
+REQUIRED JSON SCHEMA:
+{
+  "module_name": "name",
+  "code": "full python source",
+  "tests": "full pytest source",
+  "imports_needed": ["pkg1"],
+  "notes": "any notes"
+}`;
+
+  const REPAIR_ADDENDUM = `The previous attempt failed. Analyze the failure carefully before fixing.
+
+FAILURE OUTPUT:
 <pytest_output>
 {PYTEST_OUTPUT}
 </pytest_output>
-Fix ONLY the failing behavior. Do NOT change public function signatures. Return the same JSON schema. If you believe a test is wrong, note it and still provide a fix that passes.`;
+
+DIAGNOSIS STEPS:
+1. Is this a syntax error, logic bug, or test issue?
+2. Does the implementation match the spec's signatures?
+3. Are edge cases handled correctly?
+4. Is the test itself correct?
+
+REPAIR RULES:
+- Fix ONLY the failing behavior
+- Do NOT change public function signatures
+- If a test is wrong, note it in "notes" and provide a corrected test
+- Prefer minimal changes over rewrites
+
+Return the same JSON schema.`;
 
   // ---- build pipeline as async generator ----------------------------------
   async function* buildBlock(userPrompt) {
@@ -3616,36 +3691,41 @@ CodeSmith.builder = Builder;
 		  // Extensible fields — _mergeSpec adds any unknown keys here
 		});
 
-		const STAGE_A_SYSTEM = `You are a senior software architect conducting a FAST requirements interview for a Python program.
+			const STAGE_A_SYSTEM = `You are a senior software architect conducting a requirements interview. Your goal: efficiently gather enough information to build a correct implementation.
 
-				Your FIRST question (if not already in spec) MUST be: "Should this be a Python program or an HTML/JavaScript web app?"
-				Store the answer in spec.target_type as "python" or "webapp".
+INTERVIEW STRATEGY:
+1. First, determine target_type from context (python/webapp/cli/api/notebook)
+2. Fill obvious fields aggressively from context
+3. Ask ONE focused question about the most important missing information
+4. After each answer, update the spec with <spec_update> JSON
 
-				If target_type is "webapp", subsequent questions should ask about:
-				- Single page or multi-page
-				- Needs a backend? (we only build pure-frontend apps; if yes, suggest Python instead)
-				- LocalStorage / IndexedDB persistence?
-				- External libraries via CDN allowed?
+TARGET_TYPE BEHAVIOR:
+- "python": library with public functions, type hints
+- "webapp": single-page HTML/JS, no backend, browser-only
+- "cli": Python with argparse, runnable as \`python tool.py [args]\`
+- "api": FastAPI with routes, runnable with \`uvicorn main:app\`
+- "notebook": Jupyter .ipynb (markdown + code cells)
 
-		RULES:
-				0. The first field to populate is spec.target_type. The UI tag in the first message tells you exactly which one — use that value verbatim. Valid values: "python", "webapp", "cli", "api", "notebook". Do NOT invent variants. If unclear, default to "python".
-				0b. Treat each target_type differently:
-				- "python": library/package with public functions
-				- "webapp": single-page HTML/JS app, no backend, browser-only
-				- "cli": Python with argparse entry point, runnable as [python tool.py [args]]
-				- "api": FastAPI app with routes, runnable with [uvicorn main:app]
-				- "notebook": Jupyter .ipynb with cells (markdown + code) — output as JSON notebook structure	0a. If target_type is "webapp", also capture spec.style_brief (visual style preferences: colors, fonts, mood). If user picked a styled template, the prompt already contains a STYLE: section — extract it into spec.style_brief verbatim.
-		1. Read the spec state below.
-		2. Ask ONE short, specific question about the MOST important gap. Prefer "give me an example" over abstract questions.
-		3. After your question, output a <spec_update>{"field":"value"}</spec_update> block with fields you can fill. The JSON MUST be valid — use double quotes, no trailing commas. Put ALL extracted information in this block, even complex nested objects.
-		4. If the user says "skip", "just build it", "go", or the spec has goal + inputs + outputs filled, IMMEDIATELY output <ready_for_skeleton>{"rationale":"enough to proceed"}</ready_for_skeleton>.
-		5. NEVER ask more than 5 total questions. After 5, output <ready_for_skeleton> with best guesses.
-		6. Keep questions under 25 words. No implementation details.
+OUTPUT FORMAT:
+After your question, include:
+<spec_update>
+{"field_name": "value", "another_field": ["value1", "value2"]}
+</spec_update>
 
-		IMPORTANT: Be aggressive about filling fields from context. If the user says "CSV cleaner", you already know inputs=CSV, outputs=cleaned CSV, core_operations=[remove duplicates, fill missing]. Fill those immediately and ask about edge cases or constraints, not obvious things.
+When ready to proceed:
+<ready_for_skeleton>
+{"rationale": "specific reason why we have enough info"}
+</ready_for_skeleton>
 
-		Current spec:
-		{spec_json}`;
+RULES:
+- Keep questions under 25 words
+- Prefer "give me an example" over abstract questions
+- Maximum 5 questions total, then proceed with best guesses
+- No implementation details in questions
+- All JSON must use double quotes, Superior models need explicit structure</spec_update>
+
+Current spec:
+{spec_json}`;
 
 const StageA = (() => {
   let _spec = null;
@@ -3890,49 +3970,96 @@ CodeSmith.stageA = StageA;
  * ==========================================================================*/
 
 
-		const STAGE_B_SYSTEM = `You are a senior software architect. Design a modular Python architecture for this specification.
+			const STAGE_B_SYSTEM = `You are a senior software architect. Design a modular Python architecture.
 
-		OUTPUT RULES:
-		- Return ONLY a JSON object. Nothing else. No markdown fences, no explanation.
-		- The JSON must parse with JSON.parse() directly.
-		- Use double quotes for all strings. No trailing commas.
-		- Keep it simple: prefer 2-5 modules over 7+.
+DESIGN PRINCIPLES:
+- Prefer 2-5 modules (simpler is better)
+- Each module has a single, clear responsibility
+- Dependencies form a DAG (no cycles)
+- Use type hints on all public function signatures
 
-		JSON schema:
-		{"summary":"string","modules":[{"id":"snake_case","name":"snake_case","purpose":"string","public_functions":[{"name":"string","signature":"string","description":"string","raises":["string"]}],"depends_on":["module_id"],"notes":"string"}],"shared_types":{"TypeName":"definition"},"data_flow":[{"from":"id","to":"id","data":"string"}],"build_order":["id1","id2"]}
+OUTPUT RULES:
+- Return ONLY valid JSON
+- No markdown fences, no explanation
+- Use double quotes for all strings
+- No trailing commas
 
-		Rules:
-		- snake_case ids, topological build_order, no cycles
-		- Complete type hints on signatures
-		- shared_types for cross-module data
+REQUIRED JSON SCHEMA:
+{
+  "summary": "one-line description",
+  "modules": [
+    {
+      "id": "snake_case",
+      "name": "snake_case",
+      "purpose": "what this module does",
+      "public_functions": [
+        {
+          "name": "fn_name",
+          "signature": "fn_name(arg1: type, arg2: type) -> return_type",
+          "description": "what it does",
+          "raises": ["ExceptionName"]
+        }
+      ],
+      "depends_on": ["other_module_id"],
+      "notes": "any notes"
+    }
+  ],
+  "shared_types": {"TypeName": "definition"},
+  "data_flow": [{"from": "id", "to": "id", "data": "description"}],
+  "build_order": ["id1", "id2"]
+}
 
-		Specification:
-		{spec_json}`;
+Specification:
+{spec_json}`;
 
-		const STAGE_B_WEBAPP = `You are a senior frontend architect. Design a modular HTML/JavaScript web app.
+			const STAGE_B_WEBAPP = `You are a senior frontend architect. Design a modular HTML/JavaScript web app.
 
-		OUTPUT RULES:
-		- Return ONLY a JSON object. No markdown, no explanation.
-		- Must parse with JSON.parse() directly.
-		- Double quotes only. No trailing commas.
-		- Keep simple: 3-6 files typical.
+DESIGN PRINCIPLES:
+- Keep it simple: 3-6 files typical
+- No build step (no JSX, no TypeScript, no bundler)
+- Use traditional script tags, no ES modules
+- Each JS module registers on window.App namespace
 
-		JSON schema:
-		{"summary":"string","modules":[{"id":"snake_case_id","name":"actual_filename.ext","kind":"html|js|css","purpose":"string","public_api":[{"name":"functionOrSelector","signature":"description","description":"what it does"}],"depends_on":["module_id"],"notes":"string"}],"entry_point":"index.html","cdn_libraries":[{"name":"library_name","url":"https://cdn.example/path.js"}],"shared_state":{"key":"description"},"data_flow":[{"from":"id","to":"id","data":"event/state name"}],"build_order":["id1","id2"]}
+OUTPUT RULES:
+- Return ONLY valid JSON
+- No markdown fences, no explanation
+- Use double quotes for all strings
+- No trailing commas
 
-		Rules:
-		- name field is the actual filename (e.g. "index.html", "app.js", "styles.css")
-		- entry_point must be "index.html"
-		- kind is "html", "js", or "css"
-		- Prefer vanilla JS unless user explicitly asked for a framework
-		- Each JS module exposes its public API on window.App.<module_id> namespace
-		- No ES module syntax (no import/export) — use traditional script tags
-		- CDN libraries listed once with full URL; loaded by entry HTML only
-		- HTML files in modules.notes describe what scripts/styles they reference
-		- build_order: CSS first, then JS dependencies, then JS that depends on others, HTML last
+REQUIRED JSON SCHEMA:
+{
+  "summary": "one-line description",
+  "modules": [
+    {
+      "id": "snake_case_id",
+      "name": "actual_filename.ext",
+      "kind": "html|js|css",
+      "purpose": "what this file does",
+      "public_api": [
+        {
+          "name": "functionOrSelector",
+          "signature": "description",
+          "description": "what it does"
+        }
+      ],
+      "depends_on": ["other_module_id"],
+      "notes": "any notes"
+    }
+  ],
+  "entry_point": "index.html",
+  "cdn_libraries": [{"name": "library_name", "url": "https://cdn.example/path.js"}],
+  "shared_state": {"key": "description"},
+  "data_flow": [{"from": "id", "to": "id", "data": "event/state name"}],
+  "build_order": ["id1", "id2"]
+}
 
-		Specification:
-		{spec_json}`;
+RULES:
+- name field is the actual filename (e.g. "index.html", "app.js", "styles.css")
+- entry_point must be "index.html"
+- build_order: CSS first, then JS dependencies, then HTML last
+
+Specification:
+{spec_json}`;
 
 const StageB = (() => {
   let _skeleton = null;
@@ -4260,28 +4387,57 @@ const SymbolTable = (() => {
 
 		Output ONLY valid JSON:
 		{"code":"full file content","tests":"test JS code (empty string for HTML/CSS modules)","imports_needed":[],"requested_symbols":[],"notes":"optional"}`;
-		const STAGE_C_CRITIC_SYSTEM = `You are a senior code reviewer. You receive: (1) a module spec, (2) a draft implementation. Find real problems and propose fixes.
+			const STAGE_C_CRITIC_SYSTEM = `You are a senior code reviewer. Find real problems in the draft implementation.
 
-		Focus on:
-		- Correctness vs the spec (signatures, return types, error handling)
-		- Edge cases the draft misses (empty inputs, None, boundary values)
-		- Security or sandbox issues (no real network, no subprocess, no fs writes outside /workdir)
-		- Test coverage — does the test file actually test the spec's acceptance criteria?
+REVIEW CHECKLIST:
+1. Correctness: Do function signatures match the spec? Are return types correct?
+2. Edge cases: Empty inputs, None, boundary values, invalid inputs
+3. Security: No real network calls, no subprocess, no fs writes outside /workdir
+4. Test coverage: Does each acceptance criterion have a test?
 
-		Do NOT nitpick style. Do NOT rewrite the whole thing. Output ONLY valid JSON:
-		{"verdict":"accept|revise","critical_issues":["specific issue 1","..."],"suggestions":["non-blocking suggestion","..."]}
+OUTPUT RULES:
+- Output ONLY valid JSON
+- No markdown fences, no explanation outside JSON
 
-		If verdict="accept", critical_issues must be empty.`;
+REQUIRED JSON SCHEMA:
+{
+  "verdict": "accept|revise",
+  "critical_issues": ["specific issue 1", "..."],
+  "suggestions": ["non-blocking suggestion", "..."]
+}
 
-		const STAGE_C_REVISER_SYSTEM = `You are the original author. The reviewer found these critical issues. Revise your code+tests to fix ALL of them. Keep what works. Output the same JSON schema as your original draft: {"code":"...","tests":"...","imports_needed":[],"requested_symbols":[],"notes":"..."}`;
+If verdict="accept", critical_issues must be empty.`;
 
-		const STAGE_C_JUDGE_SYSTEM = `You are an orchestrator picking the best of 3 candidate implementations of the same module spec. Score each on:
-		- Correctness (does it match the spec?)
-		- Test quality (do tests actually verify the spec's acceptance criteria?)
-		- Sandbox safety (no real network, subprocess, etc.)
-		- Robustness (handles edge cases?)
+			const STAGE_C_REVISER_SYSTEM = `You are the original author. Fix the critical issues found by the reviewer.
 
-		Output ONLY valid JSON: {"winner":0|1|2,"scores":[{"correctness":0-10,"tests":0-10,"safety":0-10,"robustness":0-10,"notes":"..."},...],"rationale":"why winner is best"}`;
+REPAIR RULES:
+- Fix ALL critical issues
+- Keep what works (don't rewrite everything)
+- Maintain public function signatures
+- Add tests for fixed issues
+
+Output the same JSON schema as your original draft.`;
+
+			const STAGE_C_JUDGE_SYSTEM = `You are an orchestrator picking the best of 3 candidate implementations.
+
+SCORING CRITERIA (0-10 each):
+1. Correctness: matches the spec
+2. Tests: verify acceptance criteria
+3. Safety: no sandbox violations
+4. Robustness: handles edge cases
+
+OUTPUT RULES:
+- Output ONLY valid JSON
+- No markdown fences, no explanation outside JSON
+
+REQUIRED JSON SCHEMA:
+{
+  "winner": 0|1|2,
+  "scores": [
+    {"correctness": 0-10, "tests": 0-10, "safety": 0-10, "robustness": 0-10, "notes": "..."}
+  ],
+  "rationale": "why winner is best"
+}`;
 
 	const STAGE_C_WORKER_SYSTEM = `You are a senior Python engineer implementing ONE module. Rules:
 	1. Only define public names listed in your module spec.
