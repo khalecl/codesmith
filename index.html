@@ -9107,38 +9107,44 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				}
 				break;
 				case 'critic_start':
-				_scLog('🔍 Critic reviewing ' + ev.moduleId + '…', 'log-info');
-				break;
+					_scLog('🔍 Critic reviewing ' + ev.moduleId + '…', 'log-info');
+					break;
 				case 'critic_verdict':
 				if (ev.verdict === 'accept') _scLog('✓ Critic accepted ' + ev.moduleId, 'log-pass');
-				else _scLog('✎ Critic flagged ' + ev.issues.length + ' issue(s) in ' + ev.moduleId, 'log-warn');
-				break;
-				case 'reviser_start':
-				_scLog('🔧 Reviser fixing ' + ev.moduleId + '…', 'log-info');
-				break;
-				case 'reviser_done':
-				_scLog('✓ Reviser updated ' + ev.moduleId, 'log-pass');
-				break;
-				case 'reviser_failed':
-				_scLog('⚠ Revision failed: ' + ev.reason, 'log-warn');
-				break;
-				case 'vote_start':
+					else _scLog('✎ Critic flagged ' + ev.issues.length + ' issue(s) in ' + ev.moduleId, 'log-warn');
+					break;
+					case 'reviser_start':
+					_scLog('🔧 Reviser fixing ' + ev.moduleId + '…', 'log-info');
+					break;
+					case 'reviser_done':
+					_scLog('✓ Reviser updated ' + ev.moduleId, 'log-pass');
+					break;
+					case 'reviser_failed':
+					_scLog('⚠ Revision failed: ' + ev.reason, 'log-warn');
+					// Store full error details for inspection
+					if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = {};
+					_scModuleData[ev.moduleId]._lastError = { stage: 'reviser', reason: ev.reason, timestamp: Date.now() };
+					break;
+					case 'vote_start':
 				_scLog('🗳 Voting on ' + ev.moduleId + ' (3 candidates)…', 'log-info');
-				break;
-				case 'vote_done':
-				_scLog('🏆 Picked candidate ' + ev.winner + ' of ' + ev.totalCandidates + ' for ' + ev.moduleId + (ev.rationale ? ' — ' + ev.rationale.slice(0, 80) : ''), 'log-pass');
-				break;
-				case 'vote_failed':
-				_scLog('⚠ Vote failed: ' + ev.reason, 'log-warn');
-				break;
+					break;
+					case 'vote_done':
+					_scLog('🏆 Picked candidate ' + ev.winner + ' of ' + ev.totalCandidates + ' for ' + ev.moduleId + (ev.rationale ? ' — ' + ev.rationale.slice(0, 80) : ''), 'log-pass');
+					break;
+					case 'vote_failed':
+					_scLog('⚠ Vote failed: ' + ev.reason, 'log-warn');
+					if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = {};
+					_scModuleData[ev.moduleId]._lastError = { stage: 'vote', reason: ev.reason, timestamp: Date.now() };
+					break;
 			case 'worker_done':
-						if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
+					if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
 						_scModuleData[ev.moduleId].code = ev.result.code || '';
 						_scModuleData[ev.moduleId].tests = ev.result.tests || '';
-				
-				_scSelectModule(ev.moduleId);
-				_scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
-				if ($('#sc-review-tests')?.checked && ev.result.tests) {
+						// Clear any previous error on success
+						delete _scModuleData[ev.moduleId]._lastError;
+						_scSelectModule(ev.moduleId);
+						_scLog('Worker done for ' + ev.moduleId + ' (attempt ' + ev.attempt + ')');
+						if ($('#sc-review-tests')?.checked && ev.result.tests) {
 				CodeSmith.stageC.pause();
 				const decision = await approveTestsModal(ev.moduleId, ev.result.tests);
 				if (decision.action === 'cancel') { CodeSmith.stageC.stop(); return; }
@@ -9154,36 +9160,38 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 				CodeSmith.stageC.resume();
 				}
 			break;
-          case 'symbols_requested':
-            _scLog('Symbols requested: ' + ev.symbols.map(s => s.name).join(', '), 'log-warn');
-            break;
-          case 'symbols_decision':
-            for (const d of (ev.decisions || [])) {
-              _scLog('Symbol ' + d.name + ': ' + d.action, d.action === 'approve' ? 'log-pass' : 'log-warn');
-            }
-            break;
-          case 'tests_start':
-            _scLog('Testing ' + ev.moduleId + ' (attempt ' + ev.attempt + ')…');
-            _scRenderModuleList();
-            break;
-          case 'tests_result':
-            if (_scModuleData[ev.moduleId]) {
-              _scModuleData[ev.moduleId].output += ev.output + '\n';
-            }
-            _scSelectModule(ev.moduleId);
-            _scLog(
-              ev.passed ? '✓ ' + ev.moduleId + ' passed (' + ev.passCount + ')' : '✗ ' + ev.moduleId + ' failed (' + ev.failCount + ' failures)',
-              ev.passed ? 'log-pass' : 'log-fail'
-            );
-            break;
-          case 'repair_start':
-            _scLog('Repair ' + ev.moduleId + ' attempt ' + ev.attempt, 'log-warn');
-            break;
-			
-			case 'module_built':
-				_scRenderModuleList();
-				_scLog('🔨 ' + ev.moduleId + ' built (untested)', 'log-info');
-				break;
+case 'symbols_requested':
+	            _scLog('Symbols requested: ' + ev.symbols.map(s => s.name).join(', '), 'log-warn');
+	            break;
+	          case 'symbols_decision':
+	            for (const d of (ev.decisions || [])) {
+	              _scLog('Symbol ' + d.name + ': ' + d.action, d.action === 'approve' ? 'log-pass' : 'log-warn');
+	            }
+	            break;
+	          case 'tests_start':
+	            _scLog('Testing ' + ev.moduleId + ' (attempt ' + ev.attempt + ')…');
+	            _scRenderModuleList();
+	            break;
+	          case 'tests_result':
+	            if (_scModuleData[ev.moduleId]) {
+	              _scModuleData[ev.moduleId].output += ev.output + '\n';
+	            }
+	            _scSelectModule(ev.moduleId);
+	            _scLog(
+	              ev.passed ? '✓ ' + ev.moduleId + ' passed (' + ev.passCount + ')' : '✗ ' + ev.moduleId + ' failed (' + ev.failCount + ' failures)',
+	              ev.passed ? 'log-pass' : 'log-fail'
+	            );
+	            break;
+	          case 'repair_start':
+	            _scLog('Repair ' + ev.moduleId + ' attempt ' + ev.attempt, 'log-warn');
+	            break;
+				
+				case 'module_built':
+					_scRenderModuleList();
+					_scLog('🔨 ' + ev.moduleId + ' built (untested)', 'log-info');
+					break;
+
+
 			case 'all_built':
 						_scLog('━━━ Phase 1 complete: ' + ev.count + ' modules built ━━━', 'log-info');
 						$('#btn-sc-download-all').hidden = false;
@@ -9612,25 +9620,31 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 					escBar.hidden = false;
 				}
 
-		function _restoreEscalationBar() {
-			const escBar = $('#sc-escalation-bar');
-			escBar.replaceChildren();
-			const editBtn = el('button', { class: 'btn', id: 'btn-sc-edit-rerun', style: 'font-size:11px;' }, 'Edit & rerun');
-			editBtn.addEventListener('click', _scEditAndRerun);
-			const regenBtn = el('button', { class: 'btn', id: 'btn-sc-regen', style: 'font-size:11px;' }, 'Regenerate');
-			regenBtn.addEventListener('click', () => _scRebuildSingleModule(_scActiveModuleId));
-			const bypassBtn = el('button', {
-				class: 'btn',
-				style: 'font-size:11px;color:#0b0d10;background:#f59e0b;border-color:#f59e0b;font-weight:600;'
-				}, 'Bypass & continue');
-				bypassBtn.addEventListener('click', () => {
-					const modId = _scActiveModuleId;
-					if (!modId) return;
-					_scLog('⚠ ' + modId + ' bypassed', 'log-warn');
-					CodeSmith.stageC.setModuleDecision(modId, 'bypass');
-					_scExitEditMode();
-					CodeSmith.stageC.resume();
-					});
+			function _restoreEscalationBar() {
+				const escBar = $('#sc-escalation-bar');
+				escBar.replaceChildren();
+				const editBtn = el('button', { class: 'btn', id: 'btn-sc-edit-rerun', style: 'font-size:11px;' }, 'Edit & rerun');
+				editBtn.addEventListener('click', _scEditAndRerun);
+				const regenBtn = el('button', { class: 'btn', id: 'btn-sc-regen', style: 'font-size:11px;' }, 'Regenerate');
+				regenBtn.addEventListener('click', () => _scRebuildSingleModule(_scActiveModuleId));
+				const retrySameBtn = el('button', { class: 'btn', id: 'btn-sc-retry-same', style: 'font-size:11px;' }, 'Retry same model');
+				retrySameBtn.title = 'Retry with the same model that was used for this module';
+				retrySameBtn.addEventListener('click', () => _scRetrySameModel(_scActiveModuleId));
+				const showErrorBtn = el('button', { class: 'btn', id: 'btn-sc-show-error', style: 'font-size:11px;' }, 'Show error details');
+				showErrorBtn.addEventListener('click', () => _scShowErrorDetails(_scActiveModuleId));
+				const bypassBtn = el('button', {
+					class: 'btn',
+					style: 'font-size:11px;color:#0b0d10;background:#f59e0b;border-color:#f59e0b;font-weight:600;'
+					}, 'Bypass & continue');
+					bypassBtn.addEventListener('click', () => {
+						const modId = _scActiveModuleId;
+						if (!modId) return;
+						_scLog('⚠ ' + modId + ' bypassed', 'log-warn');
+						CodeSmith.stageC.setModuleDecision(modId, 'bypass');
+						_scExitEditMode();
+						CodeSmith.stageC.resume();
+						});
+
 
 				const skipBtn = el('button', {
 				class: 'btn',
@@ -9649,6 +9663,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			backBtn.addEventListener('click', () => _showStep('b'));
 			escBar.appendChild(editBtn);
 			escBar.appendChild(regenBtn);
+			escBar.appendChild(retrySameBtn);
+			escBar.appendChild(showErrorBtn);
 			escBar.appendChild(bypassBtn);
 			escBar.appendChild(skipBtn);
 			escBar.appendChild(backBtn);
@@ -9703,7 +9719,146 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			_scRenderModuleList();
 			}
 		}
-  
+  			async function _scRetrySameModel(modId) {
+				if (!modId) return;
+				const skeleton = CodeSmith.stageB.getSkeleton();
+				const mod = skeleton ? skeleton.modules.find(m => m.id === modId) : null;
+				if (!mod) { _scLog('Module not found in skeleton', 'log-fail'); return; }
+				_scLog('🔄 Retrying ' + modId + ' with same model…', 'log-warn');
+				const states = CodeSmith.stageC.getModuleStates();
+				states[modId] = 'building';
+				_scRenderModuleList();
+				// Clear previous error
+				if (_scModuleData[modId]) delete _scModuleData[modId]._lastError;
+				// Re-run the build for just this module using same work order
+				const depCode = SymbolTable.getDependencyCode(modId, skeleton, CodeSmith.stageC.getModuleArtifacts());
+				const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
+				const dummyInputs = (spec && spec.inputs && spec.inputs.example) ? spec.inputs.example : '';
+				const workOrder = {
+					module_spec: mod,
+					symbol_table: SymbolTable.get(),
+					dependency_code: depCode,
+					dummy_inputs: dummyInputs,
+					cdn_libraries: skeleton.cdn_libraries || [],
+					shared_state: skeleton.shared_state || {},
+				};
+				const isWebapp = spec.target_type === 'webapp';
+				const workerSystem = isWebapp
+					? STAGE_C_WEBAPP_WORKER_SYSTEM.replace('{style_brief}', spec.style_brief || 'Clean modern defaults.')
+					: STAGE_C_WORKER_SYSTEM;
+				try {
+					for await (const ev of CodeSmith.llm.chat({
+						messages: [
+							{ role: 'system', content: workerSystem },
+							{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+						],
+						tier: 'worker', temperature: 0.2, maxTokens: 20000,
+					})) {
+						if (ev.type === 'token') {
+							_scLog('  [retry] ' + ev.delta.slice(0, 60) + (ev.delta.length > 60 ? '…' : ''), 'log-info');
+						} else if (ev.type === 'done') {
+							const workerText = ev.text || '';
+							let workerResult;
+							try {
+								workerResult = _parseJSON(workerText);
+								if (!workerResult || !workerResult.code) throw new Error('Missing code');
+							} catch (err) {
+								_scLog('Retry parse failed: ' + err.message, 'log-fail');
+								states[modId] = 'escalated';
+								_scRenderModuleList();
+								return;
+							}
+							_scModuleData[modId] = { code: workerResult.code, tests: workerResult.tests || '', output: '' };
+							// Write to sandbox
+							const safeName = _sanitizeModuleName(mod.name || mod.id);
+							mod.name = safeName;
+							try {
+								await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', workerResult.code);
+								if (workerResult.tests && !isWebapp) {
+									await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', workerResult.tests);
+								}
+							} catch (err) {
+								_scLog('Retry write failed: ' + err.message, 'log-fail');
+							}
+							_scLog('✓ Retry complete for ' + modId + ' — review and test', 'log-pass');
+							_scSelectModule(modId);
+							_scRenderModuleList();
+							// Auto-run tests if available
+							if (workerResult.tests) {
+								_scLog('Auto-running tests for ' + modId + '…', 'log-info');
+								// Trigger test run by simulating resume which will hit testing phase
+								CodeSmith.stageC.resume();
+							}
+							return;
+						} else if (ev.type === 'error' && !ev.recoverable) {
+							_scLog('Retry error: ' + (ev.error ? ev.error.message : 'Unknown'), 'log-fail');
+							states[modId] = 'escalated';
+							_scRenderModuleList();
+							return;
+						}
+					}
+				} catch (err) {
+					_scLog('Retry exception: ' + (err.message || err), 'log-fail');
+					states[modId] = 'escalated';
+					_scRenderModuleList();
+				}
+			}
+
+			function _scShowErrorDetails(modId) {
+				if (!modId || !_scModuleData[modId]) {
+					alert('No error details available for ' + (modId || 'this module'));
+					return;
+				}
+				const data = _scModuleData[modId];
+				const error = data._lastError;
+				const output = data.output || '';
+				// Build detailed error report
+				let report = '=== Error Details for ' + modId + ' ===\n\n';
+				if (error) {
+					report += 'Stage: ' + error.stage + '\n';
+					report += 'Reason: ' + error.reason + '\n';
+					report += 'Time: ' + new Date(error.timestamp).toLocaleString() + '\n\n';
+				} else {
+					report += 'No structured error recorded.\n\n';
+				}
+				if (output) {
+					report += '--- Build Output (last 2000 chars) ---\n';
+					report += output.slice(-2000) + '\n\n';
+				}
+				if (data._rawWorker) {
+					report += '--- Raw Worker Response (last 1500 chars) ---\n';
+					report += data._rawWorker.slice(-1500) + '\n\n';
+				}
+				report += '--- Current Code (first 500 chars) ---\n';
+				report += (data.code || '').slice(0, 500) + '\n';
+				// Show in modal
+				const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+				const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:800px;width:90vw;max-height:80vh;display:flex;flex-direction:column;' });
+				const header = el('div', { class: 'flex items-center justify-between mb-3' });
+				header.appendChild(el('div', { class: 'text-[14px] font-semibold' }, 'Error Details: ' + modId));
+				const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close' });
+				closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+				header.appendChild(closeBtn);
+				modal.appendChild(header);
+				const pre = el('pre', { style: 'flex:1;overflow:auto;background:#0b0d10;padding:12px;font-size:11px;color:#8b92a1;white-space:pre-wrap;word-break:break-all;border-radius:6px;margin:0;' });
+				pre.textContent = report;
+				modal.appendChild(pre);
+				const actions = el('div', { class: 'flex items-center justify-end gap-2 mt-3' });
+				const copyBtn = el('button', { class: 'btn' }, 'Copy to clipboard');
+				copyBtn.addEventListener('click', () => {
+					navigator.clipboard.writeText(report).then(() => {
+						copyBtn.textContent = 'Copied!';
+						setTimeout(() => copyBtn.textContent = 'Copy to clipboard', 1500);
+					});
+				});
+				actions.appendChild(copyBtn);
+				modal.appendChild(actions);
+				const close = () => { backdrop.remove(); modal.remove(); };
+				closeBtn.addEventListener('click', close);
+				backdrop.addEventListener('click', close);
+				document.body.appendChild(backdrop);
+				document.body.appendChild(modal);
+			}
 	  // ---- Day 7: Onboarding -------------------------------------------------
 	  let _onbPreset = 'nvidia';
 
