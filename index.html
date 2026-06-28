@@ -359,71 +359,90 @@
 	  .sidebar.collapsed { width: 0; border-right-width: 0 !important; overflow: hidden; }
 
 	  /* ---- Mobile optimizations ---- */
-	  @media (max-width: 768px) {
-	    /* Collapse sidebar by default on mobile */
-	    .sidebar { position: fixed; left: 0; top: 48px; bottom: 24px; z-index: 40; height: auto; }
-	    .sidebar.collapsed { width: 0; }
-	    
-	    /* Full-width bubbles, smaller padding */
-	    .bubble { max-width: 92vw !important; padding: 8px 10px; font-size: 13px; }
-	    .bubble-user, .bubble-assistant { border-radius: 8px; }
-	    
-	    /* Compact composer as bottom sheet */
-	    .hairline-t:has(#composer) {
-	      position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
-	      background: #141820; padding: 6px 10px;
-	      border-top: 1px solid rgba(255,255,255,0.08);
-	      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
-	    }
-	    #composer { min-height: 36px; font-size: 14px; }
-	    
-	    /* Hide status strip on mobile, show minimal indicator instead */
-	    .status-strip { display: none; }
-	    #mobile-status-indicator {
-	      position: fixed; bottom: 0; left: 0; right: 0; height: 24px;
-	      background: #0f1319; border-top: 1px solid rgba(255,255,255,0.06);
-	      display: flex; align-items: center; justify-content: center;
-	      font-size: 10px; color: #5b6474; z-index: 25;
-	    }
-	    
-	    /* Smaller header */
-	    header { height: 40px !important; padding: 0 8px !important; }
-	    header .font-semibold { font-size: 13px; }
-	    
-	    /* Compact stepper */
-	    .build-stepper { padding: 6px 8px; }
-	    .step-item { padding: 4px 8px; font-size: 11px; }
-	    .step-item span:last-child { display: none; } /* hide text, show only letter */
-	    .step-num { width: 24px; height: 24px; font-size: 11px; }
-	    
-	    /* Full-width panels in build mode */
-	    .stage-a-layout, .stage-c-layout { flex-direction: column !important; }
-	    .stage-a-chat, .stage-a-spec, .stage-c-modules, .stage-c-center, .stage-c-log {
-	      width: 100% !important proud; min-width: 0 !important; border: none !important;
-	    }
-	    .stage-a-spec { max-height: 40vh; overflow-y: auto; }
-	    
-	    /* Explorer: stack panels vertically */
-	    .explorer-layout { flex-direction: column !important; }
-	    .explorer-tree, .explorer-ai {
-	      width: 100% !important; min-width: 0 !important; max-width: none !important;
-	      border: none !important; height: 200px; min-height: 0;
-	    }
-	    .explorer-editor { min-height: 300px; }
-	    
-	    /* Touch-friendly buttons */
-	    .btn, .iconbtn { min-height: 36px; min-width: 36px; }
-	    .iconbtn { width: 36px; height: 36px; }
-	    
-	    /* Larger tap targets for session items */
-	    .sess-item { padding: 10px 12px; min-height: 44px; }
-	    
-	    /* Modal full-screen on mobile */
-	    .modal { width: calc(100vw - 16px) !important; max-height: calc(100vh - 32px); }
-	    
-	    /* Hide some chrome */
-	    #composer-help { display: none; }
-	  }
+	  		  /* ---- Mobile optimizations ---- */
+		  @media (max-width: 768px) {
+		    /* Collapse sidebar by default on mobile */
+		    .sidebar { position: fixed; left: 0; top: 48px; bottom: 24px; z-index: 40; height: auto; }
+		    .sidebar.collapsed { width: 0; }
+		    
+		    /* Full-width bubbles, smaller padding */
+		    .bubble { max-width: 92vw !important; padding: 8px 10px; font-size: 13px; }
+		    .bubble-user, .bubble-assistant { border-radius: 8px; }
+		    
+		    /* Compact composer as bottom sheet */
+		    .hairline-t:has(#composer) {
+		      position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+		      background: #141820; padding: 6px 10px;
+		      border-top: 1px solid rgba(255,255,255,0.08);
+		      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+		    }
+		    #composer { min-height: 36px; font-size: 14px; }
+		    
+		    /* Hide status strip on mobile, show minimal indicator instead */
+		    .status-strip { display: none; }
+		    #mobile-status-indicator {
+		      position: fixed; bottom: 0; left: 0; right: 0; height: 24px;
+		      background: #0f1319; border-top: 1px solid rgba(255,255,255,0.06);
+		      display: flex; align-items: center; justify-content: center;
+		      font-size: 10px; color: #5b6474; z-index: 25;
+		    }
+		    
+		    /* Smaller header */
+		    header { height: 40px !important; padding: 0 8px !important; }
+		    header .font-semibold { font-size: 13px; }
+		    
+		    /* Compact stepper */
+		    .build-stepper { padding: 6px 8px; }
+		    .step-item { padding: 4px 8px; font-size: 11px; }
+		    .step-item span:last-child { display: none; } /* hide text, show only letter */
+		    .step-num { width: 24px; height: 24px; font-size: 11px; }
+		    
+		    /* Full-width panels in build mode */
+		    .stage-a-layout, .stage-c-layout { flex-direction: column !important; }
+		    .stage-a-chat, .stage-a-spec, .stage-c-modules, .stage-c-center, .stage-c-log {
+		      width: 100% !important; min-width: 0 !important; border: none !important;
+		    }
+		    .stage-a-spec { max-height: 40vh; overflow-y: auto; }
+		    
+		    /* Explorer: simplified mobile layout */
+		    .explorer-layout { flex-direction: column !important; overflow: auto; }
+		    .explorer-tree {
+		      width: 100% !important; min-width: 0 !important; max-width: none !important;
+		      border: none !important; max-height: 180px; min-height: 0; flex-shrink: 0;
+		    }
+		    .explorer-resize-handle { display: none !important; }
+		    .explorer-ai {
+		      width: 100% !important; min-width: 0 !important; max-width: none !important;
+		      border: none !important; border-top: 1px solid rgba(255,255,255,Passed 0.06) !important;
+		      max-height: 50vh; min-height: 200px;
+		    }
+		    .explorer-editor { min-height: 250px; }
+		    .monaco-container { min-height: 200px; }
+		    
+		    /* Hide non-essential explorer panels on mobile */
+		    .explorer-bottom-bar { display: none; }
+		    .editor-breadcrumb { display: none; }
+		    .explorer-editor-tabs { overflow-x: auto; }
+		    .explorer-model-bar { flex-wrap: wrap; gap: 4px; }
+		    .explorer-model-bar select { min-width: 120px; }
+		    
+		    /* Pair programmer mobile fixes */
+		    .pair-input-bar textarea { min-height: 60px; }
+		    .pair-actions { flex-wrap: wrap; }
+		    
+		    /* Touch-friendly buttons */
+		    .btn, .iconbtn { min-height: 36px; min-width: 36px; }
+		    .iconbtn { width: 36px; height: 36px; }
+		    
+		    /* Larger tap targets for session items */
+		    .sess-item { padding: 10px 12px; min-height: 44px; }
+		    
+		    /* Modal full-screen on mobile */
+		    .modal { width: calc(100vw - 16px) !important; max-height: calc(100vh - 32px); }
+		    
+		    /* Hide some chrome */
+		    #composer-help { display: none; }
+		  }
 	  
 	  @media (min-width: 769px) {
 	    #mobile-status-indicator { display: none; }
@@ -884,7 +903,16 @@
   }
   .cmd-item:hover, .cmd-item.highlighted { background: rgba(79,140,255,0.10); color: #e8ecf1; }
   .cmd-item .cmd-shortcut { margin-left: auto; font-size: 11px; color: #5b6474; font-family: monospace; }
-
+/* ---- Help modal -------------------------------------------------------- */
+  .help-section { margin-bottom: 16px; }
+  .help-section h4 { font-size: 12px; color: #e8ecf1; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .help-kbd { display: inline-block; padding: 2px 6px; background: rgba(255,255,255,0.06); border-radius: 4px; font-family: monospace; font-size: 11px; color: #e8ecf1; }
+  .help-tip { padding: 10px 12px; background: rgba(79,140,255,0.05); border: 1px solid rgba(79,140,255,0.1); border-radius: 6px; font-size: 12px; color: #8b92a1; line-height: 1.5; }
+  .help-tip strong { color: #4f8cff; }
+  .help-shortcut-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .help-shortcut-row:last-child { border-bottom: none; }
+  .help-shortcut-row kbd { margin-left: auto; }
   /* ---- Day 7: Help modal ------------------------------------------------- */
   .help-content { font-size: 13px; color: #8b92a1; line-height: 1.7; }
   .help-content h3 { font-size: 14px; color: #e8ecf1; font-weight: 600; margin: 16px 0 6px; }
@@ -1489,14 +1517,14 @@
           <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.2.4.5.8 1 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.5 1z"></path>
         </svg>
       </button>
-	  <button id="btn-help" class="iconbtn" aria-label="Help" title="Help">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-      </button>
+		  <button id="btn-help" class="iconbtn" aria-label="Help" title="Help (?)">
+	        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+	             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	          <circle cx="12" cy="12" r="10"></circle>
+	          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+	          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+	        </svg>
+	      </button>
     </div>
   </header>
 
@@ -1841,32 +1869,41 @@
 								</div>
 						  </div>
 
-						  <!-- Pair Programmer tab -->
-						  <div class="explorer-ai-content" data-aicontent="pair">
-							<div id="pair-chat" class="pair-chat">
-							  <div class="explorer-empty" style="padding:16px;">
-								<div class="explorer-empty-icon">🤝</div>
-								<div class="explorer-empty-title">AI Pair Programmer</div>
-								<div class="explorer-empty-desc">Ask for changes, improvements, or bug fixes. Get exact line-by-line edit instructions you can apply with one click.</div>
+							  <!-- Pair Programmer tab -->
+							  <div class="explorer-ai-content" data-aicontent="pair">
+								<div id="pair-chat" class="pair-chat">
+								  <div class="explorer-empty" style="padding:16px;">
+									<div class="explorer-empty-icon">🤝</div>
+									<div class="explorer-empty-title">AI Pair Programmer</div>
+									<div class="explorer-empty-desc">Ask for changes, improvements, or bug fixes. Get exact line-by-line edit instructions you can apply with one click.</div>
+								  </div>
+								</div>
+								<div class="pair-input-bar">
+								  <div class="pair-actions">
+									<button class="pair-quick-btn" data-pair-q="fix">🐛 Fix bugs</button>
+									<button class="pair-quick-btn" data-pair-q="optimize">⚡ Optimize</button>
+									<button class="pair-quick-btn" data-pair-q="refactor">♻️ Refactor</button>
+									<button class="pair-quick-btn" data-pair-q="tests">🧪 Add tests</button>
+									<button class="pair-quick-btn" data-pair-q="docs">📝 Add docs</button>
+									<button class="pair-quick-btn" data-pair-q="types">🏷️ Add types</button>
+								  </div>
+								  <div id="pair-attachments" style="display:flex;flex-wrap:wrap;gap:4px;padding:0 8px;"></div>
+								  <div style="display:flex;gap:6px;align-items:flex-end;">
+									<div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+									  <textarea id="pair-input" rows="2" placeholder="Describe what to change, or attach a file…"></textarea>
+									</div>
+									<div style="display:flex;flex-direction:column;gap:4px;">
+									  <button id="btn-pair-attach" class="btn btn-ghost" style="font-size:10px;padding:4px 8px;" title="Attach current file or upload">
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.95-8.95"/></svg>
+										Attach
+									  </button>
+									  <button id="btn-pair-send" class="btn btn-primary" style="font-size:11px;" disabled>
+										Ask
+									  </button>
+									</div>
+								  </div>
+								</div>
 							  </div>
-							</div>
-							<div class="pair-input-bar">
-							  <div class="pair-actions">
-								<button class="pair-quick-btn" data-pair-q="fix">🐛 Fix bugs</button>
-								<button class="pair-quick-btn" data-pair-q="optimize">⚡ Optimize</button>
-								<button class="pair-quick-btn" data-pair-q="refactor">♻️ Refactor</button>
-								<button class="pair-quick-btn" data-pair-q="tests">🧪 Add tests</button>
-								<button class="pair-quick-btn" data-pair-q="docs">📝 Add docs</button>
-								<button class="pair-quick-btn" data-pair-q="types">🏷️ Add types</button>
-							  </div>
-							  <div style="display:flex;gap:6px;">
-								<textarea id="pair-input" rows="2" placeholder="Describe what to change…"></textarea>
-								<button id="btn-pair-send" class="btn btn-primary" style="font-size:11px;align-self:flex-end;" disabled>
-								  Ask
-								</button>
-							  </div>
-							</div>
-						  </div>
 
 						  <!-- Algorithm tab -->
 						  <div class="explorer-ai-content" data-aicontent="algo">
@@ -2178,6 +2215,73 @@
     </div>
   </div>
 </div>
+
+
+
+
+<!-- ========= Help modal ========= -->
+<div id="help-backdrop" class="modal-backdrop" hidden></div>
+<div id="help-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title"
+     hidden style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;max-width:640px;">
+  <div class="flex items-center justify-between mb-4">
+    <h2 id="help-title" class="text-[15px] font-semibold">Help & Shortcuts</h2>
+    <button id="btn-close-help" class="iconbtn" aria-label="Close help">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+  
+  <div class="help-content" style="max-height:60vh;overflow-y:auto;">
+    <!-- Getting Started -->
+    <div class="help-section">
+      <h4>Getting Started</h4>
+      <div class="help-tip">
+        <strong>Chat mode:</strong> Ask questions, get code. <strong>Build mode:</strong> AI interviews you, designs architecture, then builds module-by-module. <strong>Explore mode:</strong> Upload code, analyze with AI, get edits you can apply.
+      </div>
+    </div>
+    
+    <!-- Keyboard Shortcuts -->
+    <div class="help-section">
+      <h4>Keyboard Shortcuts</h4>
+      <div class="help-shortcut-row"><span>New session</span><kbd class="help-kbd">Ctrl+Shift+N</kbd></div>
+      <div class="help-shortcut-row"><span>Toggle sidebar</span><kbd class="help-kbd">Ctrl+B</kbd></div>
+      <div class="help-shortcut-row"><span>Send message</span><kbd class="help-kbd">Enter</kbd></div>
+      <div class="help-shortcut-row"><span>Newline in composer</span><kbd class="help-kbd">Shift+Enter</kbd></div>
+      <div class="help-shortcut-row"><span>Command palette</span><kbd class="help-kbd">Ctrl+Shift+P</kbd></div>
+      <div class="help-shortcut-row"><span>Debug panel</span><kbd class="help-kbd">Ctrl+Shift+D</kbd></div>
+      <div class="help-shortcut-row"><span>Settings</span><kbd class="help-kbd">Ctrl+,</kbd></div>
+      <div class="help-shortcut-row"><span>Help</span><kbd class="help-kbd">?</kbd></div>
+    </div>
+    
+    <!-- Modes -->
+    <div class="help-section">
+      <h4>Mode Guide</h4>
+      <p><strong style="color:#4f8cff;">Chat</strong> — Quick questions, code snippets, explanations. No persistence beyond the session.</p>
+      <p><strong style="color:#4f8cff;">Build</strong> — Full project generation. Stage A: requirements interview. Stage B: skeleton design. Stage C: module-by-module implementation with tests.</p>
+      <p><strong style="color:#4f8cff;">Explore</strong> — Upload existing code. AI analyzes structure, suggests improvements. Pair Programmer gives line-by-line edits you can apply with one click.</p>
+    </div>
+    
+    <!-- Tips -->
+    <div class="help-section">
+      <h4>Pro Tips</h4>
+      <div class="help-tip">In <strong>Build mode</strong>, be specific in requirements. The AI asks clarifying questions — answering well produces better code.</div>
+      <div class="help-tip" style="margin-top:8px;">In <strong>Explore mode</strong>, use the Pair Programmer's "Attach" button to include the current file or upload additional files for context.</div>
+      <div class="help-tip" style="margin-top:8px;">Use <strong>Ctrl+Shift+P</strong> for the command palette to quickly switch modes or actions.</div>
+    </div>
+    
+    <!-- Troubleshooting -->
+    <div class="help-section">
+      <h4>Troubleshooting</h4>
+      <p><strong>API errors?</strong> Check Settings → Test connection. Ensure your key has credits.</p>
+      <p><strong>Pyodide not loading?</strong> It downloads ~15MB on first use. Wait for the green dot in the status bar.</p>
+      <p><strong>Mobile issues?</strong> The sidebar auto-collapses. Tap the hamburger to open. Some panels are simplified on small screens.</p>
+    </div>
+  </div>
+</div>
+
 <!-- =========================================================================
      Script
      ========================================================================= -->
@@ -3208,9 +3312,10 @@ const LLM = (() => {
           if (done) break;
 
           // Avoid repeated string splitting by tracking line boundaries
-		          buffer += decoder.decode(value, { stream: true });
-		          const lines = buffer.split('\n');
-		          buffer = lines.pop() || '';
+			          const chunk = decoder.decode(value, { stream: true });
+			          buffer += chunk;
+			          const lines = buffer.split('\n');
+			          buffer = lines.pop() || '';
 
 	          for (const line of lines) {
             const trimmed = line.trim();
@@ -5070,7 +5175,7 @@ const StageC = (() => {
 				const bootstrap = '<script>window.App = window.App || { _modules: {}, _ready: [], registerModule(n,m){this._modules[n]=m;}, getModule(n){return this._modules[n];}, onReady(fn){this._ready.push(fn);} };<\/script>';
 				const errCatcher = '<script>window._smokeErrors = []; window.addEventListener("error", e => window._smokeErrors.push(e.message)); window.addEventListener("unhandledrejection", e => window._smokeErrors.push(String(e.reason)));<\/script>';
 				const finalCheck = '<script>setTimeout(() => { parent.postMessage({type:"smoke_check",errors:window._smokeErrors,modules:Object.keys(window.App._modules||{}),booted:!!window.App._booted}, "*"); }, 1500);<\/script>';
-				const html = '<!DOCTYPE html><html><head>' + errCatcher + bootstrap + cssLinks + cdnTags + '</head><body><div id="app"></div>' + jsScripts + '<script>document.dispatchEvent(new Event("DOMContentLoaded"));for(const fn of (window.App._ready||[])){try{fn();}catch(e){window._smokeErrors.push(e.message);}}window.App._booted=true;<\/script>' + finalCheck + '</body></html>';
+					const html = ['<!DOCTYPE html><html><head>', errCatcher, bootstrap, cssLinks, cdnTags, '</head><body><div id="app"></div>', jsScripts, '<script>document.dispatchEvent(new Event("DOMContentLoaded"));for(const fn of (window.App._ready||[])){try{fn();}catch(e){window._smokeErrors.push(e.message);}}window.App._booted=true;<\/script>', finalCheck, '</body></html>'].join('');
 
 				const smokeResult = await new Promise((resolve) => {
 					const iframe = document.createElement('iframe');
@@ -5425,28 +5530,28 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 
 		const deps = (dependencyArtifacts || []).map(a => '// === ' + a.moduleName + ' ===\n' + (a.code || '')).join('\n\n');
 
-		const html = '<!DOCTYPE html><html><body><div id="harness"></div><script>\n' +
-			'window.App = window.App || {};\n' +
-			'window.tests = [];\n' +
-			'function createTestDOM() {\n' +
-			'  const c = document.getElementById("harness");\n' +
-			'  c.innerHTML = "";\n' +
-			'  return c;\n' +
-			'}\n' +
-			'try {\n' +
-			deps + '\n' +
-			moduleCode + '\n' +
-			testCode + '\n' +
-			'} catch(e) {\n' +
-			'  parent.postMessage({type:"webapp_test_results",results:[{name:"_load",passed:false,message:"Load error: "+e.message}]},"*");\n' +
-			'}\n' +
-			'const results = [];\n' +
-			'for (const t of (window.tests || [])) {\n' +
-			'  try { results.push({name: t.name || "anon", ...t()}); }\n' +
-			'  catch(e) { results.push({name: t.name || "anon", passed: false, message: e.message}); }\n' +
-			'}\n' +
-			'parent.postMessage({type:"webapp_test_results",results},"*");\n' +
-			'<' + '/script></body></html>';
+					const html = ['<!DOCTYPE html><html><body><div id="harness"></div><script>\n',
+						'window.App = window.App || {};\n',
+						'window.tests = [];\n',
+						'function createTestDOM() {\n',
+						'  const c = document.getElementById("harness");\n',
+						'  c.innerHTML = "";\n',
+						'  return c;\n',
+						'}\n',
+						'try {\n',
+						deps, '\n',
+						moduleCode, '\n',
+						testCode, '\n',
+						'} catch(e) {\n',
+						'  parent.postMessage({type:"webapp_test_results",results:[{name:"_load",passed:false,message:"Load error: "+e.message}]},"*");\n',
+						'}\n',
+						'const results = [];\n',
+						'for (const t of (window.tests || [])) {\n',
+						'  try { results.push({name: t.name || "anon", ...t()}); }\n',
+						'  catch(e) { results.push({name: t.name || "anon", passed: false, message: e.message}); }\n',
+						'}\n',
+						'parent.postMessage({type:"webapp_test_results",results},"*");\n',
+						'<', '/script></body></html>'].join('');
 
 		iframe.srcdoc = html;
 		document.body.appendChild(iframe);
@@ -6670,7 +6775,14 @@ CodeSmith.explorer = Explorer;
  * ==========================================================================*/
 const UI = (() => {
   // ---- tiny DOM helpers ---------------------------------------------------
-  const $ = (sel) => document.querySelector(sel);
+  const _domCache = new Map();
+  const $ = (sel) => {
+    if (!_domCache.has(sel)) {
+      _domCache.set(sel, document.querySelector(sel));
+    }
+    return _domCache.get(sel);
+  };
+  $.clear = () => _domCache.clear();
   // Clear DOM query cache on dynamic content changes
 		document.addEventListener('DOMContentLoaded', () => {
 			const observer = new MutationObserver(() => {
@@ -6712,7 +6824,8 @@ const UI = (() => {
       else if (k in n)          n[k] = v;
       else                      n.setAttribute(k, v);
     }
-    for (const c of [].concat(children)) {
+    const flatChildren = Array.isArray(children) ? children : [children];
+    for (const c of flatChildren) {
       if (c == null) continue;
       n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
     }
@@ -6904,7 +7017,7 @@ function renderChat() {
       // Retry button for errors
       if (isError && m.recoverable) {
         const retryBtn = el('button', { class: 'btn', style: 'margin-top:6px;font-size:12px;align-self:flex-start;' }, 'Retry');
-        retryBtn.addEventListener('click', () => retryLastMessage());
+        retryBtn.addEventListener('click', retryLastMessage);
         col.appendChild(retryBtn);
       }
 
@@ -7181,7 +7294,8 @@ function renderChat() {
     sendBtn.classList.remove('btn-stop');
     sendBtn.classList.add('btn-primary');
     // Re-add the send arrow SVG
-    sendBtn.innerHTML = 'Send <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>';
+    const sendArrowSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>';
+    sendBtn.innerHTML = ['Send ', sendArrowSvg].join('');
     composer.disabled = false;
     composer.focus();
 
@@ -8811,14 +8925,16 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		  }
 		  row.appendChild(details);
 
-		  row.addEventListener('click', () => {
-			row.classList.toggle('expanded');
-			// Highlight in Mermaid
-			document.querySelectorAll('.module-row').forEach(r => {
-			  if (r !== row) r.classList.remove('highlighted');
-			});
-			row.classList.toggle('highlighted');
-		  });
+			  row.addEventListener('click', () => {
+				row.classList.toggle('expanded');
+				// Highlight in Mermaid - use cached query if possible
+				const moduleRows = document.querySelectorAll('.module-row');
+				for (let i = 0; i < moduleRows.length; i++) {
+				  const r = moduleRows[i];
+				  if (r !== row) r.classList.remove('highlighted');
+				}
+				row.classList.toggle('highlighted');
+			  });
 
 		  list.appendChild(row);
 		}
@@ -9405,19 +9521,18 @@ case 'symbols_requested':
 					window.App._booted = true;
 				});
 				<\/script>`;
-				const indexHtml = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>' + pageTitle + '</title>\n' + cssLinks + '\n' + cdnTags + '\n  ' + bootstrap + '\n</head>\n<body>\n  <div id="app"></div>\n' + jsTags + '\n  ' + initBoot + '\n</body>\n</html>\n';
+					const indexHtml = ['<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>', pageTitle, '</title>\n', cssLinks, '\n', cdnTags, '\n  ', bootstrap, '\n</head>\n<body>\n  <div id="app"></div>\n', jsTags, '\n  ', initBoot, '\n</body>\n</html>\n'].join('');
 				zip.file('index.html', indexHtml);
 			}
 
-			// Webapp README
-			const webappReadme = '# ' + (spec.goal || 'Web App') + '\n\n' +
-				'## Run\n\nOpen `index.html` directly in a browser, OR serve the folder:\n\n' +
-				'```bash\npython3 -m http.server 8000\n# then visit http://localhost:8000\n```\n\n' +
-				'## Files\n\n' +
-				arts.map(art => {
-				const sm = skel ? (skel.modules || []).find(m => m.id === art.moduleName) : null;
-				return '- `' + ((sm && sm.name) || art.moduleName) + '` — ' + ((sm && sm.purpose) || '');
-				}).join('\n') + '\n';
+				// Webapp README
+				const webappReadmeParts = ['# ', (spec.goal || 'Web App'), '\n\n', '## Run\n\nOpen `index.html` directly in a browser, OR serve the folder:\n\n', '```bash\npython3 -m http.server 8000\n# then visit http://localhost:8000\n```\n\n', '## Files\n\n'];
+				webappReadmeParts.push(...arts.map(art => {
+					const sm = skel ? (skel.modules || []).find(m => m.id === art.moduleName) : null;
+					return '- `' + ((sm && sm.name) || art.moduleName) + '` — ' + ((sm && sm.purpose) || '');
+				}));
+				webappReadmeParts.push('\n');
+				const webappReadme = webappReadmeParts.join('');
 			zip.file('README.md', webappReadme);
 
 			if (skel) zip.file('skeleton.json', JSON.stringify(skel, null, 2));
@@ -9465,20 +9580,21 @@ case 'symbols_requested':
 
 			// Generate run.py + README via orchestrator
 			const fullCode = arts.map(a => '# === ' + a.moduleName + '.py ===\n' + (a.code || '')).join('\n\n');
-			const runPyPrompt = `You have access to the full source of a Python package. Write a single run.py file at the top level that:
-				1. Imports the package's entry function (look at the modules below — find the main orchestrator function)
-				2. Defines 1-3 SAMPLES dicts with realistic input matching the actual function signature and the spec's example data
-				3. Has a main() that takes optional sys.argv[1] to pick a sample, defaults to running all
-				4. Prints results as JSON
-				5. Uses ONLY stdlib imports
-
-				Spec example data:
-				${JSON.stringify((spec && spec.inputs && spec.inputs.example) || {}, null, 2).slice(0, 2000)}
-
-			Source:
-			${fullCode.slice(0, 12000)}
-
-			Output ONLY the Python code for run.py. No markdown fences, no explanation.`;
+				const runPyPrompt = ['You have access to the full source of a Python package. Write a single run.py file at the top level that:',
+					'1. Imports the package\'s entry function (look at the modules below — find the main orchestrator function)',
+					'2. Defines 1-3 SAMPLES dicts with realistic input matching the actual function signature and the spec\'s example data',
+					'3. Has a main() that takes optional sys.argv[1] to pick a sample, defaults to running all',
+					'4. Prints results as JSON',
+					'5. Uses ONLY stdlib imports',
+					'',
+					'Spec example data:',
+					JSON.stringify((spec && spec.inputs && spec.inputs.example) || {}, null, 2).slice(0, 2000),
+					'',
+					'Source:',
+					fullCode.slice(0, 12000),
+					'',
+					'Output ONLY the Python code for run.py. No markdown fences, no explanation.'
+				].join('\n');
 
 					let runPy = '';
 					try {
@@ -9494,18 +9610,19 @@ case 'symbols_requested':
 					} catch {}
 					if (runPy) zip.file('run.py', runPy);
 
-			const readmePrompt = `Write a README.md for this Python project. The user is non-technical. Required sections in this exact order:
-				1. # Title (one line)
-				2. ## How to run (exact bash commands starting with "cd path/to/folder", then "python run.py")
-				3. ## How to use in your code (one short Python snippet importing from the actual modules)
-				4. ## Files (bullet list of every .py with one-line purpose)
-				5. ## Limitations (real ones from the code, not generic)
-
-				Do NOT include git clone, pip install steps unless requirements.txt has real packages. Output ONLY markdown.
-
-			Modules: ${arts.map(a => a.moduleName).join(', ')}
-			Has run.py: ${!!runPy}
-			Spec goal: ${spec.goal || ''}`;
+				const readmePrompt = ['Write a README.md for this Python project. The user is non-technical. Required sections in this exact order:',
+					'1. # Title (one line)',
+					'2. ## How to run (exact bash commands starting with "cd path/to/folder", then "python run.py")',
+					'3. ## How to use in your code (one short Python snippet importing from the actual modules)',
+					'4. ## Files (bullet list of every .py with one-line purpose)',
+					'5. ## Limitations (real ones from the code, not generic)',
+					'',
+					'Do NOT include git clone, pip install steps unless requirements.txt has real packages. Output ONLY markdown.',
+					'',
+					'Modules: ' + arts.map(a => a.moduleName).join(', '),
+					'Has run.py: ' + !!runPy,
+					'Spec goal: ' + (spec.goal || '')
+				].join('\n');
 					let readme = '# ' + (spec.goal || 'CodeSmith Project') + '\n\nRun: `python run.py`\n';
 					const attribution = '\n\n---\n_Generated with [CodeSmith](https://khalecl.github.io/codesmith/) by Khaled Diab._\n';
 
@@ -10120,23 +10237,22 @@ case 'symbols_requested':
 		modal.appendChild(header);
 
 		const content = el('div', { class: 'help-content' });
-		content.innerHTML = `
-		  <h3>What CodeSmith Is</h3>
-		  <p>A browser-based tool that turns plain-English descriptions into working Python programs. AI writes the code, tests it, fixes failures automatically, and packages the result for download.</p>
-		  <h3>How It Works</h3>
-		  <p><strong>1. Requirements</strong> — Answer a few questions so the AI understands what you need.</p>
-		  <p><strong>2. Skeleton</strong> — AI designs the module architecture. You review and approve.</p>
-		  <p><strong>3. Build</strong> — Each module is coded, tested, and repaired until all tests pass.</p>
-		  <p><strong>4. Download</strong> — Get a zip with source, tests, docs, and requirements.txt.</p>
-		  <h3>Keyboard Shortcuts</h3>
-		  <p><code>Ctrl+K</code> Command palette &nbsp; <code>Ctrl+,</code> Settings &nbsp; <code>Ctrl+Shift+D</code> Debug panel &nbsp; <code>Esc</code> Close modal</p>
-		  <h3>Known Limitations</h3>
-		  <p>Pyodide (WASM Python) cannot run C extensions, filesystem I/O, networking, or GUIs. Builds on the free tier take 5-10 minutes. Memory is limited to ~100MB.</p>
-		  <h3>Privacy</h3>
-		  <p>Your code and prompts go only to the AI endpoint you configure. Nothing is stored on servers we control. All session data lives in your browser's IndexedDB.</p>
-		  <h3>Links</h3>
-		  <p><a href="#" style="color:#4f8cff;">GitHub repository (coming soon)</a></p>
-		`;
+				content.innerHTML = ['<h3>What CodeSmith Is</h3>',
+				'<p>A browser-based tool that turns plain-English descriptions into working Python programs. AI writes the code, tests it, fixes failures automatically, and packages the result for download.</p>',
+				'<h3>How It Works</h3>',
+				'<p><strong>1. Requirements</strong> — Answer a few questions so the AI understands what you need.</p>',
+				'<p><strong>2. Skeleton</strong> — AI designs the module architecture. You review and approve.</p>',
+				'<p><strong>3. Build</strong> — Each module is coded, tested, and repaired until all tests pass.</p>',
+				'<p><strong>4. Download</strong> — Get a zip with source, tests, docs, and requirements.txt.</p>',
+				'<h3>Keyboard Shortcuts</h3>',
+				'<p><code>Ctrl+K</code> Command palette &nbsp; <code>Ctrl+,</code> Settings &nbsp; <code>Ctrl+Shift+D</code> Debug panel &nbsp; <code>Esc</code> Close modal</p>',
+				'<h3>Known Limitations</h3>',
+				'<p>Pyodide (WASM Python) cannot run C extensions, filesystem I/O, networking, or GUIs. Builds on the free tier take 5-10 minutes. Memory is limited to ~100MB.</p>',
+				'<h3>Privacy</h3>',
+				'<p>Your code and prompts go only to the AI endpoint you configure. Nothing is stored on servers we control. All session data lives in your browser\'s IndexedDB.</p>',
+				'<h3>Links</h3>',
+				'<p><a href="#" style="color:#4f8cff;">GitHub repository (coming soon)</a></p>'
+			].join('');
 		modal.appendChild(content);
 
 		const close = () => { backdrop.remove(); modal.remove(); };
@@ -10267,20 +10383,21 @@ case 'symbols_requested':
 				alert('Import failed: ' + err.message);
 			}
 			});
-		  function el(tag, props = {}, children = []) {
-			const n = document.createElement(tag);
-			for (const [k, v] of Object.entries(props)) {
-			  if (k === 'class') n.className = v;
-			  else if (k === 'style' && typeof v === 'string') n.setAttribute('style', v);
-			  else if (k in n) n[k] = v;
-			  else n.setAttribute(k, v);
-			}
-			for (const c of [].concat(children)) {
-			  if (c == null) continue;
-			  n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
-			}
-			return n;
-		  }
+			  function el(tag, props = {}, children = []) {
+				const n = document.createElement(tag);
+				for (const [k, v] of Object.entries(props)) {
+				  if (k === 'class') n.className = v;
+				  else if (k === 'style' && typeof v === 'string') n.setAttribute('style', v);
+				  else if (k in n) n[k] = v;
+				  else n.setAttribute(k, v);
+				}
+				const flatChildren = Array.isArray(children) ? children : [children];
+				for (const c of flatChildren) {
+				  if (c == null) continue;
+				  n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+				}
+				return n;
+			  }
 
 		  // AI tab switching
 		  for (const tab of document.querySelectorAll('.ai-tab')) {
@@ -10469,24 +10586,25 @@ case 'symbols_requested':
 				docs: 'Add clear docstrings and inline comments explaining the logic.',
 				types: 'Add type hints to all functions and variables.',
 			  };
-				    const queryText = map[q] || q;
-						$('#pair-input').value = queryText;
-						// Show routing preview
-							let routing;
-							try {
-								routing = CodeSmith.router.route(question, userModelChoice);
-							} catch (e) {
-								routing = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
+					    const queryText = map[q] || q;
+							const pairInput = $('#pair-input');
+							if (pairInput) pairInput.value = queryText;
+							// Show routing preview
+								let routing;
+								try {
+									routing = CodeSmith.router.route(question, userModelChoice);
+								} catch (e) {
+									routing = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
+								}
+								const routeEl = $('#route-indicator');
+							if (routeEl) {
+								const modelName = CodeSmith.llm.getModelForTier(routing.tier);
+								const displayName = typeof modelName === 'string' ? modelName.split('/').pop() : routing.tier;
+								routeEl.innerHTML = ['<span class="route-model">', displayName, '</span> <span class="route-reason">— ', routing.reason, '</span>'].join('');
+								routeEl.hidden = false;
 							}
-							const routeEl = $('#route-indicator');
-						if (routeEl) {
-							const modelName = CodeSmith.llm.getModelForTier(routing.tier);
-							const displayName = typeof modelName === 'string' ? modelName.split('/').pop() : routing.tier;
-							routeEl.innerHTML = `<span class="route-model">${displayName}</span> <span class="route-reason">— ${routing.reason}</span>`;
-							routeEl.hidden = false;
-						}
-						_switchToAiTab('pair');
-						_pairSend();
+							_switchToAiTab('pair');
+							_pairSend();
 			});
 		  }
 		  // Wire bottom bar and terminal
@@ -10945,9 +11063,8 @@ case 'symbols_requested':
 		      return;
 		    }
 
-			const container = $('#explorer-analysis');
-			// Append AI analysis after local analysis
-			const aiSection = document.createElement('div');
+				// container already defined above
+				const aiSection = document.createElement('div');
 			aiSection.className = 'analysis-section';
 			aiSection.style.borderTop = '2px solid rgba(79,140,255,0.2)';
 
