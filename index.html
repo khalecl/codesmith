@@ -404,28 +404,41 @@
 		    }
 		    .stage-a-spec { max-height: 40vh; overflow-y: auto; }
 		    
-		    /* Explorer: simplified mobile layout */
-		    .explorer-layout { flex-direction: column !important; overflow: auto; }
-		    .explorer-tree {
-		      width: 100% !important; min-width: 0 !important; max-width: none !important;
-		      border: none !important; max-height: 180px; min-height: 0; flex-shrink: 0;
-		    }
-		    .explorer-resize-handle { display: none !important; }
-		    .explorer-ai {
-		      width: 100% !important; min-width: 0 !important; max-width: none !important;
-		      border: none !important; border-top: 1px solid rgba(255,255,255,Passed 0.06) !important;
-		      max-height: 50vh; min-height: 200px;
-		    }
-		    .explorer-editor { min-height: 250px; }
-		    .monaco-container { min-height: 200px; }
-		    
-		    /* Hide non-essential explorer panels on mobile */
-		    .explorer-bottom-bar { display: none; }
-		    .editor-breadcrumb { display: none; }
-		    .explorer-editor-tabs { overflow-x: auto; }
-		    .explorer-model-bar { flex-wrap: wrap; gap: 4px; }
-		    .explorer-model-bar select { min-width: 120px; }
-		    
+				/* ===== Explorer: ONE full-height pane at a time on mobile ===== */
+				.explorer-layout { flex-direction: column !important; overflow: hidden !important; }
+
+				.explorer-tree, .explorer-editor, .explorer-ai {
+				width: 100% !important; min-width: 0 !important; max-width: none !important;
+				max-height: none !important; min-height: 0 !important;
+				border: none !important; flex: 1 1 auto !important;
+				}
+
+				/* Show only the pane selected by the switcher */
+				body[data-epane="files"] .explorer-editor,
+				body[data-epane="files"] .explorer-ai,
+				body[data-epane="code"]  .explorer-tree,
+				body[data-epane="code"]  .explorer-ai,
+				body[data-epane="ai"]    .explorer-tree,
+				body[data-epane="ai"]    .explorer-editor { display: none !important; }
+				/* Safety default before JS sets the attribute */
+				body:not([data-epane]) .explorer-tree,
+				body:not([data-epane]) .explorer-ai { display: none !important; }
+
+				#epane-switch { display: flex !important; }
+
+				.explorer-resize-handle { display: none !important; }
+				.monaco-container { flex: 1 1 auto !important; min-height: 0 !important; height: auto !important; }
+				.explorer-bottom-bar { display: none; }
+				.editor-breadcrumb { display: none; }
+				.explorer-editor-tabs { overflow-x: auto; }
+				.explorer-model-bar { flex-wrap: wrap; gap: 4px; }
+				.explorer-model-bar select { min-width: 120px; }
+
+				/* Explore mode has no chat — reclaim the fixed composer + status strip */
+				body.explore-mode .hairline-t:has(#composer) { display: none !important; }
+				body.explore-mode #mobile-status-indicator { display: none !important; }
+				body.explore-mode #mobile-mode-fab { bottom: 64px; }
+
 		    /* Pair programmer mobile fixes */
 		    .pair-input-bar textarea { min-height: 60px; }
 		    .pair-actions { flex-wrap: wrap; }
@@ -1287,6 +1300,20 @@
 		}
 		.explorer-resize-handle:hover { background: rgba(79,140,255,0.3); }
 		.explorer-resize-handle:active { background: #4f8cff; }
+
+		/* Mobile pane switcher — hidden on desktop, enabled by the media query */
+		#epane-switch {
+		  display: none; flex-shrink: 0; gap: 4px; padding: 6px 8px;
+		  border-top: 1px solid rgba(255,255,255,0.06);
+		  background: #0f1319;
+		}
+		#epane-switch button {
+		  flex: 1; min-height: 40px; border: none; border-radius: 6px;
+		  background: rgba(255,255,255,0.03); color: #8b92a1;
+		  font-size: 11px; font-family: inherit; font-weight: 600;
+		  display: flex; align-items: center; justify-content: center; gap: 5px;
+		}
+		#epane-switch button.active { background: rgba(79,140,255,0.14); color: #4f8cff; }
 	/* ---- Tier 1: Monaco + Project Tree + Terminal + Snapshots ------------- */
 		.monaco-container {
 		  flex: 1; min-height: 0; position: relative; overflow: hidden;
@@ -1772,6 +1799,7 @@
 					        <span style="font-size:10px;color:#5b6474;" id="explorer-line-info"></span>
 					        <button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Copy</button>
 							<button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">📸 Snapshot</button>
+							<button id="btn-explorer-zen" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" title="Focus mode (Ctrl+Shift+Z)">⛶</button>
 					        <button id="btn-explorer-preview" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" hidden>👁 Preview</button>					      </div>
 					 
 					      <!-- Monaco editor container -->
@@ -1922,6 +1950,13 @@
 							</div>
 						  </div>
 						</div>
+									  </div>
+
+					  <!-- Mobile pane switcher -->
+					  <div id="epane-switch">
+					    <button data-epane="files">📁 Files</button>
+					    <button data-epane="code" class="active">‹/› Code</button>
+					    <button data-epane="ai">🤝 AI</button>
 					  </div>
 					</div>
 					<input type="file" id="explorer-file-input" hidden multiple
@@ -6407,11 +6442,10 @@ CodeSmith.explorer = Explorer;
 		      value: '',
 		      language: 'plaintext',
 		      theme: 'codesmith-dark',
-		      fontSize: 13,
+		      fontSize: ('ontouchstart' in window) ? 14 : 13,
 		      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
 		      fontLigatures: true,
-		      minimap: { enabled: true, maxColumn: 80, renderCharacters: false },
-		      scrollBeyondLastLine: false,
+ minimap: { enabled: !('ontouchstart' in window), maxColumn: 80, renderCharacters: false },		      scrollBeyondLastLine: false,
 		      renderWhitespace: 'selection',
 		      bracketPairColorization: { enabled: true },
 		      guides: { bracketPairs: true, indentation: true },
@@ -6420,7 +6454,7 @@ CodeSmith.explorer = Explorer;
 		      showFoldingControls: 'always',
 		      lineNumbers: 'on',
 		      glyphMargin: true,
-		      wordWrap: 'off',
+		   wordWrap: ('ontouchstart' in window) ? 'on' : 'off',
 		      automaticLayout: true,
 		      suggestOnTriggerCharacters: true,
 		      quickSuggestions: true,
@@ -8028,6 +8062,8 @@ function wireComposer() {
 			     _buildMode = btn.dataset.mode;
 					$('#split-right').hidden = _buildMode !== 'build' && _buildMode !== 'explore';
 					document.body.classList.toggle('build-mode', _buildMode === 'build' || _buildMode === 'explore');
+					document.body.classList.toggle('explore-mode', _buildMode === 'explore');
+					if (_buildMode === 'explore') setTimeout(() => { try { CodeSmith.monaco.getEditor()?.layout(); } catch (_) {} }, 80);
 					if (_buildMode === 'explore') {
 					// Hide build panels, show explorer
 					$('#stage-a-panel').hidden = true;
@@ -11757,6 +11793,32 @@ case 'symbols_requested':
 		    clearTimeout(_diagDebounce);
 		    _diagDebounce = setTimeout(() => _runLiveDiagnostics(filename), 500);
 		  });
+		 // Zen mode toggle: Ctrl+Shift+Z or Escape to exit
+		 		 // ---- Mobile Explorer pane switching --------------------------------
+		  CodeSmith.setExplorerPane = function (pane) {
+		    document.body.dataset.epane = pane;
+		    for (const b of document.querySelectorAll('#epane-switch button')) {
+		      b.classList.toggle('active', b.dataset.epane === pane);
+		    }
+		    // Monaco must re-measure after its container changes size
+		    setTimeout(() => { try { CodeSmith.monaco.getEditor()?.layout(); } catch (_) {} }, 0);
+		  };
+		  if (!document.body.dataset.epane) document.body.dataset.epane = 'code';
+		  for (const b of document.querySelectorAll('#epane-switch button')) {
+		    b.addEventListener('click', () => CodeSmith.setExplorerPane(b.dataset.epane));
+		  }
+		  // Tapping a file in the tree jumps straight to the code pane on mobile
+		  document.getElementById('explorer-tree-body')?.addEventListener('click', (ev) => {
+		    if (window.innerWidth <= 768 && ev.target.closest('.ftree-item')) {
+		      setTimeout(() => CodeSmith.setExplorerPane('code'), 60);
+		    }
+		  });
+		  // Focus (zen) toggle button — usable without a keyboard
+		  document.getElementById('btn-explorer-zen')?.addEventListener('click', () => {
+		    document.body.classList.toggle('zen-mode');
+		    setTimeout(() => { try { CodeSmith.monaco.getEditor()?.layout(); } catch (_) {} }, 0);
+		  });
+
 		 // Zen mode toggle: Ctrl+Shift+Z or Escape to exit
 			  document.addEventListener('keydown', (ev) => {
 			    if (ev.ctrlKey && ev.shiftKey && ev.key === 'Z') {
