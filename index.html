@@ -74,23 +74,39 @@
 <script>
   var require = { paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
 <script>
-  require(['vs/editor/editor.main'], function() {
-    window._monacoReady = true;
-    // Load xterm AFTER Monaco owns the AMD loader
-	var _amdDefine = window.define;
-	    window.define = undefined;
-	    var s1 = document.createElement('script');
-	    s1.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
-	    s1.onload = function() {
-	      var s2 = document.createElement('script');
-	      s2.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
-	      s2.onload = function() { window.define = _amdDefine; };
-	      document.head.appendChild(s2);
-	    };
-	    document.head.appendChild(s1);
-  });
+  // Load xterm BEFORE Monaco's AMD loader installs window.define.
+  // xterm's UMD build detects define.amd and would register as an AMD module
+  // instead of attaching to window — so it must load first.
+  (function loadXtermThenMonaco() {
+    function loadScript(src) {
+      return new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = function() { reject(new Error('Failed to load ' + src)); };
+        document.head.appendChild(s);
+      });
+    }
+    loadScript('https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js')
+      .then(function() {
+        return loadScript('https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js');
+      })
+      .catch(function(err) { console.warn('[CodeSmith] xterm load failed:', err.message); })
+      .finally(function() {
+        // Load Monaco's AMD loader ONLY AFTER xterm has attached to window.
+        // Loading loader.js earlier would install window.define and make
+        // xterm register as an anonymous AMD module instead.
+        loadScript('https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js')
+          .then(function() {
+            require(['vs/editor/editor.main'], function() {
+              window._monacoReady = true;
+            });
+          })
+          .catch(function(err) { console.warn('[CodeSmith] Monaco loader failed:', err.message); });
+      });
+  })();
 </script>
 
 <script>
@@ -1581,6 +1597,10 @@
 		<div class="hairline-t p-2">
 			<div class="text-[11px] text-muted px-2 py-1 font-semibold uppercase tracking-wider">Artifacts</div>
 			<div id="artifact-list" class="flex flex-col gap-1 max-h-[200px] overflow-y-auto"></div>
+		  </div>
+		  		<div class="hairline-t p-2">
+			<div class="text-[11px] text-muted px-2 py-1 font-semibold uppercase tracking-wider">Recent workspaces</div>
+			<div id="workspace-list" class="flex flex-col gap-1 max-h-[160px] overflow-y-auto"></div>
 		  </div>
     </aside>
 
@@ -5965,7 +5985,18 @@ CodeSmith.explorer = Explorer;
 								routing = CodeSmith.router.route(question, userModelChoice);
 							} catch (e) {
 								routing = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
-							}					
+							}			
+						// Multi-file context: pull in files related by import edges
+						let relatedSection = '';
+						try {
+						const related = CodeSmith.knowledge.getRelatedFiles(filename, 3);
+						const parts = [];
+						for (const rel of related) {
+							const rf = CodeSmith.explorer.getFile(rel);
+							if (rf) parts.push('--- RELATED FILE: ' + rel + ' ---\n' + rf.content.slice(0, 4000));
+						}
+						if (parts.length > 0) relatedSection = '\n\nRELATED FILES (imported by / importing the current file):\n' + parts.join('\n\n');
+						} catch {}		
 						// Project context from knowledge graph
 						let projectContext = '';
 						try { projectContext = CodeSmith.knowledge.getProjectContext(); } catch {}
@@ -5982,7 +6013,7 @@ CodeSmith.explorer = Explorer;
 					
 						const messages = [
 						{ role: 'system', content: PAIR_SYSTEM },
-						{ role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}${projectSection}\n\nRequest: ${question}` },
+						{ role: 'user', content: `File: ${filename} (${language})\n\n\`\`\`${language}\n${numberedCode}\n\`\`\`${docsSection}${projectSection}${relatedSection}\n\nRequest: ${question}` },
 						];
 					
 						for await (const ev of CodeSmith.llm.chat({
@@ -6363,12 +6394,34 @@ CodeSmith.explorer = Explorer;
 					'pytest','setuptools','pip'];
 					return stdlib.includes(pkg);
 				}
-				
+				function getRelatedFiles(filename, max) {
+					max = max || 3;
+					const related = new Set();
+					const base = filename.replace(/\.\w+$/, '');
+					const info = _knowledge.files[filename];
+					// Files this file imports
+					if (info) {
+					for (const imp of info.imports || []) {
+						const target = Object.keys(_knowledge.files).find(f =>
+						f !== filename && (f === imp.module || f.replace(/\.\w+$/, '') === imp.module));
+						if (target) related.add(target);
+					}
+					}
+					// Files that import this file
+					for (const [fname, finfo] of Object.entries(_knowledge.files)) {
+					if (fname === filename) continue;
+					for (const imp of finfo.imports || []) {
+						if (imp.module === base || imp.module === filename) { related.add(fname); break; }
+					}
+					}
+					return Array.from(related).slice(0, max);
+				}
 				function reset() {
 					_knowledge = { files: {}, callGraph: {}, patterns: [], issues: [], dependencies: {}, conventions: {} };
 				}
 				
-				return { learnFromFile, getProjectContext, getFileKnowledge, getSymbolsAcrossProject, getKnownIssues, getDependencies, reset };
+				return { learnFromFile, getProjectContext, getFileKnowledge, getSymbolsAcrossProject, getKnownIssues, getDependencies, getRelatedFiles, reset };
+
 				})();
 				CodeSmith.knowledge = ProjectKnowledge;
 	// === MONACO EDITOR MANAGER ==================================================
@@ -7824,6 +7877,7 @@ function wireComposer() {
 		    wireKeyboardShortcuts(); // Day 7
 		    wireErrorRecovery(); // Day 7
 			if ($('#btn-explorer-upload')) { try { wireExplorer(); } catch(e) { console.warn('[CodeSmith] Explorer wire skipped:', e.message); } }
+	  try { _renderWorkspaceList(); } catch(e) {}
 	  // Help button
 		    const helpBtn = $('#btn-help');
 		    if (helpBtn) helpBtn.addEventListener('click', openHelp);
@@ -11504,8 +11558,7 @@ case 'symbols_requested':
 					// wrong place. "Apply all" already applies edits bottom-up, so
 					// earlier line numbers stay valid without any adjustment.)
 
-					const result = CodeSmith.explorer.applyEdit(filename, adjustedEdit);
-					if (result.ok) {
+					const result = CodeSmith.explorer.applyEdit(filename, edit);					if (result.ok) {
 					card.classList.add('edit-applied');
 					card.dataset.appliedAt = String(Date.now());
 					applyBtn.textContent = '↶ Undo';
@@ -12140,6 +12193,7 @@ case 'symbols_requested':
 		      try {
 		        const data = CodeSmith.explorer.serialize();
 		        if (data.files && Object.keys(data.files).length > 0) {
+					  _recordWorkspaceHistory();
 		          CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).catch(() => {});
 		        }
 		      } catch {}
@@ -12150,6 +12204,8 @@ case 'symbols_requested':
 		    try {
 		      const data = CodeSmith.explorer.serialize();
 		      if (!data.files || Object.keys(data.files).length === 0) return;
+			  		      _recordWorkspaceHistory();
+
 		      CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).then(() => {
 		        const toast = el('div', { style: 'position:fixed;bottom:20px;right:20px;background:#4f8cff;color:#0b0d10;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;' }, '✓ Workspace saved');
 		        document.body.appendChild(toast);
@@ -12168,6 +12224,48 @@ case 'symbols_requested':
 		        if (first) _explorerShowFile(first);
 		      }
 		    } catch {}
+		  }
+		  async function _recordWorkspaceHistory() {
+		    try {
+		      const data = CodeSmith.explorer.serialize();
+		      if (!data.files || Object.keys(data.files).length === 0) return;
+		      const rec = (await CodeSmith.db.getArtifact('workspace_history')) || { id: 'workspace_history', entries: [] };
+		      const key = JSON.stringify(Object.keys(data.files).sort());
+		      const entries = (rec.entries || []).filter(e => e.key !== key);
+		      const names = Object.keys(data.files);
+		      entries.unshift({ key, ts: Date.now(), label: names[0] + (names.length > 1 ? ' +' + (names.length - 1) : ''), data });
+		      rec.entries = entries.slice(0, 5);
+		      await CodeSmith.db.putArtifact(rec);
+		      _renderWorkspaceList();
+		    } catch {}
+		  }
+		  async function _renderWorkspaceList() {
+		    const list = document.getElementById('workspace-list');
+		    if (!list) return;
+		    list.replaceChildren();
+		    let rec;
+		    try { rec = await CodeSmith.db.getArtifact('workspace_history'); } catch { return; }
+		    const entries = (rec && rec.entries) || [];
+		    if (entries.length === 0) {
+		      list.appendChild(el('div', { class: 'text-muted text-[11px] px-2 py-2 text-center' }, 'No recent workspaces'));
+		      return;
+		    }
+		    for (const entry of entries) {
+		      const count = Object.keys(entry.data.files || {}).length;
+		      const item = el('div', { class: 'artifact-item' }, [
+		        el('span', { class: 'art-name' }, entry.label || 'Workspace'),
+		        el('span', { class: 'art-status' }, count + ' files · ' + fmtTime(entry.ts)),
+		      ]);
+		      item.addEventListener('click', () => {
+		        CodeSmith.explorer.restore(entry.data);
+		        _explorerRenderTree();
+		        _explorerRenderTabs();
+		        const first = CodeSmith.explorer.getActiveFile() || (CodeSmith.explorer.getFileList()[0] || {}).name;
+		        if (first) _explorerShowFile(first);
+		        document.querySelector('.mode-btn[data-mode="explore"]')?.click();
+		      });
+		      list.appendChild(item);
+		    }
 		  }
 
 		  // ---- Ctrl+P: quick file open ----------------------------------------
