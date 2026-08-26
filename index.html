@@ -10938,11 +10938,41 @@ case 'symbols_requested':
 		  }
 		}
 
+		// Per-file AI panel state cache — preserves analysis/pair/algo content across file switches
+		const _aiPanelCache = {}; // { filename: { analysis, pair, algo } }
+		function _saveAiPanelState(filename) {
+		  if (!filename) return;
+		  const a = document.querySelector('#explorer-analysis');
+		  const p = document.querySelector('#pair-chat');
+		  const g = document.querySelector('#algo-container');
+		  _aiPanelCache[filename] = {
+		    analysis: a ? a.innerHTML : '',
+		    pair: p ? p.innerHTML : '',
+		    algo: g ? g.innerHTML : '',
+		  };
+		}
+		function _restoreAiPanelState(filename) {
+		  const cached = _aiPanelCache[filename];
+		  const analysisEl = document.querySelector('#explorer-analysis');
+		  const pairChat = document.querySelector('#pair-chat');
+		  const algoContainer = document.querySelector('#algo-container');
+		  if (cached) {
+		    if (analysisEl) analysisEl.innerHTML = cached.analysis;
+		    if (pairChat) pairChat.innerHTML = cached.pair;
+		    if (algoContainer) algoContainer.innerHTML = cached.algo;
+		    return true;
+		  }
+		  return false;
+		}
+		let _lastShownFile = null;
 		function _explorerShowFile(name) {
 		  const $ = (sel) => document.querySelector(sel);
 		  if (!name) return;
 		  const file = CodeSmith.explorer.getFile(name);
 		  if (!file) return;
+		  // Save outgoing file's AI panels before switching
+		  if (_lastShownFile && _lastShownFile !== name) _saveAiPanelState(_lastShownFile);
+		  _lastShownFile = name;
 		 
 			$('#explorer-editor-header').hidden = false;
 			$('#explorer-file-path').textContent = name;
@@ -10971,13 +11001,15 @@ case 'symbols_requested':
 		    _runLiveDiagnostics(name);
 		  }
 		 
-		 	// Reset AI panels for new file
-			const analysisEl = document.querySelector('#explorer-analysis');
-			if (analysisEl) analysisEl.replaceChildren();
-			const pairChat = document.querySelector('#pair-chat');
-			if (pairChat) pairChat.innerHTML = '<div class="explorer-empty" style="padding:16px;"><div class="explorer-empty-icon">🤝</div><div class="explorer-empty-title">AI Pair Programmer</div><div class="explorer-empty-desc">Ask for changes, improvements, or bug fixes.</div></div>';
-			const algoContainer = document.querySelector('#algo-container');
-			if (algoContainer) algoContainer.innerHTML = '<div class="explorer-empty"><div class="explorer-empty-icon">🔀</div><div class="explorer-empty-title">Algorithm Flowchart</div><div class="explorer-empty-desc">Generates a visual flowchart of the code\'s logic</div></div>';
+		 	// Restore this file's AI panels (or reset if never visited)
+			if (!_restoreAiPanelState(name)) {
+				const analysisEl = document.querySelector('#explorer-analysis');
+				if (analysisEl) analysisEl.replaceChildren();
+				const pairChat = document.querySelector('#pair-chat');
+				if (pairChat) pairChat.innerHTML = '<div class="explorer-empty" style="padding:16px;"><div class="explorer-empty-icon">🤝</div><div class="explorer-empty-title">AI Pair Programmer</div><div class="explorer-empty-desc">Ask for changes, improvements, or bug fixes.</div></div>';
+				const algoContainer = document.querySelector('#algo-container');
+				if (algoContainer) algoContainer.innerHTML = '<div class="explorer-empty"><div class="explorer-empty-icon">🔀</div><div class="explorer-empty-title">Algorithm Flowchart</div><div class="explorer-empty-desc">Generates a visual flowchart of the code\'s logic</div></div>';
+			}
 		  // Run local analysis
 		  const analysis = CodeSmith.explorer.analyzeCode(file.content, file.language);
 			// Feed basic structure into knowledge graph (no AI needed)
