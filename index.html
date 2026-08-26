@@ -5809,12 +5809,20 @@ CodeSmith.stageC = StageC;
 		};
 		return map[ext] || 'text';
 	}
-
+			function serialize() {
+				return { files: _files, activeFile: _activeFile, openTabs: _openTabs };
+			}
+			function restore(data) {
+				if (!data || !data.files) return;
+				_files = data.files;
+				_activeFile = data.activeFile || null;
+				_openTabs = Array.isArray(data.openTabs) ? data.openTabs : [];
+			}
 			return {
 				addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
 				getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
 				getEditHistory, undoLastEdit, reapplyEdit,
-				clearAll, deleteFile, analyzeCode,
+				clearAll, deleteFile, analyzeCode, serialize, restore,
 			};
 
 		function reapplyEdit(historyIndex) {
@@ -8362,6 +8370,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			return;
 			}
 			for (const a of artifacts) {
+			if (a.id === 'explorer_workspace') continue;
 			const item = el('div', { class: 'artifact-item' }, [
 				el('span', { class: 'art-name' }, a.moduleName),
 				el('span', { class: 'art-status' }, a.status + ' · ' + fmtTime(a.createdAt)),
@@ -10302,6 +10311,14 @@ case 'symbols_requested':
 	  function wireKeyboardShortcuts() {
 		document.addEventListener('keydown', (ev) => {
 		  const mod = ev.ctrlKey || ev.metaKey;
+		  // Ctrl+S: save explorer workspace (prevents browser Save Page dialog)
+		  if (mod && ev.key === 's') { ev.preventDefault(); _saveWorkspaceNow(); return; }
+		  // Ctrl+P: quick file open
+		  if (mod && !ev.shiftKey && ev.key === 'p') { ev.preventDefault(); openFilePalette(); return; }
+		  // Ctrl+Shift+P: command palette
+		  if (mod && ev.shiftKey && ev.key === 'P') { ev.preventDefault(); openCommandPalette(); return; }
+		  // Ctrl+Shift+F: cross-file search
+		  if (mod && ev.shiftKey && ev.key === 'F') { ev.preventDefault(); openSearchPanel(); return; }
 		  // Ctrl+K: command palette
 		  if (mod && ev.key === 'k') { ev.preventDefault(); openCommandPalette(); return; }
 		  // Ctrl+,: settings
@@ -10312,6 +10329,15 @@ case 'symbols_requested':
 			const modals = document.querySelectorAll('.modal-backdrop');
 			if (modals.length > 0) modals[modals.length - 1].click();
 		  }
+		});
+		// Flush workspace on tab close / crash-safe exit
+		window.addEventListener('beforeunload', () => {
+		  try {
+			const data = CodeSmith.explorer.serialize();
+			if (data.files && Object.keys(data.files).length > 0) {
+			  CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data });
+			}
+		  } catch {}
 		});
 	  }
 
@@ -10645,7 +10671,8 @@ case 'symbols_requested':
 		  }
 		  // Wire bottom bar and terminal
 		  _wireExploreMode();
-
+			// Restore persisted explorer workspace (files, tabs, active file)
+			_restoreWorkspace();
 				// Preview button
 				const previewBtn = $('#btn-explorer-preview');
 				if (previewBtn) previewBtn.addEventListener('click', () => {
@@ -11469,32 +11496,14 @@ case 'symbols_requested':
 			  const originalEdit = { ...edit };
 			  let currentEdit = { ...edit };
 			  
-				applyBtn.addEventListener('click', () => {
+			applyBtn.addEventListener('click', () => {
 			    if (edit.suspicious && !confirm('This edit has warnings (' + (edit.warnings || []).join('; ') + '). Apply anyway?')) return;
-					
-					// Get fresh file content in case previous edits changed it
-					const file = CodeSmith.explorer.getFile(filename);
-					const freshContent = file ? file.content : '';
-					const currentLines = freshContent.split('\n');
-					
-					// Recalculate line numbers based on current file state vs original
-					// Track how line numbers have shifted from previous applied edits
-					const appliedEdits = CodeSmith.explorer.getEditHistory().filter(h => h.filename === filename);
-					let lineShift = 0;
-					for (const h of appliedEdits) {
-						if (h.timestamp > (card.dataset.appliedAt || 0)) {
-							const hLines = h.before.split('\n').length;
-							const hNewLines = h.after.split('\n').length;
-							lineShift += (hNewLines - hLines);
-						}
-					}
-					
-					// Adjust edit to current line numbers
-					const adjustedEdit = { ...currentEdit };
-					if (adjustedEdit.startLine) adjustedEdit.startLine += lineShift;
-					if (adjustedEdit.endLine) adjustedEdit.endLine += lineShift;
-					if (adjustedEdit.afterLine) adjustedEdit.afterLine += lineShift;
-					
+
+					// Apply at the exact line numbers stated in the edit — no shifting.
+					// (Line-shift compensation was causing "add" edits to land in the
+					// wrong place. "Apply all" already applies edits bottom-up, so
+					// earlier line numbers stay valid without any adjustment.)
+
 					const result = CodeSmith.explorer.applyEdit(filename, adjustedEdit);
 					if (result.ok) {
 					card.classList.add('edit-applied');
@@ -11792,6 +11801,7 @@ case 'symbols_requested':
 		  CodeSmith.monaco.onChange((filename, content) => {
 		    clearTimeout(_diagDebounce);
 		    _diagDebounce = setTimeout(() => _runLiveDiagnostics(filename), 500);
+		    _persistWorkspace();
 		  });
 		 // Zen mode toggle: Ctrl+Shift+Z or Escape to exit
 		 		 // ---- Mobile Explorer pane switching --------------------------------
@@ -12121,6 +12131,150 @@ case 'symbols_requested':
 		      apiKey: row.querySelector('.ep-key')?.value || '',
 		      model: row.querySelector('.ep-model')?.value?.trim() || '',
 		    })).filter(ep => ep.apiUrl && ep.apiKey);
+		  }
+		  		  // ---- Explorer workspace persistence --------------------------------
+		  let _persistTimer = null;
+		  function _persistWorkspace() {
+		    clearTimeout(_persistTimer);
+		    _persistTimer = setTimeout(() => {
+		      try {
+		        const data = CodeSmith.explorer.serialize();
+		        if (data.files && Object.keys(data.files).length > 0) {
+		          CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).catch(() => {});
+		        }
+		      } catch {}
+		    }, 800);
+		  }
+		  function _saveWorkspaceNow() {
+		    clearTimeout(_persistTimer);
+		    try {
+		      const data = CodeSmith.explorer.serialize();
+		      if (!data.files || Object.keys(data.files).length === 0) return;
+		      CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).then(() => {
+		        const toast = el('div', { style: 'position:fixed;bottom:20px;right:20px;background:#4f8cff;color:#0b0d10;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;' }, '✓ Workspace saved');
+		        document.body.appendChild(toast);
+		        setTimeout(() => toast.remove(), 1500);
+		      }).catch(() => {});
+		    } catch {}
+		  }
+		  async function _restoreWorkspace() {
+		    try {
+		      const rec = await CodeSmith.db.getArtifact('explorer_workspace');
+		      if (rec && rec.files && Object.keys(rec.files).length > 0) {
+		        CodeSmith.explorer.restore(rec);
+		        _explorerRenderTree();
+		        _explorerRenderTabs();
+		        const first = CodeSmith.explorer.getActiveFile() || (CodeSmith.explorer.getFileList()[0] || {}).name;
+		        if (first) _explorerShowFile(first);
+		      }
+		    } catch {}
+		  }
+
+		  // ---- Ctrl+P: quick file open ----------------------------------------
+		  function openFilePalette() {
+		    const files = CodeSmith.explorer.getFileList();
+		    if (files.length === 0) return;
+		    const backdrop = el('div', { class: 'cmd-palette-backdrop' });
+		    const palette = el('div', { class: 'cmd-palette' });
+		    const input = el('input', { class: 'cmd-input', placeholder: 'Go to file…' });
+		    input.setAttribute('aria-label', 'Quick file open');
+		    const list = el('div', { class: 'cmd-list' });
+		    list.setAttribute('role', 'listbox');
+		    palette.appendChild(input);
+		    palette.appendChild(list);
+		    backdrop.appendChild(palette);
+		    document.body.appendChild(backdrop);
+
+		    let highlighted = 0;
+		    function render(filter) {
+		      list.replaceChildren();
+		      const q = (filter || '').toLowerCase();
+		      const filtered = files.filter(f => f.name.toLowerCase().includes(q));
+		      highlighted = Math.min(highlighted, Math.max(0, filtered.length - 1));
+		      filtered.forEach((f, i) => {
+		        const item = el('div', { class: 'cmd-item' + (i === highlighted ? ' highlighted' : '') });
+		        item.setAttribute('role', 'option');
+		        item.textContent = f.name;
+		        const meta = el('span', { class: 'cmd-shortcut' }, f.lines + 'L');
+		        item.appendChild(meta);
+		        item.addEventListener('click', () => { close(); openFile(f.name); });
+		        item.addEventListener('mouseenter', () => {
+		          list.querySelectorAll('.cmd-item').forEach(c => c.classList.remove('highlighted'));
+		          item.classList.add('highlighted');
+		          highlighted = i;
+		        });
+		        list.appendChild(item);
+		      });
+		    }
+		    function openFile(name) {
+		      CodeSmith.explorer.openTab(name);
+		      _explorerRenderTree();
+		      _explorerRenderTabs();
+		      _explorerShowFile(name);
+		    }
+		    render('');
+		    input.focus();
+		    input.addEventListener('input', () => { highlighted = 0; render(input.value); });
+		    input.addEventListener('keydown', (ev) => {
+		      const q = input.value.toLowerCase();
+		      const filtered = files.filter(f => f.name.toLowerCase().includes(q));
+		      if (ev.key === 'ArrowDown') { ev.preventDefault(); highlighted = Math.min(highlighted + 1, filtered.length - 1); render(input.value); }
+		      else if (ev.key === 'ArrowUp') { ev.preventDefault(); highlighted = Math.max(highlighted - 1, 0); render(input.value); }
+		      else if (ev.key === 'Enter') { ev.preventDefault(); if (filtered[highlighted]) { close(); openFile(filtered[highlighted].name); } }
+		      else if (ev.key === 'Escape') { close(); }
+		    });
+		    function close() { backdrop.remove(); }
+		    backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) close(); });
+		  }
+
+		  // ---- Ctrl+Shift+F: cross-file search ---------------------------------
+		  function openSearchPanel() {
+		    const backdrop = el('div', { class: 'cmd-palette-backdrop' });
+		    const palette = el('div', { class: 'cmd-palette', style: 'width:min(640px,calc(100vw - 32px));' });
+		    const input = el('input', { class: 'cmd-input', placeholder: 'Search across all files…' });
+		    input.setAttribute('aria-label', 'Cross-file search');
+		    const list = el('div', { class: 'cmd-list', style: 'max-height:400px;' });
+		    palette.appendChild(input);
+		    palette.appendChild(list);
+		    backdrop.appendChild(palette);
+		    document.body.appendChild(backdrop);
+
+		    function render(q) {
+		      list.replaceChildren();
+		      if (!q || q.length < 2) return;
+		      const lq = q.toLowerCase();
+		      let count = 0;
+		      outer:
+		      for (const [fname, f] of Object.entries(CodeSmith.explorer.getAllFiles())) {
+		        const lines = f.content.split('\n');
+		        for (let i = 0; i < lines.length; i++) {
+		          if (lines[i].toLowerCase().includes(lq)) {
+		            const item = el('div', { class: 'cmd-item', style: 'font-family:monospace;font-size:11px;' });
+		            item.textContent = fname + ':' + (i + 1) + '  ' + lines[i].trim().slice(0, 90);
+		            const lineNo = i + 1;
+		            item.addEventListener('click', () => {
+		              close();
+		              CodeSmith.explorer.openTab(fname);
+		              _explorerRenderTree();
+		              _explorerRenderTabs();
+		              _explorerShowFile(fname);
+		              setTimeout(() => {
+		                const ed = CodeSmith.monaco.getEditor();
+		                if (ed) { ed.revealLineInCenter(lineNo); ed.setPosition({ lineNumber: lineNo, column: 1 }); ed.focus(); }
+		              }, 120);
+		            });
+		            list.appendChild(item);
+		            if (++count >= 50) break outer;
+		          }
+		        }
+		      }
+		      if (count === 0) list.appendChild(el('div', { class: 'cmd-item' }, 'No matches'));
+		    }
+		    input.addEventListener('input', () => render(input.value));
+		    input.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+		    function close() { backdrop.remove(); }
+		    backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) close(); });
+		    input.focus();
 		  }
 		return {
 			wire, refreshSessions, renderChat, renderSessionList,
