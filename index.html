@@ -2180,7 +2180,22 @@
 			</div>
 	      <div class="text-[11px] text-muted mt-1">Display-only counter shown in the status bar. Does not block requests.</div>
 	    </div>
-
+	    <div class="hairline-t pt-3 mt-2">
+	      <div class="text-[12px] text-muted mb-2 font-semibold">Data management</div>
+	      <div class="field" style="margin-bottom:8px;">
+	        <label>Models cache</label>
+	        <div style="display:flex;align-items:center;gap:8px;">
+	          <span id="dm-models-info" class="text-[11px] text-muted font-mono" style="flex:1;">—</span>
+	          <button id="btn-clear-models-cache" class="btn btn-ghost" style="font-size:11px;color:#ff6b6b;">Clear cache</button>
+	        </div>
+	      </div>
+	      <div class="field">
+	        <label>Recent workspaces</label>
+	        <div id="dm-workspace-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;"></div>
+	        <button id="btn-clear-workspaces" class="btn btn-ghost" style="font-size:11px;color:#ff6b6b;margin-top:4px;align-self:flex-start;">Delete all workspaces</button>
+	      </div>
+	    </div>
+		
 	   <div class="hairline-t pt-3 mt-2">
 	      <div class="text-[12px] text-muted mb-2 font-semibold">Per-tier endpoints (optional)</div>
 	      <div class="text-[11px] text-muted mb-2">Route different tiers to different providers. Leave blank to use defaults above.</div>
@@ -7561,6 +7576,7 @@ function wireComposer() {
 	        list.appendChild(_createEndpointRow({ name: '', apiUrl: '', apiKey: '', model: '', forTier: 'worker' }, idx));
 	      };
 	    }
+		  _renderDataManagement();
     $('#settings-backdrop').hidden = false;
     $('#settings-modal').hidden = false;
     // Focus first field
@@ -12216,7 +12232,74 @@ case 'symbols_requested':
 		      apiKey: row.querySelector('.ep-key')?.value || '',
 		      model: row.querySelector('.ep-model')?.value?.trim() || '',
 		    })).filter(ep => ep.apiUrl && ep.apiKey);
-		  }
+		  } // ---- 
+			  // ---- Data management (settings modal) --------------------------
+			  async function _renderDataManagement() {
+			    // Models cache
+			    const s = CodeSmith.state.settings || {};
+			    const info = document.getElementById('dm-models-info');
+			    const cache = s.modelsCache || [];
+			    if (info) {
+			      info.textContent = cache.length > 0
+			        ? cache.length + ' models cached' + (s.modelsCacheAt ? ' · ' + fmtTime(s.modelsCacheAt) : '')
+			        : 'empty';
+			    }
+			    const clearCacheBtn = document.getElementById('btn-clear-models-cache');
+			    if (clearCacheBtn && !clearCacheBtn._wired) {
+			      clearCacheBtn._wired = true;
+			      clearCacheBtn.addEventListener('click', async () => {
+			        const cur = CodeSmith.state.settings || {};
+			        const next = { ...cur, modelsCache: [], modelsCacheAt: 0 };
+			        delete next.id;
+			        await CodeSmith.db.saveSettings(next);
+			        CodeSmith.state.settings = { ...next, id: 'app' };
+			        populateDatalist([]);
+			        renderModelsCacheInfo();
+			        _renderDataManagement();
+			      });
+			    }
+			    // Workspaces
+			    const list = document.getElementById('dm-workspace-list');
+			    if (!list) return;
+			    list.replaceChildren();
+			    let rec;
+			    try { rec = await CodeSmith.db.getArtifact('workspace_history'); } catch {}
+			    const entries = (rec && rec.entries) || [];
+			    if (entries.length === 0) {
+			      list.appendChild(el('div', { class: 'text-muted text-[11px]' }, 'No saved workspaces'));
+			    }
+			    entries.forEach((entry, i) => {
+			      const count = Object.keys(entry.data && entry.data.files || {}).length;
+			      const row = el('div', { style: 'display:flex;align-items:center;gap:8px;padding:4px 8px;background:#0f1319;border-radius:4px;font-size:11px;' });
+			      row.appendChild(el('span', { style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8ecf1;' }, entry.label || 'Workspace'));
+			      row.appendChild(el('span', { class: 'text-muted', style: 'font-size:10px;white-space:nowrap;' }, count + ' files · ' + fmtTime(entry.ts)));
+			      const delBtn = el('button', { class: 'btn btn-ghost', style: 'font-size:10px;color:#ff6b6b;padding:2px 6px;' }, '✕');
+			      delBtn.addEventListener('click', async () => {
+			        try {
+			          const r = await CodeSmith.db.getArtifact('workspace_history');
+			          if (r && r.entries) {
+			            r.entries.splice(i, 1);
+			            await CodeSmith.db.putArtifact(r);
+			          }
+			        } catch {}
+			        _renderDataManagement();
+			        _renderWorkspaceList();
+			      });
+			      row.appendChild(delBtn);
+			      list.appendChild(row);
+			    });
+			    const clearAllBtn = document.getElementById('btn-clear-workspaces');
+			    if (clearAllBtn && !clearAllBtn._wired) {
+			      clearAllBtn._wired = true;
+			      clearAllBtn.addEventListener('click', async () => {
+			        if (!confirm('Delete all recent workspaces? This cannot be undone.')) return;
+			        try { await CodeSmith.db.deleteArtifact('workspace_history'); } catch {}
+			        try { await CodeSmith.db.deleteArtifact('explorer_workspace'); } catch {}
+			        _renderDataManagement();
+			        _renderWorkspaceList();
+			      });
+			    }
+			  }
 		  		  // ---- Explorer workspace persistence --------------------------------
 		  let _persistTimer = null;
 		  function _persistWorkspace() {
