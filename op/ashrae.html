@@ -401,20 +401,26 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 
     <!-- ============ SECTION 2: SETTINGS ============ -->
     <div class="section" id="sec-settings">
+      <!-- AUDITOR INFO -->
       <div class="card card-accent">
-        <div class="card-title" style="margin-bottom:14px;">AUDITOR SETTINGS</div>
+        <div class="card-header"><div class="card-title">Auditor Information</div></div>
         <div class="form-row">
           <div class="fg"><label>Auditor Name</label><input type="text" data-bind="settings.auditorName"></div>
           <div class="fg"><label>Company Name</label><input type="text" data-bind="settings.companyName"></div>
         </div>
-          <div class="fg"><label>Company Logo (URL or Upload)</label>
-            <div class="fg-inline">
-              <input type="text" data-bind="settings.companyLogoURL" placeholder="https://example.com/logo.png" onchange="updateCompanyLogo()">
-              <input type="file" accept="image/*" onchange="handleLogoUpload(event)" style="max-width:200px;">
-            </div>
-            <div id="logo-preview" style="margin-top:8px;"></div>
+        <div class="fg"><label>Company Logo (URL or Upload)</label>
+          <div class="fg-inline">
+            <input type="text" data-bind="settings.companyLogoURL" placeholder="https://example.com/logo.png" onchange="updateCompanyLogo()">
+            <input type="file" accept="image/*" onchange="handleLogoUpload(event)" style="max-width:200px;">
           </div>
-        <div class="form-row">
+          <div id="logo-preview" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- AUDIT CONFIGURATION -->
+      <div class="card card-accent">
+        <div class="card-header"><div class="card-title">Audit Configuration</div></div>
+        <div class="form-row form-row-3">
           <div class="fg"><label>Climate Zone</label>
             <select data-bind="settings.climateZone" onchange="save()">
               <option value="0A">0A - Extremely Hot Humid</option><option value="0B">0B - Extremely Hot Dry</option>
@@ -433,14 +439,20 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
               <option value="SI">SI (m², kWh, °C)</option>
             </select>
           </div>
-          <div class="form-row">
           <div class="fg"><label>ASHRAE Audit Level</label>
-              <select data-bind="settings.ashraeLevel" onchange="save();applyLevelVisibility();buildDashboard();">
-                <option value="1">Level 1 — Walk-Through Analysis</option>
+            <select data-bind="settings.ashraeLevel" onchange="save();applyLevelVisibility();buildDashboard();">
+              <option value="1">Level 1 — Walk-Through Analysis</option>
               <option value="2">Level 2 — Energy Survey & Analysis</option>
               <option value="3">Level 3 — Detailed Analysis / Investment-Grade</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      <!-- AI CONFIGURATION -->
+      <div class="card card-accent">
+        <div class="card-header"><div class="card-title">AI Configuration</div></div>
+        <div class="form-row">
           <div class="fg"><label>AI Provider</label>
             <select data-bind="settings.aiProvider" onchange="save();updateAIProviderUI();">
               <option value="gemini">Gemini (Free — 15 req/min)</option>
@@ -451,10 +463,11 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
               <option value="custom">Custom API</option>
             </select>
           </div>
-
           <div class="fg"><label id="ai-key-label">API Key</label>
             <input type="text" data-bind="settings.aiApiKey" placeholder="API key..." onchange="save();fetchAvailableModels();">
           </div>
+        </div>
+        <div class="form-row">
           <div class="fg"><label>Model</label>
             <div class="fg-inline">
               <select id="ai-model-select" onchange="appState.settings.aiModel=this.value;save();">
@@ -466,32 +479,33 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           <div class="fg" id="fg-aiEndpoint" style="display:none;"><label>Custom Endpoint URL</label>
             <input type="text" data-bind="settings.aiEndpoint" placeholder="https://api.example.com/v1/chat/completions" onchange="save()">
           </div>
-          <div class="form-row form-row-3">
-            <div class="fg"><label>Max Tokens</label>
-              <select data-bind="settings.aiMaxTokens" onchange="save();">
-                <option value="1024">1024 — Short</option>
-                <option value="2048">2048 — Medium</option>
-                <option value="4096" selected>4096 — Long</option>
-                <option value="8192">8192 — Very Long</option>
-              </select>
-            </div>
-            <div class="fg"><label>Temperature</label>
-              <input type="number" step="0.1" min="0" max="2" data-bind="settings.aiTemp" value="0.7" onchange="save();">
-            </div>
-            <div class="fg"><label>Test Connection</label>
-              <button class="btn-sm btn-primary" onclick="testAIConnection()" style="width:100%;">🧪 Test AI</button>
-              <div id="ai-test-result" style="margin-top:4px;font-size:.75rem;"></div>
-            </div>
+        </div>
+        <div class="form-row form-row-3">
+          <div class="fg"><label>Max Tokens</label>
+            <select data-bind="settings.aiMaxTokens" onchange="save();">
+              <option value="1024">1024 — Short</option>
+              <option value="2048">2048 — Medium</option>
+              <option value="4096" selected>4096 — Long</option>
+              <option value="8192">8192 — Very Long</option>
+            </select>
+          </div>
+          <div class="fg"><label>Temperature</label>
+            <input type="number" step="0.1" min="0" max="2" data-bind="settings.aiTemp" value="0.7" onchange="save();">
+          </div>
+          <div class="fg"><label>Test Connection</label>
+            <button class="btn-sm btn-primary" onclick="testAIConnection()" style="width:100%;">🧪 Test AI</button>
+            <div id="ai-test-result" style="margin-top:4px;font-size:.75rem;"></div>
           </div>
         </div>
-        </div>
-        <div class="card" style="margin-top:12px;">
-          <div class="card-title" style="font-size:.82rem;margin-bottom:8px;">STORAGE MANAGEMENT</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-sm btn-secondary" onclick="compressAllPhotos()">🗜 Compress All Photos</button>
-            <button class="btn-sm btn-secondary" onclick="countPhotos()">📊 Photo Stats</button>
-            <span id="photo-stats" style="font-size:.75rem;color:var(--text-muted);align-self:center;"></span>
-          </div>
+      </div>
+
+      <!-- STORAGE MANAGEMENT -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Storage Management</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-sm btn-secondary" onclick="compressAllPhotos()">🗜 Compress All Photos</button>
+          <button class="btn-sm btn-secondary" onclick="countPhotos()">📊 Photo Stats</button>
+          <span id="photo-stats" style="font-size:.75rem;color:var(--text-muted);align-self:center;"></span>
         </div>
       </div>
     </div>
@@ -1350,7 +1364,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           <div class="card">
             <div class="card-title" style="margin-bottom:10px;">ECM RECOMMENDATIONS</div>
             <div class="table-wrap"><table id="ecm-table">
-              <thead><tr><th>ID</th><th>System</th><th>Title</th><th>Savings %</th><th>Priority</th><th>Est Cost $</th><th>Ann Savings $</th><th>Payback</th><th>Selected</th></tr></thead>
+              <thead><tr><th>ID</th><th>System</th><th>Title</th><th>Savings %</th><th>Priority</th><th>Est Cost $</th><th>Ann Savings $</th><th>Payback</th><th data-level-min="2">NPV 15yr</th><th data-level-min="2">IRR</th><th data-level-min="3">LCC</th><th>Selected</th></tr></thead>
               <tbody id="ecm-body"></tbody>
             </table></div>
           </div>
@@ -1989,9 +2003,9 @@ function buildNav() {
 }
 
 function showSection(id) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
   const sec = document.getElementById('sec-' + id);
-  if (sec) sec.classList.add('active');
+  if (sec) { sec.classList.add('active'); sec.style.display = ''; }
   document.querySelectorAll('#sidebar-nav a').forEach(a => a.classList.toggle('active', a.dataset.sec === id));
   document.getElementById('sidebar').classList.remove('open');
   if (id === 'analysis') setTimeout(renderCharts, 100);
@@ -2030,6 +2044,7 @@ function updateProgress() {
     parseFloat(appState.other.elevCount) > 0 || appState.other.dcPresent === 'Yes' || appState.other.kitchenPresent === 'Yes' || appState.other.parkingPresent === 'Yes',
     appState.electrical.transformers.length > 0 || appState.loads.length > 0,
     appState.utility.rows.some(r => parseFloat(r.kwh) > 0) && parseFloat(appState.project.grossArea) > 0,
+    appState.references.length > 0,
     Object.values(appState.ecmSelections).some(v => v)
   ];
   checks.forEach(c => { if (c) complete++; });
@@ -2578,7 +2593,7 @@ function renderTransformers() {
     const totalLoss = ironLoss + copperActual;
     const eff = (measKW * 1000 + totalLoss) > 0 ? (measKW * 1000 / (measKW * 1000 + totalLoss) * 100) : 0;
     const annLossKWH = totalLoss / 1000 * 8760;
-    const annLossCost = annLossKWH * (parseFloat(appState.utility.elecRate) || 0.10);
+    const annLossCost = annLossKWH * elecRate();
     const yearAge = t.year ? (new Date().getFullYear() - parseInt(t.year)) : 0;
 
     let utilColor = '#94a3b8';
@@ -2684,7 +2699,7 @@ function addLoadRow() {
 function renderLoadTable() {
   const body = document.getElementById('load-body');
   if (!body) return;
-  const rate = parseFloat(appState.utility.elecRate) || 0.10;
+  const rate = elecRate();
   body.innerHTML = appState.loads.map((l, i) => {
     const npKW = parseFloat(l.npKW)||0;
     const measKW = parseFloat(l.measKW)||0;
@@ -3504,7 +3519,7 @@ function renderCharts() {
   // 9. Load by Category
   if (appState.loads.length > 0) {
     const cats = {};
-    const rate = parseFloat(appState.utility.elecRate) || 0.10;
+    const rate = elecRate();
     appState.loads.forEach(l => {
       const kw = parseFloat(l.measKW)||0;
       const annHrs = (parseFloat(l.hpd)||0)*(parseFloat(l.dpw)||0)*(parseFloat(l.wpy)||0);
@@ -3579,7 +3594,7 @@ function renderCharts() {
   // 12. Transformer Losses
   if (appState.electrical.transformers.length > 0) {
     const xfmrs = appState.electrical.transformers;
-    const rate = parseFloat(appState.utility.elecRate) || 0.10;
+    const rate = elecRate();
     charts.xfmrloss = new Chart(document.getElementById('chart-xfmrloss'), {
       type: 'bar',
       data: {
@@ -3913,6 +3928,10 @@ async function fetchAvailableModels() {
     populateModelDropdown(DEFAULT_MODELS[prov] || []);
   }
 }
+async function safeJson(resp) {
+  const txt = await resp.text();
+  try { return JSON.parse(txt); } catch(e) { return { error: { message: 'HTTP ' + resp.status + ': ' + txt.substring(0, 200) } }; }
+}
 
   async function testAIConnection() {
     const resultEl = document.getElementById('ai-test-result');
@@ -3934,7 +3953,7 @@ async function fetchAvailableModels() {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({contents:[{parts:[{text:testPrompt}]}],generationConfig:{maxOutputTokens:50}})
         });
-        const data = await resp.json();
+        const data = await safeJson(resp);
         if (data.error) throw new Error(data.error.message);
         text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       } else if (prov === 'groq') {
@@ -3942,7 +3961,7 @@ async function fetchAvailableModels() {
           method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
           body: JSON.stringify({model:model,messages:[{role:'user',content:testPrompt}],max_tokens:50})
         });
-        const data = await resp.json();
+        const data = await safeJson(resp);
         if (data.error) throw new Error(data.error.message);
         text = data.choices?.[0]?.message?.content || '';
       } else if (prov === 'openai') {
@@ -3950,7 +3969,7 @@ async function fetchAvailableModels() {
           method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
           body: JSON.stringify({model:model,messages:[{role:'user',content:testPrompt}],max_tokens:50})
         });
-        const data = await resp.json();
+        const data = await safeJson(resp);
         if (data.error) throw new Error(data.error.message);
         text = data.choices?.[0]?.message?.content || '';
       } else if (prov === 'custom') {
@@ -3960,8 +3979,8 @@ async function fetchAvailableModels() {
           method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
           body: JSON.stringify({model:model,messages:[{role:'user',content:testPrompt}],max_tokens:50})
         });
-        const data = await resp.json();
-        if (data.error) throw new Error(data.error?.message || JSON.stringify(data.error));
+        const data = await safeJson(resp);
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
         text = data.choices?.[0]?.message?.content || data.candidates?.[0]?.content?.parts?.[0]?.text || data.response || '';
       }
 
@@ -4161,7 +4180,7 @@ Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kV
       text = data.choices?.[0]?.message?.content || '';
       if (!text) throw new Error('Empty response from OpenAI');
     } else if (provider === 'anthropic') {
-      const model = customModel || 'claude-sonnet-4-20250514';
+      const model = appState.settings.aiModel || 'claude-sonnet-4-20250514';
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method:'POST',
         headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
@@ -4172,7 +4191,7 @@ Transformers: ${appState.electrical.transformers.map(t=>t.tag+' '+t.ratedKVA+'kV
       else throw new Error(data.error?.message || 'No response');
 
     } else if (provider === 'ollama') {
-      const model = customModel || 'llama3.1';
+      const model = appState.settings.aiModel || 'llama3.1';
       const resp = await fetch('http://localhost:11434/api/generate', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({model:model,prompt:prompt,stream:false})
@@ -4545,6 +4564,9 @@ appState.checklist = {0:true,1:true,2:true,3:true,4:false,5:false,6:false,7:true
 
   // AI Draft — empty
   appState.aiDraft = '';
+  appState.aiSections = {executive:'',utility:'',envelope:'',lighting:'',hvac:'',dhw:'',electrical:'',pq:'',loads:'',findings:'',ecm:''};
+  appState.references = [];
+  appState.recordings = {};
 
   // Save and rebuild everything
 // Write state to localStorage WITHOUT reading DOM (which would overwrite our demo data)
@@ -4580,7 +4602,7 @@ appState._projectId = 'p_demo_' + Date.now();
 // ========== REPORT GENERATION ==========
       async function captureCharts() {
       const chartImages = {};
-      const ids = ['chart-utility','chart-eui','chart-enduse','chart-lpd','chart-ecm','chart-demand','chart-xfmr','chart-pf','chart-load-cat','chart-load-mode','chart-harmonics','chart-voltage','chart-xfmr-loss','chart-loadcurve'];
+      const ids = ['chart-utility','chart-eui','chart-enduse','chart-lpd','chart-ecm','chart-demand','chart-xfmr','chart-pf','chart-loadcat','chart-opmode','chart-harmonics','chart-voltevents','chart-xfmrloss','chart-loadcurve'];
       for (const id of ids) {
         const canvas = document.getElementById(id);
         if (canvas && canvas.width > 0 && canvas.height > 0) {
@@ -4777,8 +4799,9 @@ appState._projectId = 'p_demo_' + Date.now();
               // Restore original section visibility
               if (analysisSection) {
                 allSections.forEach(s => {
-                  if (s.dataset.wasActive === 'true') { s.classList.add('active'); s.style.display = ''; }
-                  else { s.classList.remove('active'); s.style.display = 'none'; }
+                  if (s.dataset.wasActive === 'true') s.classList.add('active');
+                  else s.classList.remove('active');
+                  s.style.display = '';
                   delete s.dataset.wasActive;
                 });
               }
@@ -4795,7 +4818,7 @@ appState._projectId = 'p_demo_' + Date.now();
             const totalGas = appState.utility.rows.reduce((sum, r) => sum + (parseFloat(r.gas)||0), 0);
             const totalDC = appState.utility.rows.reduce((sum, r) => sum + (parseFloat(r.dc)||0), 0);
             const totalAllCost = totalElecCost + totalGasCost + totalDCCost + totalWCost + totalSCost;
-            const rate = parseFloat(appState.utility.elecRate)||0.10;
+            const rate = elecRate();
 
             // ECM calcs
             const selectedECMs = ECM_LIB.filter(e => appState.ecmSelections[e.id]);
@@ -5048,7 +5071,7 @@ appState._projectId = 'p_demo_' + Date.now();
           <table><thead><tr><th>Tag</th><th>Type</th><th>kVA</th><th>Year</th><th>Util%</th><th>Eff%</th><th>Ann Loss kWh</th><th>Cond</th></tr></thead>
           <tbody>${xfmrRows.map(t=>`<tr><td>${t.tag}</td><td>${t.type}</td><td>${t.kva}</td><td>${t.year||'—'}</td><td style="font-family:monospace;">${t.util}%</td><td style="font-family:monospace;">${t.eff}%</td><td style="font-family:monospace;">${fmt(t.annLoss)}</td><td>${t.condition}</td></tr>`).join('')}</tbody></table>
             ${chartImg['chart-xfmr']?`<h3>7.2 Transformer Utilization</h3><img src="${chartImg['chart-xfmr']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
-            ${chartImg['chart-xfmr-loss']?`<h3>7.3 Transformer Losses</h3><img src="${chartImg['chart-xfmr-loss']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
+            ${chartImg['chart-xfmrloss']?`<h3>7.3 Transformer Losses</h3><img src="${chartImg['chart-xfmrloss']}" style="width:100%;max-width:600px;display:block;margin:10px auto;">`:'' }
                   ${appState.electrical.notes?`<p><em>${appState.electrical.notes}</em></p>`:''}
              
                 ${appState.aiSections.electrical?`<div style="font-size:11.5px;line-height:1.7;padding:12px 16px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin:10px 0;">${formatAIDraft(appState.aiSections.electrical)}</div>`:''}
@@ -5077,7 +5100,7 @@ appState._projectId = 'p_demo_' + Date.now();
             const annKWH=Math.round((parseFloat(l.measKW)||0)*annH);
             return `<tr><td>${l.name}</td><td>${l.category}</td><td>${l.npKW}</td><td>${l.measKW}</td><td>${l.measPF||'—'}</td><td style="font-size:10px;">${l.mode}</td><td style="font-family:monospace;">${fmt(annKWH)}</td></tr>`;
           }).join('')}</tbody></table>
-          ${chartImg['chart-load-cat']?`<h3>9.1 Load by Category</h3><img src="${chartImg['chart-load-cat']}" style="width:100%;max-width:400px;display:block;margin:10px auto;">`:'' }
+          ${chartImg['chart-loadcat']?`<h3>9.1 Load by Category</h3><img src="${chartImg['chart-loadcat']}" style="width:100%;max-width:400px;display:block;margin:10px auto;">`:'' }
           ${chartImg['chart-demand']?`<h3>9.2 24-Hour Demand Profile</h3><img src="${chartImg['chart-demand']}" style="width:100%;max-width:700px;display:block;margin:10px auto;">`:'' }
           ${chartImg['chart-loadcurve']?`<h3>9.3 Building Load Curve with Transient Analysis</h3><img src="${chartImg['chart-loadcurve']}" style="width:100%;max-width:750px;display:block;margin:10px auto;">`:'' }
                   ${appState.loads.notes?`<p><em>${appState.loads.notes}</em></p>`:''}
@@ -5175,7 +5198,7 @@ function downloadCSV() {
   const rows = [];
   const add = (...cols) => rows.push(cols.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(','));
   const blank = () => rows.push('');
-  const rate = parseFloat(appState.utility.elecRate)||0.10;
+  const rate = elecRate();
 
   add('=== 1. PROJECT INFO ===');
   add('Building',appState.project.buildingName); add('Address',appState.project.address+' '+appState.project.city+' '+appState.project.state);
@@ -5223,10 +5246,10 @@ function downloadCSV() {
   blank();
 
   add('=== 9. DEMAND PROFILE ===');
-  add('','0-6h','6-9h','9-12h','12-17h','17-21h','21-24h');
-  const d = appState.demand;
-  add('Weekday kW',d.wd0,d.wd1,d.wd2,d.wd3,d.wd4,d.wd5);
-  add('Weekend kW',d.we0,d.we1,d.we2,d.we3,d.we4,d.we5);
+  const d = (appState.demand && appState.demand.summer) || {wd:[],we:[]};
+  add('Hour', ...Array.from({length:24},(_,h)=>h+':00'));
+  add('Weekday kW', ...(d.wd||[]));
+  add('Weekend kW', ...(d.we||[]));
   blank();
 
   add('=== 10. POWER QUALITY ===');
@@ -5248,6 +5271,9 @@ function downloadCSV() {
 function fmt(n) {
   if (n === '' || n === undefined || n === null || isNaN(n)) return '—';
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+function elecRate() {
+  return parseFloat(appState.utility.elecFees?.consumption) || 0.10;
 }
 
 // ========== INIT ON LOAD ==========
