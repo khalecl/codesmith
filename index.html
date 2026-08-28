@@ -1068,6 +1068,13 @@
 		  align-items: center; justify-content: center; border-radius: 3px;
 		}
 		.editor-tab .tab-close:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+		.editor-tab .tab-name { overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+		.editor-tab[draggable="true"] { cursor: grab; }
+		.editor-tab[draggable="true"]:active { cursor: grabbing; }
+		.explorer-editor-tabs.has-overflow {
+		  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+		  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+		}
 
 		.explorer-code-area {
 		  flex: 1; overflow: auto; position: relative;
@@ -1828,6 +1835,7 @@
 					        <span style="margin-left:auto;font-size:10px;color:#5b6474;" id="explorer-cursor-pos">Ln 1, Col 1</span>
 					        <span style="font-size:10px;color:#5b6474;" id="explorer-line-info"></span>
 					        <button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Copy</button>
+						<button id="btn-explorer-run" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" title="Run active file in terminal (F5)">▶ Run</button>
 							<button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">📸 Snapshot</button>
 							<button id="btn-explorer-zen" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" title="Focus mode (Ctrl+Shift+Z)">⛶</button>
 					        <button id="btn-explorer-preview" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" hidden>👁 Preview</button>					      </div>
@@ -2190,6 +2198,27 @@
 			</div>
 	      <div class="text-[11px] text-muted mt-1">Display-only counter shown in the status bar. Does not block requests.</div>
 	    </div>
+    <div class="hairline-t pt-3 mt-2">
+      <div class="text-[12px] text-muted mb-2 font-semibold">Editor</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="field">
+          <label for="s-ed-fontsize">Font size</label>
+          <input id="s-ed-fontsize" type="number" min="10" max="24" step="1" class="font-mono" />
+        </div>
+        <div class="field">
+          <label for="s-ed-tabsize">Tab size</label>
+          <input id="s-ed-tabsize" type="number" min="2" max="8" step="1" class="font-mono" />
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:6px;">
+        <label style="font-size:12px;color:#8b92a1;display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="s-ed-wordwrap" style="accent-color:#4f8cff;"> Word wrap
+        </label>
+        <label style="font-size:12px;color:#8b92a1;display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="s-ed-minimap" style="accent-color:#4f8cff;"> Minimap
+        </label>
+      </div>
+    </div>
 	    <div class="hairline-t pt-3 mt-2">
 	      <div class="text-[12px] text-muted mb-2 font-semibold">Data management</div>
 	      <div class="field" style="margin-bottom:8px;">
@@ -5698,6 +5727,9 @@ CodeSmith.stageC = StageC;
 		_openTabs = _openTabs.filter(n => n !== name);
 		if (_activeFile === name) _activeFile = _openTabs[_openTabs.length - 1] || null;
 	}
+	function _reorderTabs(newOrder) {
+		if (Array.isArray(newOrder)) _openTabs = newOrder.filter(n => _files[n]);
+	}
 
 	function updateFileContent(name, newContent) {
 		if (!_files[name]) return;
@@ -5865,7 +5897,7 @@ CodeSmith.stageC = StageC;
 			}
 			return {
 				addFile, getFile, getAllFiles, getFileList, getActiveFile, setActiveFile,
-				getOpenTabs, openTab, closeTab, updateFileContent, applyEdit,
+				getOpenTabs, openTab, closeTab, _reorderTabs, updateFileContent, applyEdit,
 				getEditHistory, undoLastEdit, reapplyEdit,
 				clearAll, deleteFile, analyzeCode, serialize, restore,
 			};
@@ -6457,6 +6489,21 @@ CodeSmith.explorer = Explorer;
 		  let _viewStates = {};   // { filename: editor.saveViewState() }
 		  let _onChangeCallbacks = [];
 		  let _initialized = false;
+  let _editorPrefs = {};
+  try { _editorPrefs = (CodeSmith.state.settings && CodeSmith.state.settings.editorPrefs) || {}; } catch {}
+
+  function setOptions(prefs) {
+    _editorPrefs = { ..._editorPrefs, ...prefs };
+    if (_editor) {
+      _editor.updateOptions({
+        fontSize: _editorPrefs.fontSize,
+        wordWrap: _editorPrefs.wordWrap,
+        tabSize: _editorPrefs.tabSize,
+        minimap: _editorPrefs.minimap != null ? { enabled: _editorPrefs.minimap } : undefined,
+      });
+    }
+  }
+  function getOptions() { return { ..._editorPrefs }; }
 		 
 		  const LANG_MAP = {
 		    python: 'python', javascript: 'javascript', typescript: 'typescript',
@@ -6528,10 +6575,10 @@ CodeSmith.explorer = Explorer;
 		      value: '',
 		      language: 'plaintext',
 		      theme: 'codesmith-dark',
-		      fontSize: ('ontouchstart' in window) ? 14 : 13,
-		      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
-		      fontLigatures: true,
- minimap: { enabled: !('ontouchstart' in window), maxColumn: 80, renderCharacters: false },		      scrollBeyondLastLine: false,
+      fontSize: _editorPrefs.fontSize || (('ontouchstart' in window) ? 14 : 13),
+      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
+      fontLigatures: true,
+ minimap: { enabled: _editorPrefs.minimap != null ? _editorPrefs.minimap : !('ontouchstart' in window), maxColumn: 80, renderCharacters: false },		      scrollBeyondLastLine: false,
 		      renderWhitespace: 'selection',
 		      bracketPairColorization: { enabled: true },
 		      guides: { bracketPairs: true, indentation: true },
@@ -6540,12 +6587,12 @@ CodeSmith.explorer = Explorer;
 		      showFoldingControls: 'always',
 		      lineNumbers: 'on',
 		      glyphMargin: true,
-		   wordWrap: ('ontouchstart' in window) ? 'on' : 'off',
+   wordWrap: _editorPrefs.wordWrap || (('ontouchstart' in window) ? 'on' : 'off'),
 		      automaticLayout: true,
 		      suggestOnTriggerCharacters: true,
 		      quickSuggestions: true,
 		      parameterHints: { enabled: true },
-		      tabSize: 4,
+      tabSize: _editorPrefs.tabSize || 4,
 		      insertSpaces: true,
 		      smoothScrolling: true,
 		      cursorBlinking: 'smooth',
@@ -6579,6 +6626,29 @@ CodeSmith.explorer = Explorer;
 					if (_diffEditor) _diffEditor.layout();
 					});
 				_initialized = true;
+ 
+			// Go-to-definition (Ctrl+Click / F12) across all known project files.
+			// Resolves symbols via the knowledge graph; lazily creates Monaco models
+			// for target files that aren't open yet so cross-file jumps work.
+			monaco.languages.registerDefinitionProvider('*', {
+			  provideDefinition(model, position) {
+			    const word = model.getWordAtPosition(position);
+			    if (!word || !word.word) return null;
+			    const matches = CodeSmith.knowledge.getSymbolsAcrossProject().filter(s => s.name === word.word);
+			    if (matches.length === 0) return null;
+			    const locations = [];
+			    for (const s of matches) {
+			      const uri = monaco.Uri.parse('file:///' + s.file);
+			      if (!monaco.editor.getModel(uri)) {
+			        const f = CodeSmith.explorer.getFile(s.file);
+			        if (!f) continue;
+			        _models[s.file] = monaco.editor.createModel(f.content, LANG_MAP[f.language] || 'plaintext', uri);
+			      }
+			      locations.push({ uri, range: new monaco.Range(s.line, 1, s.line, 1) });
+			    }
+			    return locations.length > 0 ? locations : null;
+			  },
+			});
 			}
 		 
 		  function openFile(filename, content, language) {
@@ -6691,7 +6761,7 @@ CodeSmith.explorer = Explorer;
 		    _initialized = false;
 		  }
 		 
-		  return { init, openFile, updateContent, closeFile, getEditor, isInitialized, setDiagnostics, clearDiagnostics, showDiffView, disposeDiff, onChange, dispose };
+  return { init, openFile, updateContent, closeFile, getEditor, isInitialized, setDiagnostics, clearDiagnostics, showDiffView, disposeDiff, onChange, dispose, setOptions, getOptions };
 		})();
 		CodeSmith.monaco = MonacoMgr;
 		 
@@ -6774,6 +6844,57 @@ CodeSmith.explorer = Explorer;
 		 
 		  function _prompt() {
 		    _term.write('\x1b[32m>>> \x1b[0m');
+ 
+  async function _syncExplorerToWorkdir() {
+    let count = 0;
+    try {
+      await CodeSmith.sandbox.warmUp();
+      const files = CodeSmith.explorer.getAllFiles();
+      for (const [name, f] of Object.entries(files)) {
+        const parts = name.split('/');
+        if (parts.length > 1) {
+          const dir = '/workdir/' + parts.slice(0, -1).join('/');
+          await CodeSmith.sandbox.runPython(
+            'import os; os.makedirs(' + JSON.stringify(dir) + ', exist_ok=True)',
+            { sessionGlobals: true, timeoutMs: 5000 }
+          );
+        }
+        await CodeSmith.sandbox.writeFile('/workdir/' + name, f.content);
+        count++;
+      }
+    } catch {}
+    return count;
+  }
+ 
+  async function _runFileInTerminal(filename) {
+    await _syncExplorerToWorkdir();
+    _term.writeln('\x1b[36m$ python ' + filename + '\x1b[0m');
+    try {
+      const code = 'import sys, os\n' +
+        'sys.path.insert(0, "/workdir")\n' +
+        'os.chdir("/workdir")\n' +
+        'with open(' + JSON.stringify('/workdir/' + filename) + ') as _f:\n' +
+        '    _src = _f.read()\n' +
+        'exec(compile(_src, ' + JSON.stringify(filename) + ', "exec"), {"__name__": "__main__"})';
+      const result = await CodeSmith.sandbox.runPython(code, { sessionGlobals: true, timeoutMs: 30000 });
+      if (result.stdout) _term.writeln(result.stdout.replace(/\n$/, ''));
+      if (result.stderr) _term.writeln('\x1b[33m' + result.stderr.replace(/\n$/, '') + '\x1b[0m');
+      if (result.error) _term.writeln('\x1b[31m' + result.error.type + ': ' + result.error.message + '\x1b[0m');
+    } catch (e) {
+      _term.writeln('\x1b[31m' + e.message + '\x1b[0m');
+    }
+    _term.writeln('');
+  }
+ 
+  async function runActiveFile() {
+    const name = CodeSmith.explorer.getActiveFile();
+    if (!name || !_initialized) return false;
+    _busy = true;
+    await _runFileInTerminal(name);
+    _busy = false;
+    _prompt();
+    return true;
+  }
 		  }
 		 
 		  async function _runCommand(cmd) {
@@ -6787,12 +6908,14 @@ CodeSmith.explorer = Explorer;
 		      _prompt();
 		      return;
 		    }
-		    if (cmd.trim() === 'help') {
-		      _term.writeln('\x1b[34mCommands:\x1b[0m');
-		      _term.writeln('  clear     — clear terminal');
-		      _term.writeln('  ls        — list files in /workdir');
-		      _term.writeln('  cat FILE  — show file contents');
-		      _term.writeln('  help      — show this help');
+    if (cmd.trim() === 'help') {
+      _term.writeln('\x1b[34mCommands:\x1b[0m');
+      _term.writeln('  clear     — clear terminal');
+      _term.writeln('  ls        — list files in /workdir');
+      _term.writeln('  cat FILE  — show file contents');
+      _term.writeln('  sync      — copy all Explorer files into /workdir');
+      _term.writeln('  run [FILE]— run a file (defaults to the active editor file)');
+      _term.writeln('  help      — show this help');
 		      _term.writeln('  Any Python expression or statement');
 		      _term.writeln('');
 		      _busy = false;
@@ -6820,6 +6943,29 @@ CodeSmith.explorer = Explorer;
 		      _busy = false;
 		      _prompt();
 		      return;
+    if (cmd.trim() === 'sync') {
+      const n = await _syncExplorerToWorkdir();
+      _term.writeln('\x1b[32mSynced ' + n + ' file(s) to /workdir\x1b[0m');
+      _term.writeln('');
+      _busy = false;
+      _prompt();
+      return;
+    }
+    if (cmd.trim() === 'run' || cmd.trim().startsWith('run ')) {
+      const arg = cmd.trim().slice(3).trim();
+      const target = arg || CodeSmith.explorer.getActiveFile();
+      if (!target) {
+        _term.writeln('\x1b[31mNo file specified and no active editor file.\x1b[0m');
+        _term.writeln('');
+        _busy = false;
+        _prompt();
+        return;
+      }
+      await _runFileInTerminal(target);
+      _busy = false;
+      _prompt();
+      return;
+    }
 		    }
 		 
 		    // Python execution
@@ -6845,7 +6991,7 @@ CodeSmith.explorer = Explorer;
 		  function fit() { if (_fitAddon) _fitAddon.fit(); }
 		  function isInitialized() { return _initialized; }
 		 
-		  return { init, write, clear, fit, isInitialized };
+
 		})();
 		CodeSmith.terminal = TerminalMgr;
 		 
@@ -7573,6 +7719,11 @@ function wireComposer() {
 	    $('#s-max-fast').value    = s.maxTokensFast || CodeSmith.DEFAULTS.maxTokensFast;
 	    $('#s-parallel-workers').value = s.parallelWorkers || CodeSmith.DEFAULTS.parallelWorkers;
 	    $('#s-budget-cap').value  = s.tokenBudgetCap || CodeSmith.DEFAULTS.tokenBudgetCap;
+    const _edPrefs = s.editorPrefs || {};
+    $('#s-ed-fontsize').value = _edPrefs.fontSize || '';
+    $('#s-ed-tabsize').value = _edPrefs.tabSize || '';
+    $('#s-ed-wordwrap').checked = !!_edPrefs.wordWrap;
+    $('#s-ed-minimap').checked = _edPrefs.minimap !== false;
 	    $('#test-result').textContent = '';
     populateDatalist(s.modelsCache || []);
     renderModelsCacheInfo();
@@ -7637,11 +7788,19 @@ function wireComposer() {
 		  parallelWorkers: Math.max(1, Math.min(6, parseInt($('#s-parallel-workers').value, 10) || 1)),
 	      tokenBudgetCap:        Math.max(1000, parseInt($('#s-budget-cap').value, 10) || CodeSmith.DEFAULTS.tokenBudgetCap),
 		  collabMode: $('#s-collab-mode').value || 'solo',
+		  editorPrefs: {
+		    fontSize: Math.max(10, Math.min(24, parseInt($('#s-ed-fontsize').value, 10) || 0)) || undefined,
+		    tabSize: Math.max(2, Math.min(8, parseInt($('#s-ed-tabsize').value, 10) || 0)) || undefined,
+		    wordWrap: $('#s-ed-wordwrap').checked ? 'on' : 'off',
+		    minimap: $('#s-ed-minimap').checked,
+		  },
+		  lastMode: prev.lastMode || 'chat',
 	    };
     await CodeSmith.db.saveSettings(next);
     CodeSmith.state.settings = { ...next, id: 'app' };
     renderStatusStrip();
     renderComposerHelp();
+    try { CodeSmith.monaco.setOptions(next.editorPrefs); } catch {}
     closeSettings();
   }
 
@@ -8147,7 +8306,15 @@ function wireComposer() {
 			    btn.addEventListener('click', () => {
 			      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
 			      btn.classList.add('active');
-			     _buildMode = btn.dataset.mode;
+				     _buildMode = btn.dataset.mode;
+					try {
+					  const cur = CodeSmith.state.settings || {};
+					  if (cur.lastMode !== _buildMode) {
+					    const next = { ...cur, lastMode: _buildMode };
+					    delete next.id;
+					    CodeSmith.db.saveSettings(next).then(() => { CodeSmith.state.settings = { ...next, id: 'app' }; }).catch(() => {});
+					  }
+					} catch {}
 					$('#split-right').hidden = _buildMode !== 'build' && _buildMode !== 'explore';
 					document.body.classList.toggle('build-mode', _buildMode === 'build' || _buildMode === 'explore');
 					document.body.classList.toggle('explore-mode', _buildMode === 'explore');
@@ -10395,12 +10562,38 @@ case 'symbols_requested':
 		  if (mod && ev.key === 's') { ev.preventDefault(); _saveWorkspaceNow(); return; }
 		  // Ctrl+P: quick file open
 		  if (mod && !ev.shiftKey && ev.key === 'p') { ev.preventDefault(); openFilePalette(); return; }
+		  // Ctrl+W: close active explorer tab (explore mode only)
+		  if (mod && ev.key === 'w' && document.body.classList.contains('explore-mode')) {
+			ev.preventDefault();
+			const active = CodeSmith.explorer.getActiveFile();
+			if (active) _closeExplorerTab(active);
+			return;
+		  }
+		  // Ctrl+Tab / Ctrl+Shift+Tab: cycle explorer tabs (explore mode only)
+		  if (mod && ev.key === 'Tab' && document.body.classList.contains('explore-mode')) {
+			ev.preventDefault();
+			const tabs = CodeSmith.explorer.getOpenTabs();
+			if (tabs.length < 2) return;
+			const cur = CodeSmith.explorer.getActiveFile();
+			const idx = tabs.indexOf(cur);
+			const next = tabs[(idx + (ev.shiftKey ? -1 : 1) + tabs.length) % tabs.length];
+			CodeSmith.explorer.setActiveFile(next);
+			_explorerRenderTabs();
+			_explorerRenderTree();
+			_explorerShowFile(next);
+			return;
+		  }
 		  // Ctrl+Shift+P: command palette
 		  if (mod && ev.shiftKey && ev.key === 'P') { ev.preventDefault(); openCommandPalette(); return; }
 		  // Ctrl+Shift+F: cross-file search
 		  if (mod && ev.shiftKey && ev.key === 'F') { ev.preventDefault(); openSearchPanel(); return; }
-		  // Ctrl+K: command palette
-		  if (mod && ev.key === 'k') { ev.preventDefault(); openCommandPalette(); return; }
+		  // Ctrl+K: command palette — but let Monaco handle it when the editor
+		  // has focus (Ctrl+K is Monaco's chord prefix: Ctrl+K Ctrl+C, etc.)
+		  if (mod && ev.key === 'k') {
+			const inMonaco = ev.target && ev.target.closest && ev.target.closest('#monaco-container, .monaco-editor');
+			if (!inMonaco) { ev.preventDefault(); openCommandPalette(); }
+			return;
+		  }
 		  // Ctrl+,: settings
 		  if (mod && ev.key === ',') { ev.preventDefault(); openSettings(); return; }
 		  // Esc: close topmost modal
@@ -10944,35 +11137,67 @@ case 'symbols_requested':
 			const active = name === CodeSmith.explorer.getActiveFile();
 			const tab = document.createElement('div');
 			tab.className = 'editor-tab' + (active ? ' active' : '');
-			tab.textContent = name;
+			tab.draggable = true;
+			tab.dataset.tabFile = name;
+			const nameSpan = document.createElement('span');
+			nameSpan.className = 'tab-name';
+			nameSpan.textContent = name;
+			tab.appendChild(nameSpan);
+			// Unsaved-changes dot on the tab itself
+			const tabFile = CodeSmith.explorer.getFile(name);
+			if (tabFile && tabFile.modified) {
+			  const dot = document.createElement('span');
+			  dot.className = 'tab-modified';
+			  dot.title = 'Unsaved changes';
+			  tab.appendChild(dot);
+			}
 			const closeBtn = document.createElement('span');
 			closeBtn.className = 'tab-close';
 			closeBtn.textContent = '×';
+			closeBtn.title = 'Close (Ctrl+W)';
 			closeBtn.addEventListener('click', (ev) => {
 			  ev.stopPropagation();
-			  CodeSmith.explorer.closeTab(name);
-			  _explorerRenderTabs();
-			  _explorerRenderTree();
-			  const newActive = CodeSmith.explorer.getActiveFile();
-			  if (newActive) _explorerShowFile(newActive);
-			  else {
-				// Last tab closed: dispose Monaco before clearing its container,
-				// otherwise the manager thinks it's initialized with a dead DOM.
-				if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.dispose();
-				const mc = $('#monaco-container');
-				if (mc) mc.innerHTML = '<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;"><div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div></div>';
-				$('#explorer-editor-header').hidden = true;
-			  }
+			  _closeExplorerTab(name);
 			});
 			tab.appendChild(closeBtn);
+			// Middle-click closes the tab (standard editor behavior)
+			tab.addEventListener('auxclick', (ev) => {
+			  if (ev.button === 1) { ev.preventDefault(); _closeExplorerTab(name); }
+			});
 			tab.addEventListener('click', () => {
 			  CodeSmith.explorer.setActiveFile(name);
 			  _explorerRenderTabs();
 			  _explorerRenderTree();
 			  _explorerShowFile(name);
 			});
+			// Drag-to-reorder tabs
+			tab.addEventListener('dragstart', (ev) => {
+			  ev.dataTransfer.setData('text/x-codesmith-tab', name);
+			  ev.dataTransfer.effectAllowed = 'move';
+			});
+			tab.addEventListener('dragover', (ev) => {
+			  if (ev.dataTransfer.types.includes('text/x-codesmith-tab')) {
+				ev.preventDefault();
+				ev.dataTransfer.dropEffect = 'move';
+			  }
+			});
+			tab.addEventListener('drop', (ev) => {
+			  const dragged = ev.dataTransfer.getData('text/x-codesmith-tab');
+			  if (!dragged || dragged === name) return;
+			  ev.preventDefault();
+			  const openTabs = CodeSmith.explorer.getOpenTabs();
+			 	const from = openTabs.indexOf(dragged);
+			  const to = openTabs.indexOf(name);
+			  if (from < 0 || to < 0) return;
+			  openTabs.splice(to, 0, openTabs.splice(from, 1)[0]);
+			  // Explorer stores tabs internally; rewrite via close/open order
+			  CodeSmith.explorer._reorderTabs && CodeSmith.explorer._reorderTabs(openTabs);
+			  _explorerRenderTabs();
+			});
 			container.appendChild(tab);
 		  }
+		  // Overflow affordance: fade edge when tabs overflow horizontally
+		  container.classList.toggle('has-overflow', container.scrollWidth > container.clientWidth);
 		}
 
 		// Per-file AI panel state cache — preserves analysis/pair/algo content across file switches
@@ -11870,6 +12095,26 @@ case 'symbols_requested':
 		  const close = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', close); } };
 		  setTimeout(() => document.addEventListener('click', close), 0);
 		}
+			// Run the active editor file in the integrated terminal
+			async function _runActiveFileInTerminal() {
+			  const name = CodeSmith.explorer.getActiveFile();
+			  if (!name) return;
+			  const panel = document.getElementById('integrated-terminal');
+			  const toggleBtn = document.getElementById('btn-toggle-terminal');
+			  if (panel && panel.hidden) {
+			    panel.hidden = false;
+			    if (toggleBtn) toggleBtn.classList.add('active');
+			  }
+			  try {
+			    if (!CodeSmith.terminal.isInitialized()) {
+			      await CodeSmith.sandbox.warmUp();
+			      await CodeSmith.terminal.init(document.getElementById('terminal-body'));
+			    }
+			    await CodeSmith.terminal.runActiveFile();
+			  } catch (err) {
+			    console.warn('[CodeSmith] Run in terminal failed:', err.message || err);
+			  }
+			}
 		// Mode switching for explore mode — add to wireMode()
 		function _wireExploreMode() {
 		  const $ = (sel) => document.querySelector(sel);
@@ -11890,7 +12135,7 @@ case 'symbols_requested':
 		      await CodeSmith.sandbox.warmUp();
 		      await CodeSmith.terminal.init($('#terminal-body'));
 		    }
-		    if (!panel.hidden) CodeSmith.terminal.fit();
+
 		  });
 		 
 		  $('#btn-toggle-snapshots').addEventListener('click', () => {
@@ -11918,6 +12163,16 @@ case 'symbols_requested':
 		    CodeSmith.snapshots.take(name, file.content, label);
 		    _renderSnapshots();
 		  });
+			
+			// Run active file: header button + F5
+			const runFileBtn = $('#btn-explorer-run');
+			if (runFileBtn) runFileBtn.addEventListener('click', _runActiveFileInTerminal);
+			document.addEventListener('keydown', (ev) => {
+				if (ev.key === 'F5' && document.body.classList.contains('explore-mode')) {
+				ev.preventDefault();
+				_runActiveFileInTerminal();
+				}
+			});
 		 
 		  // Monaco change listener for live diagnostics
 		  CodeSmith.monaco.onChange((filename, content) => {
@@ -12525,55 +12780,130 @@ case 'symbols_requested':
 		    backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) close(); });
 		  }
 
-		  // ---- Ctrl+Shift+F: cross-file search ---------------------------------
-		  function openSearchPanel() {
-		    const backdrop = el('div', { class: 'cmd-palette-backdrop' });
-		    const palette = el('div', { class: 'cmd-palette', style: 'width:min(640px,calc(100vw - 32px));' });
-		    const input = el('input', { class: 'cmd-input', placeholder: 'Search across all files…' });
-		    input.setAttribute('aria-label', 'Cross-file search');
-		    const list = el('div', { class: 'cmd-list', style: 'max-height:400px;' });
-		    palette.appendChild(input);
-		    palette.appendChild(list);
-		    backdrop.appendChild(palette);
-		    document.body.appendChild(backdrop);
+  // ---- Ctrl+Shift+F: cross-file search & replace -------------------------
+  function openSearchPanel() {
+    const backdrop = el('div', { class: 'cmd-palette-backdrop' });
+    const palette = el('div', { class: 'cmd-palette', style: 'width:min(680px,calc(100vw - 32px));' });
+    const input = el('input', { class: 'cmd-input', placeholder: 'Search across all files…' });
+    input.setAttribute('aria-label', 'Cross-file search');
 
-		    function render(q) {
-		      list.replaceChildren();
-		      if (!q || q.length < 2) return;
-		      const lq = q.toLowerCase();
-		      let count = 0;
-		      outer:
-		      for (const [fname, f] of Object.entries(CodeSmith.explorer.getAllFiles())) {
-		        const lines = f.content.split('\n');
-		        for (let i = 0; i < lines.length; i++) {
-		          if (lines[i].toLowerCase().includes(lq)) {
-		            const item = el('div', { class: 'cmd-item', style: 'font-family:monospace;font-size:11px;' });
-		            item.textContent = fname + ':' + (i + 1) + '  ' + lines[i].trim().slice(0, 90);
-		            const lineNo = i + 1;
-		            item.addEventListener('click', () => {
-		              close();
-		              CodeSmith.explorer.openTab(fname);
-		              _explorerRenderTree();
-		              _explorerRenderTabs();
-		              _explorerShowFile(fname);
-		              setTimeout(() => {
-		                const ed = CodeSmith.monaco.getEditor();
-		                if (ed) { ed.revealLineInCenter(lineNo); ed.setPosition({ lineNumber: lineNo, column: 1 }); ed.focus(); }
-		              }, 120);
-		            });
-		            list.appendChild(item);
-		            if (++count >= 50) break outer;
-		          }
-		        }
-		      }
-		      if (count === 0) list.appendChild(el('div', { class: 'cmd-item' }, 'No matches'));
-		    }
-		    input.addEventListener('input', () => render(input.value));
-		    input.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
-		    function close() { backdrop.remove(); }
-		    backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) close(); });
-		    input.focus();
-		  }
+    // Options row: case sensitivity + regex toggles + match count
+    const optsRow = el('div', { style: 'display:flex;align-items:center;gap:14px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;color:#8b92a1;' });
+    const caseLabel = el('label', { style: 'display:flex;align-items:center;gap:4px;cursor:pointer;' });
+    const caseChk = el('input', { type: 'checkbox' });
+    caseChk.style.accentColor = '#4f8cff';
+    caseLabel.appendChild(caseChk);
+    caseLabel.appendChild(document.createTextNode('Aa match case'));
+    const regexLabel = el('label', { style: 'display:flex;align-items:center;gap:4px;cursor:pointer;' });
+    const regexChk = el('input', { type: 'checkbox' });
+    regexChk.style.accentColor = '#4f8cff';
+    regexLabel.appendChild(regexChk);
+    regexLabel.appendChild(document.createTextNode('.* regex'));
+    const countEl = el('span', { style: 'margin-left:auto;font-family:monospace;font-size:10px;color:#5b6474;' });
+    optsRow.appendChild(caseLabel);
+    optsRow.appendChild(regexLabel);
+    optsRow.appendChild(countEl);
+
+    // Replace row
+    const replaceRow = el('div', { style: 'display:flex;gap:6px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.06);align-items:center;' });
+    const replaceInput = el('input', { class: 'cmd-input', style: 'border:none;padding:4px 0;', placeholder: 'Replace with… ($1 groups in regex mode)' });
+    replaceInput.setAttribute('aria-label', 'Replace text');
+    const replaceBtn = el('button', { class: 'btn', style: 'font-size:11px;white-space:nowrap;' }, 'Replace all');
+    replaceRow.appendChild(replaceInput);
+    replaceRow.appendChild(replaceBtn);
+
+    const list = el('div', { class: 'cmd-list', style: 'max-height:400px;' });
+    palette.appendChild(input);
+    palette.appendChild(optsRow);
+    palette.appendChild(replaceRow);
+    palette.appendChild(list);
+    backdrop.appendChild(palette);
+    document.body.appendChild(backdrop);
+
+    const MAX_RESULTS = 500;
+
+    function _matcher() {
+      const q = input.value;
+      if (!q) return null;
+      const flags = caseChk.checked ? 'g' : 'gi';
+      if (regexChk.checked) {
+        try { return new RegExp(q, flags); }
+        catch { return null; }
+      }
+      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(esc, flags);
+    }
+
+    function render() {
+      list.replaceChildren();
+      const re = _matcher();
+      if (!re) { countEl.textContent = input.value && regexChk.checked ? 'invalid regex' : ''; return; }
+      let count = 0;
+      outer:
+      for (const [fname, f] of Object.entries(CodeSmith.explorer.getAllFiles())) {
+        const lines = f.content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          re.lastIndex = 0;
+          if (re.test(lines[i])) {
+            const item = el('div', { class: 'cmd-item', style: 'font-family:monospace;font-size:11px;' });
+            item.textContent = fname + ':' + (i + 1) + '  ' + lines[i].trim().slice(0, 90);
+            const lineNo = i + 1;
+            item.addEventListener('click', () => {
+              close();
+              CodeSmith.explorer.openTab(fname);
+              _explorerRenderTree();
+              _explorerRenderTabs();
+              _explorerShowFile(fname);
+              setTimeout(() => {
+                const ed = CodeSmith.monaco.getEditor();
+                if (ed) { ed.revealLineInCenter(lineNo); ed.setPosition({ lineNumber: lineNo, column: 1 }); ed.focus(); }
+              }, 120);
+            });
+            list.appendChild(item);
+            if (++count >= MAX_RESULTS) { countEl.textContent = MAX_RESULTS + '+ matches'; break outer; }
+          }
+        }
+      }
+      if (count < MAX_RESULTS) countEl.textContent = count + ' match' + (count === 1 ? '' : 'es');
+      if (count === 0) list.appendChild(el('div', { class: 'cmd-item' }, 'No matches'));
+    }
+
+    replaceBtn.addEventListener('click', () => {
+      const re = _matcher();
+      if (!re) return;
+      const replacement = replaceInput.value;
+      let filesChanged = 0, totalRepl = 0;
+      for (const [fname, f] of Object.entries(CodeSmith.explorer.getAllFiles())) {
+        re.lastIndex = 0;
+        const next = f.content.replace(re, (...args) => {
+          totalRepl++;
+          // Expand $1..$9 capture-group references manually for consistency
+          return replacement.replace(/\$(\d)/g, (m, n) => (args[+n] != null ? args[+n] : m));
+        });
+        if (next !== f.content) {
+          filesChanged++;
+          CodeSmith.explorer.updateFileContent(fname, next);
+          if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.updateContent(fname, next);
+        }
+      }
+      _explorerRenderTree();
+      render();
+      replaceBtn.textContent = '✓ ' + totalRepl + ' in ' + filesChanged + ' file' + (filesChanged === 1 ? '' : 's');
+      setTimeout(() => { replaceBtn.textContent = 'Replace all'; }, 2500);
+    });
+
+    input.addEventListener('input', render);
+    caseChk.addEventListener('change', render);
+    regexChk.addEventListener('change', render);
+    input.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+    replaceInput.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') close();
+      if (ev.key === 'Enter') { ev.preventDefault(); replaceBtn.click(); }
+    });
+    function close() { backdrop.remove(); }
+    backdrop.addEventListener('click', (ev) => { if (ev.target === backdrop) close(); });
+    input.focus();
+  }
 		return {
 			wire, refreshSessions, renderChat, renderSessionList,
 			renderStatusStrip, renderComposerHelp, newSession,
@@ -12641,6 +12971,14 @@ CodeSmith.ui = UI;
 			);
 		}
 		}
+    // Restore persisted mode
+    try {
+      const savedMode = CodeSmith.state.settings && CodeSmith.state.settings.lastMode;
+      if (savedMode && savedMode !== 'chat') {
+        const mb = document.querySelector('.mode-btn[data-mode="' + savedMode + '"]');
+        if (mb) mb.click();
+      }
+    } catch {}
 try { CodeSmith.ui.wire(); } catch(e) { console.error('wire FAILED:', e); }
     try { CodeSmith.ui.renderStatusStrip(); } catch(e) { console.error('renderStatusStrip FAILED:', e); }
     try { CodeSmith.ui.renderComposerHelp(); } catch(e) { console.error('renderComposerHelp FAILED:', e); }
