@@ -1963,7 +1963,7 @@
 							  </div>
 							</div>
 							<div style="padding:6px 8px;border-top:1px solid rgba(255,255,255,0.06);">
-							  <button id="btn-explorer-algo" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
+								  <button id="btn-explorer-algo-2" class="btn btn-primary" style="font-size:11px;width:100%;" disabled>
 								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
 								Generate Flowchart
 							  </button>
@@ -10645,11 +10645,14 @@ case 'symbols_requested':
 			CodeSmith.explorer.clearAll();
 			_explorerRenderTree();
 			_explorerRenderTabs();
-			$('#explorer-code-area').innerHTML = '';
-			$('#explorer-drop-zone')?.remove();
+			// Dispose Monaco before wiping its container so the manager doesn't
+			// think it's still alive with a destroyed DOM.
+			if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.dispose();
+			const mc = $('#monaco-container');
+			mc.innerHTML = '';
 			const dz = el('div', { id: 'explorer-drop-zone', class: 'drop-zone', style: 'margin:40px auto;max-width:360px;' });
 			dz.innerHTML = '<div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div>';
-			$('#explorer-code-area').appendChild(dz);
+			mc.appendChild(dz);
 			_explorerResetAnalysis();
 		  });
 
@@ -10692,6 +10695,8 @@ case 'symbols_requested':
 
 		  // Algorithm button
 		  $('#btn-explorer-algo').addEventListener('click', _explorerRunAlgo);
+  const algoBtn2 = $('#btn-explorer-algo-2');
+  if (algoBtn2) algoBtn2.addEventListener('click', _explorerRunAlgo);
 		  const algoExportBtn = $('#btn-explorer-algo-export');
 		  if (algoExportBtn) algoExportBtn.addEventListener('click', (ev) => {
 		    const svg = $('#algo-container').querySelector('svg');
@@ -10898,10 +10903,10 @@ case 'symbols_requested':
 			        { label: 'Copy filename', action: () => navigator.clipboard.writeText(f.name) },
 			        { label: 'Copy contents', action: () => { const fl = CodeSmith.explorer.getFile(f.name); if (fl) navigator.clipboard.writeText(fl.content); } },
 			        'sep',
-			        { label: 'Rename', action: () => { const nn = prompt('New name:', f.name); if (nn && nn !== f.name) { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.explorer.addFile(nn, fl.content); CodeSmith.explorer.closeTab(f.name); CodeSmith.explorer.openTab(nn); _explorerRenderTree(); _explorerRenderTabs(); _explorerShowFile(nn); } } } },
+        { label: 'Rename', action: () => { const nn = prompt('New name:', f.name); if (nn && nn !== f.name) { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.explorer.addFile(nn, fl.content); CodeSmith.explorer.deleteFile(f.name); if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(f.name); CodeSmith.explorer.openTab(nn); _explorerRenderTree(); _explorerRenderTabs(); _explorerShowFile(nn); } } } },
 			        { label: 'Snapshot', action: () => { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.snapshots.take(f.name, fl.content, 'Manual'); _renderSnapshots(); } } },
 			        'sep',
-						{ label: 'Delete', cls: 'destructive', action: () => { if (confirm('Delete ' + f.name + '?')) { CodeSmith.explorer.deleteFile(f.name); if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(f.name); _explorerRenderTree(); _explorerRenderTabs(); const next = CodeSmith.explorer.getActiveFile(); if (next) _explorerShowFile(next); else { const mc = document.querySelector('#monaco-container'); if (mc) mc.innerHTML = '<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;"><div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div></div>'; document.querySelector('#explorer-editor-header').hidden = true; } } } },
+					{ label: 'Delete', cls: 'destructive', action: () => { if (confirm('Delete ' + f.name + '?')) { CodeSmith.explorer.deleteFile(f.name); if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(f.name); _explorerRenderTree(); _explorerRenderTabs(); const next = CodeSmith.explorer.getActiveFile(); if (next) _explorerShowFile(next); else { if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.dispose(); const mc = document.querySelector('#monaco-container'); if (mc) mc.innerHTML = '<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;"><div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div></div>'; document.querySelector('#explorer-editor-header').hidden = true; } } } },
 			      ]);
 			    });
 			body.appendChild(item);
@@ -10909,12 +10914,14 @@ case 'symbols_requested':
 
 		  // Enable/disable buttons
 		  const hasFile = !!CodeSmith.explorer.getActiveFile();
-		  const analyzeBtn = $('#btn-explorer-analyze');
-		  const algoBtn = $('#btn-explorer-algo');
-		  const pairBtn = $('#btn-pair-send');
-		  if (analyzeBtn) analyzeBtn.disabled = !hasFile;
-		  if (algoBtn) algoBtn.disabled = !hasFile;
-		  if (pairBtn) pairBtn.disabled = !hasFile;
+  const analyzeBtn = $('#btn-explorer-analyze');
+  const algoBtn = $('#btn-explorer-algo');
+  const algoBtn2 = $('#btn-explorer-algo-2');
+  const pairBtn = $('#btn-pair-send');
+  if (analyzeBtn) analyzeBtn.disabled = !hasFile;
+  if (algoBtn) algoBtn.disabled = !hasFile;
+  if (algoBtn2) algoBtn2.disabled = !hasFile;
+  if (pairBtn) pairBtn.disabled = !hasFile;
 		}
 
 		function _explorerRenderTabs() {
@@ -10939,7 +10946,11 @@ case 'symbols_requested':
 			  const newActive = CodeSmith.explorer.getActiveFile();
 			  if (newActive) _explorerShowFile(newActive);
 			  else {
-				$('#explorer-code-area').innerHTML = '';
+				// Last tab closed: dispose Monaco before clearing its container,
+				// otherwise the manager thinks it's initialized with a dead DOM.
+				if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.dispose();
+				const mc = $('#monaco-container');
+				if (mc) mc.innerHTML = '<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;"><div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div></div>';
 				$('#explorer-editor-header').hidden = true;
 			  }
 			});
