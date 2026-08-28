@@ -1522,6 +1522,130 @@
 				#target-toggle .mode-btn { padding: 6px 16px; font-size: 13px; }
 				.template-card { transition: all 200ms; }
 				.template-card:hover { transform: translateY(-2px); }
+				/* ============================================================================
+ * HELP CENTER + SETTINGS RAIL
+ * ==========================================================================*/
+
+/* Shared wide modal + two-column rail layout */
+.modal.modal-wide { width: min(860px, calc(100vw - 32px)); padding: 0; }
+.modal.modal-wide .rail-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.modal.modal-wide .rail-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
+
+.rail-search {
+  margin-left: auto; width: 200px; background: #0f1319;
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+  color: #e8ecf1; font-family: inherit; font-size: 12px; padding: 5px 9px;
+}
+.rail-search:focus { outline: none; border-color: #4f8cff; }
+.rail-search::placeholder { color: #3a3f4a; }
+
+.rail-layout { display: flex; min-height: 340px; max-height: calc(100vh - 220px); }
+.rail-nav {
+  width: 176px; flex-shrink: 0; padding: 10px 8px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
+}
+.rail-nav button {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 10px; border: none; border-radius: 6px; background: none;
+  color: #8b92a1; font-family: inherit; font-size: 12px; text-align: left;
+  cursor: pointer;
+}
+.rail-nav button:hover { background: rgba(255,255,255,0.04); color: #e8ecf1; }
+.rail-nav button.active { background: rgba(79,140,255,0.15); color: #4f8cff; font-weight: 600; }
+.rail-nav .rail-nav-icon { width: 16px; text-align: center; flex-shrink: 0; }
+.rail-nav .rail-nav-sep {
+  height: 1px; background: rgba(255,255,255,0.06); margin: 6px 4px;
+}
+
+.rail-panes { flex: 1; min-width: 0; overflow-y: auto; padding: 16px 18px; }
+.rail-pane { display: none; flex-direction: column; gap: 14px; }
+.rail-pane.active { display: flex; }
+.rail-pane.search-hit { display: flex; }
+
+.rail-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06);
+  background: #141820; position: sticky; bottom: 0;
+}
+.rail-foot .spacer { flex: 1; }
+
+/* ---- Help-specific ---- */
+.help-topic {
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+  background: #0f1319; overflow: hidden;
+}
+.help-topic > summary {
+  padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+  color: #e8ecf1; list-style: none; display: flex; align-items: center; gap: 8px;
+}
+.help-topic > summary::-webkit-details-marker { display: none; }
+.help-topic > summary::before {
+  content: '▸'; color: #5b6474; font-size: 10px; transition: transform 0.12s;
+}
+.help-topic[open] > summary::before { transform: rotate(90deg); }
+.help-topic > summary:hover { background: rgba(255,255,255,0.03); }
+.help-topic .help-body {
+  padding: 2px 14px 14px 30px; font-size: 12.5px; line-height: 1.65; color: #8b92a1;
+}
+.help-topic .help-body p { margin: 0 0 8px; }
+.help-topic .help-body ul { margin: 0 0 8px; padding-left: 18px; }
+.help-topic .help-body li { margin-bottom: 4px; }
+.help-topic .help-body strong { color: #e8ecf1; font-weight: 600; }
+.help-topic .help-body a { color: #4f8cff; text-decoration: none; }
+.help-topic .help-body a:hover { text-decoration: underline; }
+.help-topic .help-body code {
+  background: #0b0d10; border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px; padding: 1px 5px; font-size: 11.5px;
+  font-family: "JetBrains Mono", monospace; color: #4ade80;
+}
+.help-topic.flash { border-color: #4f8cff; box-shadow: 0 0 0 2px rgba(79,140,255,0.18); }
+
+kbd {
+  display: inline-block; min-width: 18px; text-align: center;
+  background: #1a1f2a; border: 1px solid rgba(255,255,255,0.1);
+  border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px;
+  font-family: "JetBrains Mono", monospace; font-size: 11px; color: #e8ecf1;
+}
+.keytable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.keytable td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.keytable td:first-child { width: 170px; white-space: nowrap; }
+.keytable tr:last-child td { border-bottom: none; }
+.keytable .key-scope { color: #5b6474; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+.key-group-title {
+  font-size: 11px; color: #5b6474; text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 600; margin: 12px 0 4px;
+}
+
+/* ---- Settings-specific ---- */
+.settings-group-title {
+  font-size: 11px; color: #5b6474; text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 600;
+}
+.rail-pane .hairline-t { border-top: none !important; padding-top: 0 !important; margin-top: 0 !important; }
+.rail-pane > * { margin: 0 !important; }
+.field-dim { opacity: 0.25; pointer-events: none; }
+.field-hidden { display: none !important; }
+.keyreveal {
+  background: none; border: none; color: #5b6474; cursor: pointer;
+  font-size: 11px; padding: 2px 6px;
+}
+.keyreveal:hover { color: #4f8cff; }
+.settings-empty { color: #5b6474; font-size: 12px; padding: 20px; text-align: center; }
+
+@media (max-width: 768px) {
+  .rail-layout { flex-direction: column; max-height: calc(100vh - 200px); }
+  .rail-nav {
+    width: 100%; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .rail-nav button { width: auto; white-space: nowrap; }
+  .rail-nav .rail-nav-sep { display: none; }
+  .rail-search { width: 130px; }
+}
 	</style>
 </head>
 <body class="bg-bg text-text">
@@ -3737,7 +3861,32 @@ Return the same JSON schema.`;
           { role: 'user', content: 'Module spec:\n' + JSON.stringify(spec, null, 2) },
           { role: 'assistant', content: JSON.stringify(workerResult) },
           { role: 'user', content: repairMsg },
-        ];
+		// ---- Editor commands (explore mode) — wired to the same handlers as the buttons ----
+		{ id: 'ed-new-file', label: 'Explorer: New file', shortcut: '', action: () => document.getElementById('btn-explorer-new')?.click() },
+		{ id: 'ed-close-tab', label: 'Explorer: Close active tab', shortcut: 'Ctrl+W', action: () => {
+		  const active = CodeSmith.explorer.getActiveFile();
+		  if (active) _closeExplorerTab(active);
+		}},
+		{ id: 'ed-run', label: 'Explorer: Run active file', shortcut: 'F5', action: () => _runActiveFileInTerminal() },
+		{ id: 'ed-download', label: 'Explorer: Download all as zip', shortcut: '', action: () => document.getElementById('btn-explorer-download-all')?.click() },
+		{ id: 'ed-terminal', label: 'Explorer: Toggle terminal', shortcut: 'Ctrl+`', action: () => document.getElementById('btn-toggle-terminal')?.click() },
+		{ id: 'ed-problems', label: 'Explorer: Toggle problems', shortcut: '', action: () => document.getElementById('btn-toggle-problems')?.click() },
+		{ id: 'ed-snapshots', label: 'Explorer: Toggle snapshots', shortcut: '', action: () => document.getElementById('btn-toggle-snapshots')?.click() },
+		{ id: 'ed-goto-file', label: 'Explorer: Go to file', shortcut: 'Ctrl+P', action: () => openFilePalette() },
+		{ id: 'ed-search', label: 'Explorer: Search across files', shortcut: 'Ctrl+Shift+F', action: () => openSearchPanel() },
+		{ id: 'ed-save', label: 'Explorer: Save workspace', shortcut: 'Ctrl+S', action: () => {
+		  try {
+		    const data = CodeSmith.explorer.serialize();
+		    if (data.files && Object.keys(data.files).length > 0) {
+		      CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data });
+		    }
+		  } catch {}
+		}},
+		{ id: 'ed-zen', label: 'Explorer: Toggle focus (zen) mode', shortcut: 'Ctrl+Shift+Z', action: () => {
+		  document.body.classList.toggle('zen-mode');
+		  setTimeout(() => { try { CodeSmith.monaco.getEditor()?.layout(); } catch (_) {} }, 0);
+		}},
+	  ];
       } else {
         workerMessages = [
           { role: 'system', content: WORKER_SYSTEM },
@@ -6630,25 +6779,30 @@ CodeSmith.explorer = Explorer;
 			// Go-to-definition (Ctrl+Click / F12) across all known project files.
 			// Resolves symbols via the knowledge graph; lazily creates Monaco models
 			// for target files that aren't open yet so cross-file jumps work.
-			monaco.languages.registerDefinitionProvider('*', {
-			  provideDefinition(model, position) {
-			    const word = model.getWordAtPosition(position);
-			    if (!word || !word.word) return null;
-			    const matches = CodeSmith.knowledge.getSymbolsAcrossProject().filter(s => s.name === word.word);
-			    if (matches.length === 0) return null;
-			    const locations = [];
-			    for (const s of matches) {
-			      const uri = monaco.Uri.parse('file:///' + s.file);
-			      if (!monaco.editor.getModel(uri)) {
-			        const f = CodeSmith.explorer.getFile(s.file);
-			        if (!f) continue;
-			        _models[s.file] = monaco.editor.createModel(f.content, LANG_MAP[f.language] || 'plaintext', uri);
-			      }
-			      locations.push({ uri, range: new monaco.Range(s.line, 1, s.line, 1) });
-			    }
-			    return locations.length > 0 ? locations : null;
-			  },
-			});
+		// Monaco's LanguageSelector is a language id string or array — '*' is
+		// VS Code DocumentSelector syntax and never matches here. Register per-language.
+		const _defProvider = {
+		  provideDefinition(model, position) {
+		    const word = model.getWordAtPosition(position);
+		    if (!word || !word.word) return null;
+		    const matches = CodeSmith.knowledge.getSymbolsAcrossProject().filter(s => s.name === word.word);
+		    if (matches.length === 0) return null;
+		    const locations = [];
+		    for (const s of matches) {
+		      const uri = monaco.Uri.parse('file:///' + s.file);
+		      if (!monaco.editor.getModel(uri)) {
+		        const f = CodeSmith.explorer.getFile(s.file);
+		        if (!f) continue;
+		        _models[s.file] = monaco.editor.createModel(f.content, LANG_MAP[f.language] || 'plaintext', uri);
+		      }
+		      locations.push({ uri, range: new monaco.Range(s.line, 1, s.line, 1) });
+		    }
+		    return locations.length > 0 ? locations : null;
+		  },
+		};
+		for (const lang of ['python','javascript','typescript','html','css','json','markdown','shell','sql','yaml','ini','xml','plaintext']) {
+		  monaco.languages.registerDefinitionProvider(lang, _defProvider);
+		}
 			}
 		 
 		  function openFile(filename, content, language) {
@@ -6842,8 +6996,9 @@ CodeSmith.explorer = Explorer;
 		    _initialized = true;
 		  }
 		 
-		  function _prompt() {
-		    _term.write('\x1b[32m>>> \x1b[0m');
+  function _prompt() {
+    _term.write('\x1b[32m>>> \x1b[0m');
+  }
  
   async function _syncExplorerToWorkdir() {
     let count = 0;
@@ -6895,7 +7050,6 @@ CodeSmith.explorer = Explorer;
     _prompt();
     return true;
   }
-		  }
 		 
 		  async function _runCommand(cmd) {
 		    if (!cmd.trim()) { _prompt(); return; }
@@ -6989,10 +7143,10 @@ CodeSmith.explorer = Explorer;
 		  function write(text) { if (_term) _term.writeln(text); }
 		  function clear() { if (_term) _term.clear(); }
 		  function fit() { if (_fitAddon) _fitAddon.fit(); }
-		  function isInitialized() { return _initialized; }
-		 
-
-		})();
+  function isInitialized() { return _initialized; }
+ 
+  return { init, write, clear, fit, isInitialized, runActiveFile, sync: _syncExplorerToWorkdir };
+})();
 		CodeSmith.terminal = TerminalMgr;
 		 
 		 
@@ -7705,7 +7859,158 @@ function wireComposer() {
                : d.toLocaleDateString();
     info.textContent = list.length + ' models · ' + when;
   }
+    // ---- Settings: build a nav rail around the existing markup --------------
+  // Sections are located by anchor IDs, then MOVED into panes. No field is
+  // renamed, recreated or reordered, so openSettings()/saveSettings() are
+  // unaffected. Runs once; safe to call again.
+  const SETTINGS_GROUPS = [
+    { id: 'connection', label: 'Connection', icon: '🔌',
+      anchors: ['s-api-url', 's-api-key', 'btn-test-conn'] },
+    { id: 'models', label: 'Models', icon: '🧠',
+      anchors: ['btn-fetch-models', 's-model-orch', 's-model-worker', 's-model-fast', 's-max-orch'] },
+    { id: 'build', label: 'Build', icon: '⚙️',
+      anchors: ['s-collab-mode', 's-parallel-workers', 's-budget-cap'] },
+    { id: 'editor', label: 'Editor', icon: '‹/›',
+      anchors: ['s-ed-fontsize', 's-ed-tabsize', 's-ed-wordwrap', 's-ed-minimap'] },
+    { id: 'data', label: 'Data', icon: '🗄️',
+      anchors: ['dm-models-info', 'dm-workspace-list', 'btn-clear-workspaces'] },
+    { id: 'advanced', label: 'Advanced', icon: '🧩',
+      anchors: ['endpoint-list', 'btn-add-endpoint'] },
+  ];
+
+  let _settingsOrganized = false;
+
+  function organizeSettings() {
+    if (_settingsOrganized) return;
+    const modal = document.getElementById('settings-modal');
+    const apiField = document.getElementById('s-api-url');
+    if (!modal || !apiField) return;
+
+    // The flat container holding every settings section.
+    const container = apiField.closest('.field').parentElement;
+    if (!container) return;
+
+    modal.classList.add('modal-wide');
+
+    // Header row -> rail-head, plus a live search box.
+    const header = modal.querySelector('.flex.items-center.justify-between');
+    if (header) header.className = 'rail-head';
+    const search = el('input', {
+      class: 'rail-search', type: 'search', placeholder: 'Search settings…',
+      'aria-label': 'Search settings',
+    });
+    if (header) header.insertBefore(search, header.lastElementChild);
+
+    // Footer (Cancel/Save) -> sticky.
+    const foot = document.getElementById('btn-save-settings');
+    if (foot && foot.parentElement) {
+      foot.parentElement.className = 'rail-foot';
+      foot.parentElement.insertBefore(el('span', { class: 'spacer' }), foot.parentElement.firstChild);
+    }
+
+    // Build the rail scaffold and park it where the container was.
+    const layout = el('div', { class: 'rail-layout' });
+    const nav = el('div', { class: 'rail-nav', role: 'tablist' });
+    const panes = el('div', { class: 'rail-panes' });
+    layout.appendChild(nav);
+    layout.appendChild(panes);
+    container.parentElement.insertBefore(layout, container);
+
+    const paneMap = {}, navMap = {};
+    for (const g of SETTINGS_GROUPS) {
+      const btn = el('button', { role: 'tab', 'data-spane': g.id });
+      btn.appendChild(el('span', { class: 'rail-nav-icon' }, g.icon));
+      btn.appendChild(el('span', {}, g.label));
+      btn.addEventListener('click', () => { search.value = ''; showPane(g.id); });
+      nav.appendChild(btn);
+      navMap[g.id] = btn;
+      const pane = el('div', { class: 'rail-pane', 'data-spane': g.id });
+      panes.appendChild(pane);
+      paneMap[g.id] = pane;
+    }
+
+    // Resolve every direct child of the old container to a group, then move it.
+    const blocks = Array.from(container.children);
+    for (const block of blocks) {
+      let target = 'advanced';
+      for (const g of SETTINGS_GROUPS) {
+        if (g.anchors.some(a => block.id === a || block.querySelector('#' + a))) {
+          target = g.id;
+          break;
+        }
+      }
+      paneMap[target].appendChild(block);
+    }
+    container.remove();
+
+    // Tag each moved block with searchable text.
+    for (const pane of Object.values(paneMap)) {
+      for (const block of pane.children) {
+        block.dataset.searchText = (block.textContent || '').toLowerCase();
+      }
+    }
+
+    function showPane(id) {
+      for (const [k, p] of Object.entries(paneMap)) p.classList.toggle('active', k === id);
+      for (const [k, b] of Object.entries(navMap)) b.classList.toggle('active', k === id);
+      for (const p of Object.values(paneMap)) {
+        p.classList.remove('search-hit');
+        for (const b of p.children) b.classList.remove('field-hidden');
+      }
+      const empty = panes.querySelector('.settings-empty');
+      if (empty) empty.hidden = true;
+      panes.scrollTop = 0;
+    }
+
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      if (!q) {
+        const cur = nav.querySelector('button.active');
+        showPane(cur ? cur.dataset.spane : SETTINGS_GROUPS[0].id);
+        return;
+      }
+      let hits = 0;
+      for (const pane of Object.values(paneMap)) {
+        let paneHits = 0;
+        for (const block of pane.children) {
+          if (block.classList.contains('settings-empty')) continue;
+          const match = (block.dataset.searchText || '').includes(q);
+          block.classList.toggle('field-hidden', !match);
+          if (match) { paneHits++; hits++; }
+        }
+        pane.classList.toggle('search-hit', paneHits > 0);
+        pane.classList.remove('active');
+      }
+      for (const b of Object.values(navMap)) b.classList.remove('active');
+      let empty = panes.querySelector('.settings-empty');
+      if (!empty) { empty = el('div', { class: 'settings-empty' }); panes.appendChild(empty); }
+      empty.textContent = 'Nothing matches “' + search.value.trim() + '”.';
+      empty.hidden = hits > 0;
+    });
+
+    // Show/hide toggle on the API key field.
+    const keyInput = document.getElementById('s-api-key');
+    if (keyInput && keyInput.parentElement) {
+      const row = el('div', { style: 'display:flex;gap:6px;align-items:center;' });
+      keyInput.parentElement.insertBefore(row, keyInput);
+      row.appendChild(keyInput);
+      keyInput.style.flex = '1';
+      const toggle = el('button', { class: 'keyreveal', type: 'button' }, 'Show');
+      toggle.addEventListener('click', () => {
+        const hidden = keyInput.type === 'password';
+        keyInput.type = hidden ? 'text' : 'password';
+        toggle.textContent = hidden ? 'Hide' : 'Show';
+      });
+      row.appendChild(toggle);
+    }
+
+    CodeSmith.showSettingsPane = showPane;
+    showPane(SETTINGS_GROUPS[0].id);
+    _settingsOrganized = true;
+  }
+
   function openSettings() {
+	    organizeSettings();
     lastFocused = document.activeElement;
     const s = CodeSmith.state.settings || CodeSmith.DEFAULTS;
 		$('#s-api-url').value     = s.apiUrl || '';
@@ -8448,8 +8753,11 @@ function wireComposer() {
   }
 
   function _makeEditable() {
-    const codePane = $('#build-code');
-    const testsPane = $('#build-tests');
+    // #build-code / #build-tests don't exist — the real panes are the Stage C
+    // content areas (#sc-code / #sc-tests).
+    const codePane = $('#sc-code');
+    const testsPane = $('#sc-tests');
+    if (!codePane || !testsPane) return;
     if (codePane.querySelector('.escalated-editor')) return; // already editable
 
     codePane.replaceChildren();
@@ -10425,8 +10733,48 @@ case 'symbols_requested':
 
 	  // ---- Day 7: Command palette --------------------------------------------
 	  let _cmdOpen = false;
+  // ---- Single source of truth for every keybinding -------------------------
+  // scope: 'global' | 'explore' | 'editor' | 'build'
+  const SHORTCUTS = [
+    { group: 'Files',      keys: ['Ctrl','P'],           label: 'Quick open file',                scope: 'explore' },
+    { group: 'Files',      keys: ['Ctrl','S'],           label: 'Save workspace (to browser)',    scope: 'global'  },
+    { group: 'Files',      keys: ['Ctrl','W'],           label: 'Close current tab',              scope: 'explore' },
+    { group: 'Files',      keys: ['Alt','1..9'],         label: 'Jump to tab by position',        scope: 'explore' },
 
+    { group: 'Navigation', keys: ['Ctrl','Shift','F'],   label: 'Search across all files',        scope: 'explore' },
+    { group: 'Navigation', keys: ['F12'],                label: 'Go to definition',               scope: 'editor'  },
+    { group: 'Navigation', keys: ['Ctrl','Click'],       label: 'Go to definition',               scope: 'editor'  },
+    { group: 'Navigation', keys: ['Ctrl','F'],           label: 'Find in current file',           scope: 'editor'  },
+    { group: 'Navigation', keys: ['Ctrl','H'],           label: 'Replace in current file',        scope: 'editor'  },
+    { group: 'Navigation', keys: ['Ctrl','G'],           label: 'Go to line',                     scope: 'editor'  },
+
+    { group: 'Running',    keys: ['F5'],                 label: 'Run active file in terminal',    scope: 'explore' },
+    { group: 'Running',    keys: ['Ctrl','`'],           label: 'Toggle integrated terminal',     scope: 'explore' },
+
+    { group: 'Editing',    keys: ['Ctrl','K','Ctrl','C'],label: 'Comment selection',              scope: 'editor'  },
+    { group: 'Editing',    keys: ['Ctrl','K','Ctrl','U'],label: 'Uncomment selection',            scope: 'editor'  },
+    { group: 'Editing',    keys: ['Alt','↑ / ↓'],        label: 'Move line up / down',            scope: 'editor'  },
+    { group: 'Editing',    keys: ['Ctrl','D'],           label: 'Select next occurrence',         scope: 'editor'  },
+    { group: 'Editing',    keys: ['Ctrl','Z'],           label: 'Undo',                           scope: 'editor'  },
+
+    { group: 'Interface',  keys: ['Ctrl','Shift','P'],   label: 'Command palette',                scope: 'global'  },
+    { group: 'Interface',  keys: ['Ctrl','K'],           label: 'Command palette (outside editor)', scope: 'global' },
+    { group: 'Interface',  keys: ['Ctrl',','],           label: 'Settings',                       scope: 'global'  },
+    { group: 'Interface',  keys: ['Ctrl','Shift','Z'],   label: 'Focus (zen) mode',               scope: 'explore' },
+    { group: 'Interface',  keys: ['Ctrl','Shift','D'],   label: 'Debug panel',                    scope: 'global'  },
+    { group: 'Interface',  keys: ['?'],                  label: 'Open this help',                 scope: 'global'  },
+    { group: 'Interface',  keys: ['Esc'],                label: 'Close modal / exit zen mode',    scope: 'global'  },
+  ];
+  CodeSmith.SHORTCUTS = SHORTCUTS;
+
+  function _kbd(keys) {
+    return keys.map(k => '<kbd>' + k + '</kbd>').join(' <span style="color:#3a3f4a;">+</span> ');
+  }
+  
 	  const CMD_ACTIONS = [
+				{ id: 'settings-editor', label: 'Settings: editor preferences', shortcut: '', action: () => { openSettings(); CodeSmith.showSettingsPane && CodeSmith.showSettingsPane('editor'); } },
+		{ id: 'settings-models', label: 'Settings: models', shortcut: '', action: () => { openSettings(); CodeSmith.showSettingsPane && CodeSmith.showSettingsPane('models'); } },
+		{ id: 'settings-conn',   label: 'Settings: connection', shortcut: '', action: () => { openSettings(); CodeSmith.showSettingsPane && CodeSmith.showSettingsPane('connection'); } },
 		{ id: 'new-session', label: 'New session', shortcut: '', action: () => newSession() },
 		{ id: 'settings', label: 'Settings', shortcut: 'Ctrl+,', action: () => openSettings() },
 		{ id: 'mode-chat', label: 'Switch to Chat mode', shortcut: '', action: () => { document.querySelector('.mode-btn[data-mode="chat"]').click(); } },
@@ -10434,7 +10782,12 @@ case 'symbols_requested':
 		{ id: 'warmup', label: 'Warm up Python sandbox', shortcut: '', action: async () => { try { await CodeSmith.sandbox.warmUp(); } catch {} } },
 		{ id: 'export', label: 'Export current artifact', shortcut: '', action: () => { const dl = $('#btn-build-download') || $('#btn-sc-download-all'); if (dl) dl.click(); } },
 		{ id: 'debug', label: 'Debug panel', shortcut: 'Ctrl+Shift+D', action: () => { const p = $('#debug-panel'); p.hidden = !p.hidden; } },
-		{ id: 'help', label: 'Help', shortcut: '?', action: () => openHelp() },
+				{ id: 'help',          label: 'Help', shortcut: '?', action: () => openHelp() },
+		{ id: 'help-keys',     label: 'Help: keyboard shortcuts', shortcut: '', action: () => openHelp('keys.all') },
+		{ id: 'help-editor',   label: 'Help: using the editor', shortcut: '', action: () => openHelp('explore.files') },
+		{ id: 'help-run',      label: 'Help: running code', shortcut: '', action: () => openHelp('explore.run') },
+		{ id: 'help-build',    label: 'Help: build pipeline', shortcut: '', action: () => openHelp('build.stages') },
+		{ id: 'help-trouble',  label: 'Help: troubleshooting', shortcut: '', action: () => openHelp('trouble.cors') },
 		{ id: 'clear-session', label: 'Clear current session messages', shortcut: '', action: async () => {
 		  const sess = CodeSmith.state.sessions.find(s => s.id === CodeSmith.state.currentId);
 		  if (sess) { sess.messages = []; await CodeSmith.db.putSession(sess); renderChat(); }
@@ -10447,6 +10800,256 @@ case 'symbols_requested':
 		  }
 		}},
 	  ];
+  // ---- Help content. Tabs are derived from the distinct `tab` values. ------
+  const HELP_TABS = [
+    { id: 'start',   label: 'Getting started', icon: '🚀' },
+    { id: 'explore', label: 'Editor',          icon: '‹/›' },
+    { id: 'build',   label: 'Build pipeline',  icon: '⚙️' },
+    { id: 'ai',      label: 'AI features',     icon: '🤝' },
+    { id: 'keys',    label: 'Shortcuts',       icon: '⌨️' },
+    { id: 'trouble', label: 'Troubleshooting', icon: '🩺' },
+    { id: 'about',   label: 'About & privacy', icon: 'ℹ️' },
+  ];
+
+  const HELP_TOPICS = [
+    // ---------------- Getting started ----------------
+    { id: 'start.what', tab: 'start', open: true, title: 'What CodeSmith is', body: `
+      <p>A single HTML file that runs entirely in your browser. It does two separate jobs:</p>
+      <ul>
+        <li><strong>Explore</strong> — a real code editor (Monaco) with a file tree, tabs,
+            cross-file search, a Python terminal, and an AI pair programmer. This is the
+            mode most people use day to day.</li>
+        <li><strong>Build</strong> — a pipeline that turns a plain-English description into
+            a tested Python project: requirements → architecture → per-module code, test
+            and repair → downloadable zip.</li>
+      </ul>
+      <p>There is no server and no build step. Your code stays in your browser.</p>` },
+
+    { id: 'start.setup', tab: 'start', title: 'First-time setup', body: `
+      <p>You need one API key from any OpenAI-compatible provider:</p>
+      <ul>
+        <li><a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a>
+            — free tier, best quality, but browser CORS is blocked so it must go through
+            the bundled Cloudflare Worker proxy.</li>
+        <li><a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a>
+            — free tier, fastest inference, works direct from the browser.</li>
+        <li>Anything else that speaks <code>/v1/chat/completions</code>.</li>
+      </ul>
+      <p>Open <strong>Settings → Connection</strong>, paste the key, press
+      <strong>Test connection</strong>. Then <strong>Settings → Models</strong> and hit
+      <strong>Fetch models</strong> to populate the dropdowns.</p>` },
+
+    { id: 'start.modes', tab: 'start', title: 'Chat, Build and Explore modes', body: `
+      <p>The three buttons in the top bar switch the whole workspace:</p>
+      <ul>
+        <li><strong>Chat</strong> — plain conversation with the orchestrator model.</li>
+        <li><strong>Build</strong> — the four-stage pipeline with its stepper.</li>
+        <li><strong>Explore</strong> — the editor.</li>
+      </ul>
+      <p>Your last mode is remembered, so reopening the app puts you back where you were.</p>` },
+
+    // ---------------- Editor ----------------
+    { id: 'explore.files', tab: 'explore', open: true, title: 'Getting files in and out', body: `
+      <p>Five ways in, from the buttons under the file tree:</p>
+      <ul>
+        <li><strong>Upload</strong> — pick files, or drag them onto the editor area.
+            <code>.zip</code> archives are unpacked automatically.</li>
+        <li><strong>New</strong> — create an empty scratch file.</li>
+        <li><strong>Paste</strong> — paste a snippet and name it.</li>
+        <li><strong>Folder</strong> — import a whole directory tree.</li>
+        <li><strong>URL</strong> — fetch a raw file from the web (GitHub raw links work).</li>
+      </ul>
+      <p>Out: <strong>Download all</strong> gives you a zip of the whole workspace, and
+      right-click any file in the tree for <em>Copy contents</em>.</p>
+      <p><strong>Note:</strong> <kbd>Ctrl</kbd> + <kbd>S</kbd> saves to your browser's
+      IndexedDB, not to disk. It is crash protection, not a file save.</p>` },
+
+    { id: 'explore.tabs', tab: 'explore', title: 'Tabs and panes', body: `
+      <p>Tabs can be dragged to reorder and closed with middle-click or the <code>×</code>.
+      A dot on the tab means unsaved changes; the tree shows an <code>M</code> badge for
+      the same thing.</p>
+      <p>Drag the thin vertical strips between the file tree, editor and AI panel to
+      resize them. Widths are remembered between sessions.</p>
+      <p><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> or the <code>⛶</code> button
+      collapses everything but the editor.</p>` },
+
+    { id: 'explore.run', tab: 'explore', title: 'Running your code', body: `
+      <p>Press <kbd>F5</kbd> or the <strong>▶ Run</strong> button in the editor header.
+      This copies every file in your workspace into the sandbox's <code>/workdir</code>,
+      then executes the active file as <code>__main__</code>.</p>
+      <p>The terminal (<kbd>Ctrl</kbd> + <kbd></kbd>) is a live Python REPL sharing the
+      same interpreter. It understands <code>ls</code>, <code>cat FILE</code>,
+      <code>clear</code>, <code>help</code>, and any Python expression.</p>
+      <p>Python runs on Pyodide (WebAssembly). See
+      <em>Troubleshooting → Pyodide limits</em> for what that rules out.</p>` },
+
+    { id: 'explore.search', tab: 'explore', title: 'Finding things', body: `
+      <ul>
+        <li><kbd>Ctrl</kbd> + <kbd>P</kbd> — jump to a file by name.</li>
+        <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> — search text across every
+            open file; click a result to jump to that line.</li>
+        <li><kbd>Ctrl</kbd> + <kbd>F</kbd> — Monaco's own find, inside the current file only.</li>
+        <li><kbd>F12</kbd> or <kbd>Ctrl</kbd>-click a symbol — jump to where it's defined,
+            including across files. This uses the knowledge graph, so it improves as more
+            files are loaded.</li>
+      </ul>` },
+
+    { id: 'explore.problems', tab: 'explore', title: 'Problems and snapshots', body: `
+      <p>The <strong>Problems</strong> panel shows lightweight live diagnostics as you type
+      — unbalanced brackets, obvious syntax slips, suspicious indentation. It is not a full
+      type checker.</p>
+      <p><strong>📸 Snapshot</strong> stores a copy of the current file so you can diff or
+      restore it later. Snapshots are per file and survive reloads.</p>` },
+
+    // ---------------- Build ----------------
+    { id: 'build.stages', tab: 'build', open: true, title: 'The four stages', body: `
+      <ul>
+        <li><strong>1. Requirements</strong> — a short conversation that produces a written
+            spec. You approve it before anything is generated.</li>
+        <li><strong>2. Skeleton</strong> — the architecture: modules, their responsibilities,
+            the shared symbol table and the build order. Shown as a diagram. You approve it.</li>
+        <li><strong>3. Build</strong> — each module in order: generate → write to the sandbox
+            → install deps → run pytest → repair on failure. A module that can't be repaired
+            is <em>escalated</em> for you to edit by hand.</li>
+        <li><strong>4. Download</strong> — a zip with source, tests, a README,
+            <code>run.py</code> and <code>requirements.txt</code>.</li>
+      </ul>` },
+
+    { id: 'build.tuning', tab: 'build', title: 'Tuning cost and quality', body: `
+      <p>In <strong>Settings → Build</strong>:</p>
+      <ul>
+        <li><strong>Worker collaboration</strong> — <em>Solo</em> is one pass.
+            <em>Critic-Reviser</em> adds a review round and is the best quality-per-token.
+            <em>Vote of 3</em> generates three drafts and judges them; roughly triple cost.</li>
+        <li><strong>Parallel workers</strong> — builds N modules simultaneously. Faster in
+            wall-clock time, but burns rate limit and makes failures harder to read. Leave
+            at 1 unless you're in a hurry.</li>
+        <li><strong>Max tokens</strong> — per tier. Too low and complex modules get
+            truncated mid-function, which shows up as a confusing syntax error.</li>
+      </ul>` },
+
+    { id: 'build.escalation', tab: 'build', title: 'When a module is escalated', body: `
+      <p>After repeated repair attempts fail, the module is marked <strong>escalated</strong>
+      and its code and tests become editable. Fix what's wrong, press <strong>Rerun</strong>,
+      and the pipeline picks up from there.</p>
+      <p>The usual causes: a dependency Pyodide can't provide, a test asserting something
+      the spec never promised, or a cross-module name mismatch.</p>` },
+
+    // ---------------- AI features ----------------
+    { id: 'ai.pair', tab: 'ai', open: true, title: 'Pair programmer', body: `
+      <p>Describe a change in plain language and you get back line-level edit instructions
+      you can apply with one click, rather than a wall of rewritten code. Every applied edit
+      goes into the edit history and can be undone.</p>
+      <p>The quick buttons (Fix bugs, Optimize, Refactor, Add tests, Add docs, Add types)
+      are just pre-written prompts — you can always type your own.</p>
+      <p><strong>Attach</strong> pulls other files into the request so the model can see
+      how a change ripples across the project.</p>` },
+
+    { id: 'ai.analysis', tab: 'ai', title: 'Analysis and flowcharts', body: `
+      <p><strong>Analyze with AI</strong> gives a structured read of the current file:
+      metrics, symbols, imports, complexity, and the model's notes on what it does and
+      where it's fragile.</p>
+      <p><strong>Generate flowchart</strong> renders the control flow as a Mermaid diagram,
+      which you can export.</p>` },
+
+    { id: 'ai.routing', tab: 'ai', title: 'Model tiers and routing', body: `
+      <p>Three tiers are configured separately:</p>
+      <ul>
+        <li><strong>Orchestrator</strong> — planning, architecture, requirements. Wants a
+            strong reasoning model.</li>
+        <li><strong>Worker</strong> — writing and repairing code. Wants a coding model.</li>
+        <li><strong>Fast</strong> — small classification and formatting calls. Wants
+            whatever is cheapest.</li>
+      </ul>
+      <p>The smart router picks a tier per task automatically. <strong>Settings → Advanced</strong>
+      lets you point each tier at a different provider entirely.</p>` },
+
+    { id: 'ai.knowledge', tab: 'ai', title: 'Project knowledge graph', body: `
+      <p>Every file you open is parsed for symbols, imports and relationships. That graph
+      feeds go-to-definition, gives the pair programmer cross-file awareness, and is why
+      sending a whole file wholesale is worse than the targeted context CodeSmith builds.</p>
+      <p>It resets when you clear the workspace.</p>` },
+
+    // ---------------- Shortcuts (rendered from SHORTCUTS) ----------------
+    { id: 'keys.all', tab: 'keys', open: true, title: 'All keyboard shortcuts', body: '__SHORTCUT_TABLE__' },
+    { id: 'keys.notes', tab: 'keys', title: 'Notes on key handling', body: `
+      <p><kbd>Ctrl</kbd> + <kbd>K</kbd> opens the command palette everywhere <em>except</em>
+      inside the editor, where it stays Monaco's chord prefix
+      (<kbd>Ctrl</kbd>+<kbd>K</kbd> then <kbd>Ctrl</kbd>+<kbd>C</kbd> to comment, etc.).
+      Use <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> if you want the palette while typing code.</p>
+      <p><kbd>Ctrl</kbd>+<kbd>Tab</kbd> is reserved by the browser and cannot be intercepted
+      by a web page. Use <kbd>Alt</kbd>+<kbd>1..9</kbd> to switch tabs instead.</p>` },
+
+    // ---------------- Troubleshooting ----------------
+    { id: 'trouble.pyodide', tab: 'trouble', open: true, title: 'Pyodide limits', body: `
+      <p>Python runs as WebAssembly in the browser tab. That means <strong>no</strong>:</p>
+      <ul>
+        <li>C extensions that aren't pre-built for Pyodide (most of scientific Python is;
+            most database drivers are not)</li>
+        <li>real filesystem access outside the virtual <code>/workdir</code></li>
+        <li>raw sockets or blocking network I/O</li>
+        <li>GUI toolkits, subprocesses, or threading</li>
+      </ul>
+      <p>Memory is roughly 100 MB. Long-running loops will freeze the tab, so runs are
+      capped at 30 seconds.</p>` },
+
+    { id: 'trouble.cors', tab: 'trouble', title: 'Connection failures', body: `
+      <ul>
+        <li><strong>CORS error with NVIDIA</strong> — expected. NVIDIA's free tier rejects
+            browser origins. Keep the Cloudflare Worker proxy URL in
+            <strong>Settings → Connection</strong>.</li>
+        <li><strong>401 / 403</strong> — key is wrong, expired, or belongs to a different
+            provider than the base URL.</li>
+        <li><strong>429</strong> — rate limited. Lower parallel workers, or switch tiers.</li>
+        <li><strong>Works in Chat, fails in Build</strong> — usually a max-tokens ceiling
+            that's too low for the worker tier.</li>
+      </ul>
+      <p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> opens the debug panel with the raw
+      request and response log.</p>` },
+
+    { id: 'trouble.editor', tab: 'trouble', title: 'Editor problems', body: `
+      <ul>
+        <li><strong>Blank editor area</strong> — Monaco failed to load from the CDN. Check
+            the browser console and reload.</li>
+        <li><strong>Terminal button does nothing</strong> — Pyodide is still downloading on
+            first use; it's a large one-time fetch. Watch the status strip.</li>
+        <li><strong>Files disappeared after reload</strong> — the workspace autosaves to
+            IndexedDB, but private/incognito windows discard it on close. Use
+            <strong>Download all</strong> for anything you care about.</li>
+        <li><strong>Go-to-definition finds nothing</strong> — the symbol has to have been
+            seen. Open the file that defines it once.</li>
+      </ul>` },
+
+    { id: 'trouble.reset', tab: 'trouble', title: 'Starting clean', body: `
+      <p><strong>Settings → Data</strong> lets you clear the models cache and saved
+      workspaces individually. The command palette's <em>Clear all data</em> deletes the
+      whole IndexedDB database and reloads — that includes your API key, so export
+      anything first.</p>` },
+
+    // ---------------- About ----------------
+    { id: 'about.privacy', tab: 'about', open: true, title: 'Privacy', body: `
+      <p>CodeSmith is one HTML file. There is no CodeSmith server, no telemetry, and no
+      account.</p>
+      <p>Your code and prompts go to exactly one place: the API endpoint you configured.
+      Everything else — sessions, files, snapshots, settings, the API key itself — lives in
+      your browser's IndexedDB and never leaves the machine.</p>
+      <p>The one exception is the Cloudflare Worker proxy, which exists only because
+      NVIDIA blocks browser origins. It is a transparent pass-through and stores nothing.</p>` },
+
+    { id: 'about.stack', tab: 'about', title: 'What it is built on', body: `
+      <ul>
+        <li><strong>Monaco</strong> — the editor from VS Code</li>
+        <li><strong>Pyodide</strong> — CPython compiled to WebAssembly</li>
+        <li><strong>xterm.js</strong> — the terminal</li>
+        <li><strong>Mermaid</strong> — architecture and flow diagrams</li>
+        <li><strong>marked + DOMPurify + highlight.js</strong> — markdown rendering</li>
+        <li><strong>JSZip</strong> — archive import and export</li>
+      </ul>
+      <p>No framework, no bundler, no npm install. Vanilla JavaScript in one file.</p>` },
+
+    { id: 'about.links', tab: 'about', title: 'Source', body: `
+      <p><a href="https://github.com/khalecl/codesmith" target="_blank" rel="noopener">github.com/khalecl/codesmith</a></p>` },  ];
+
 
 	  function openCommandPalette() {
 		if (_cmdOpen) return;
@@ -10518,41 +11121,153 @@ case 'symbols_requested':
 	  }
 
 	  // ---- Day 7: Help modal -------------------------------------------------
-	  function openHelp() {
-		const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
-		const modal = el('div', { class: 'modal', style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;max-width:560px;' });
-		const header = el('div', { class: 'flex items-center justify-between mb-3' });
-		header.appendChild(el('div', { class: 'text-[15px] font-semibold' }, 'CodeSmith Help'));
-		const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close' });
-		closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-		header.appendChild(closeBtn);
-		modal.appendChild(header);
+	  // ---- Help centre: tabbed, searchable, deep-linkable ---------------------
+  let _helpOpen = false;
 
-		const content = el('div', { class: 'help-content' });
-				content.innerHTML = ['<h3>What CodeSmith Is</h3>',
-				'<p>A browser-based tool that turns plain-English descriptions into working Python programs. AI writes the code, tests it, fixes failures automatically, and packages the result for download.</p>',
-				'<h3>How It Works</h3>',
-				'<p><strong>1. Requirements</strong> — Answer a few questions so the AI understands what you need.</p>',
-				'<p><strong>2. Skeleton</strong> — AI designs the module architecture. You review and approve.</p>',
-				'<p><strong>3. Build</strong> — Each module is coded, tested, and repaired until all tests pass.</p>',
-				'<p><strong>4. Download</strong> — Get a zip with source, tests, docs, and requirements.txt.</p>',
-				'<h3>Keyboard Shortcuts</h3>',
-				'<p><code>Ctrl+K</code> Command palette &nbsp; <code>Ctrl+,</code> Settings &nbsp; <code>Ctrl+Shift+D</code> Debug panel &nbsp; <code>Esc</code> Close modal</p>',
-				'<h3>Known Limitations</h3>',
-				'<p>Pyodide (WASM Python) cannot run C extensions, filesystem I/O, networking, or GUIs. Builds on the free tier take 5-10 minutes. Memory is limited to ~100MB.</p>',
-				'<h3>Privacy</h3>',
-				'<p>Your code and prompts go only to the AI endpoint you configure. Nothing is stored on servers we control. All session data lives in your browser\'s IndexedDB.</p>',
-				'<h3>Links</h3>',
-				'<p><a href="#" style="color:#4f8cff;">GitHub repository (coming soon)</a></p>'
-			].join('');
-		modal.appendChild(content);
+  function _renderShortcutTable() {
+    const groups = {};
+    for (const s of SHORTCUTS) (groups[s.group] = groups[s.group] || []).push(s);
+    const out = [];
+    for (const [g, list] of Object.entries(groups)) {
+      out.push('<div class="key-group-title">' + g + '</div>');
+      out.push('<table class="keytable"><tbody>');
+      for (const s of list) {
+        out.push('<tr><td>' + _kbd(s.keys) + '</td><td>' + s.label +
+                 '</td><td class="key-scope">' + s.scope + '</td></tr>');
+      }
+      out.push('</tbody></table>');
+    }
+    return out.join('');
+  }
 
-		const close = () => { backdrop.remove(); modal.remove(); };
-		closeBtn.addEventListener('click', close);
-		backdrop.addEventListener('click', close);
-		document.body.appendChild(backdrop);
-		document.body.appendChild(modal);
-	  }
+  function openHelp(deepLinkId) {
+    if (_helpOpen) return;
+    _helpOpen = true;
+
+    const backdrop = el('div', { class: 'modal-backdrop', style: 'z-index:80;' });
+    const modal = el('div', {
+      class: 'modal modal-wide', role: 'dialog', 'aria-modal': 'true',
+      style: 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;',
+    });
+
+    // -- header --
+    const head = el('div', { class: 'rail-head' });
+    head.appendChild(el('h2', {}, 'CodeSmith Help'));
+    const search = el('input', {
+      class: 'rail-search', type: 'search', placeholder: 'Search help…',
+      'aria-label': 'Search help topics',
+    });
+    head.appendChild(search);
+    const closeBtn = el('button', { class: 'iconbtn', 'aria-label': 'Close help' });
+    closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    head.appendChild(closeBtn);
+    modal.appendChild(head);
+
+    // -- layout --
+    const layout = el('div', { class: 'rail-layout' });
+    const nav = el('div', { class: 'rail-nav', role: 'tablist' });
+    const panes = el('div', { class: 'rail-panes' });
+    layout.appendChild(nav);
+    layout.appendChild(panes);
+    modal.appendChild(layout);
+
+    const paneMap = {};
+    const navMap = {};
+
+    for (const tab of HELP_TABS) {
+      const btn = el('button', { role: 'tab', 'data-htab': tab.id });
+      btn.appendChild(el('span', { class: 'rail-nav-icon' }, tab.icon));
+      btn.appendChild(el('span', {}, tab.label));
+      btn.addEventListener('click', () => { search.value = ''; showTab(tab.id); });
+      nav.appendChild(btn);
+      navMap[tab.id] = btn;
+
+      const pane = el('div', { class: 'rail-pane', 'data-hpane': tab.id });
+      panes.appendChild(pane);
+      paneMap[tab.id] = pane;
+    }
+
+    for (const t of HELP_TOPICS) {
+      const pane = paneMap[t.tab];
+      if (!pane) continue;
+      const det = el('details', { class: 'help-topic', id: 'help-' + t.id });
+      if (t.open) det.open = true;
+      const sum = document.createElement('summary');
+      sum.textContent = t.title;
+      det.appendChild(sum);
+      const body = el('div', { class: 'help-body' });
+      body.innerHTML = t.body === '__SHORTCUT_TABLE__' ? _renderShortcutTable() : t.body;
+      det.appendChild(body);
+      det.dataset.searchText = (t.title + ' ' + body.textContent).toLowerCase();
+      pane.appendChild(det);
+    }
+
+    function showTab(id) {
+      for (const [k, p] of Object.entries(paneMap)) p.classList.toggle('active', k === id);
+      for (const [k, b] of Object.entries(navMap)) b.classList.toggle('active', k === id);
+      for (const d of panes.querySelectorAll('.help-topic')) d.classList.remove('search-hit', 'field-hidden');
+      panes.scrollTop = 0;
+    }
+
+    // -- search across all tabs --
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      if (!q) {
+        const cur = nav.querySelector('button.active');
+        showTab(cur ? cur.dataset.htab : HELP_TABS[0].id);
+        return;
+      }
+      let hits = 0;
+      for (const pane of Object.values(paneMap)) {
+        let paneHits = 0;
+        for (const d of pane.querySelectorAll('.help-topic')) {
+          const match = d.dataset.searchText.includes(q);
+          d.classList.toggle('field-hidden', !match);
+          if (match) { d.open = true; paneHits++; hits++; }
+        }
+        pane.classList.toggle('search-hit', paneHits > 0);
+        pane.classList.remove('active');
+      }
+      for (const b of Object.values(navMap)) b.classList.remove('active');
+      let empty = panes.querySelector('.settings-empty');
+      if (hits === 0) {
+        if (!empty) {
+          empty = el('div', { class: 'settings-empty' }, 'No help topics match “' + q + '”.');
+          panes.appendChild(empty);
+        }
+        empty.textContent = 'No help topics match “' + search.value.trim() + '”.';
+        empty.hidden = false;
+      } else if (empty) {
+        empty.hidden = true;
+      }
+    });
+
+    // -- open + optional deep link --
+    const close = () => { _helpOpen = false; backdrop.remove(); modal.remove(); };
+    closeBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    document.body.appendChild(backdrop);
+    document.body.appendChild(modal);
+
+    if (deepLinkId) {
+      const topic = HELP_TOPICS.find(t => t.id === deepLinkId);
+      if (topic) {
+        showTab(topic.tab);
+        const node = document.getElementById('help-' + topic.id);
+        if (node) {
+          node.open = true;
+          node.classList.add('flash');
+          setTimeout(() => node.scrollIntoView({ block: 'center', behavior: 'smooth' }), 40);
+          setTimeout(() => node.classList.remove('flash'), 1600);
+        }
+        search.focus();
+        return;
+      }
+    }
+    showTab(HELP_TABS[0].id);
+    search.focus();
+  }
+  CodeSmith.openHelp = openHelp;
 
 	  // ---- Day 7: Keyboard shortcuts -----------------------------------------
 	  function wireKeyboardShortcuts() {
@@ -10569,18 +11284,31 @@ case 'symbols_requested':
 			if (active) _closeExplorerTab(active);
 			return;
 		  }
-		  // Ctrl+Tab / Ctrl+Shift+Tab: cycle explorer tabs (explore mode only)
-		  if (mod && ev.key === 'Tab' && document.body.classList.contains('explore-mode')) {
+		  // Ctrl+PageUp/PageDown: cycle explorer tabs (explore mode only).
+		  // (Ctrl+Tab is reserved by browsers for tab switching and can't be intercepted.)
+		  if (mod && (ev.key === 'PageDown' || ev.key === 'PageUp') && document.body.classList.contains('explore-mode')) {
 			ev.preventDefault();
 			const tabs = CodeSmith.explorer.getOpenTabs();
 			if (tabs.length < 2) return;
 			const cur = CodeSmith.explorer.getActiveFile();
 			const idx = tabs.indexOf(cur);
-			const next = tabs[(idx + (ev.shiftKey ? -1 : 1) + tabs.length) % tabs.length];
+			const next = tabs[(idx + (ev.key === 'PageUp' ? -1 : 1) + tabs.length) % tabs.length];
 			CodeSmith.explorer.setActiveFile(next);
 			_explorerRenderTabs();
 			_explorerRenderTree();
 			_explorerShowFile(next);
+			return;
+		  }
+		  // Alt+1..9: jump directly to explorer tab N
+		  if (ev.altKey && !mod && /^[1-9]$/.test(ev.key) && document.body.classList.contains('explore-mode')) {
+			ev.preventDefault();
+			const tabs = CodeSmith.explorer.getOpenTabs();
+			const target = tabs[parseInt(ev.key, 10) - 1];
+			if (!target) return;
+			CodeSmith.explorer.setActiveFile(target);
+			_explorerRenderTabs();
+			_explorerRenderTree();
+			_explorerShowFile(target);
 			return;
 		  }
 		  // Ctrl+Shift+P: command palette
@@ -10596,6 +11324,14 @@ case 'symbols_requested':
 		  }
 		  // Ctrl+,: settings
 		  if (mod && ev.key === ',') { ev.preventDefault(); openSettings(); return; }
+		  		  // ?: open help (only when not typing into a field)
+		  if (ev.key === '?' && !mod) {
+			const t = ev.target;
+			const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+			                     t.isContentEditable ||
+			                     (t.closest && t.closest('.monaco-editor')));
+			if (!typing) { ev.preventDefault(); openHelp(); return; }
+		  }
 		  // Esc: close topmost modal
 		  if (ev.key === 'Escape') {
 			if (_cmdOpen) return; // handled internally
@@ -10949,6 +11685,8 @@ case 'symbols_requested':
 		  }
 		  // Wire bottom bar and terminal
 		  _wireExploreMode();
+		  			const helpBtn = $('#btn-explorer-help');
+			if (helpBtn) helpBtn.addEventListener('click', () => openHelp('explore.files'));
 			// Restore persisted explorer workspace (files, tabs, active file)
 			_restoreWorkspace();
 				// Preview button
@@ -11279,6 +12017,17 @@ case 'symbols_requested':
 			_explorerRenderLocalAnalysis(analysis);
 					_renderEditHistory();
 		}
+			function _closeExplorerTab(name) {
+			  CodeSmith.explorer.closeTab(name);
+			  _explorerRenderTabs();
+			  _explorerRenderTree();
+			  const next = CodeSmith.explorer.getActiveFile();
+			  if (next) { _explorerShowFile(next); return; }
+			  const hdr = document.querySelector('#explorer-editor-header');
+			  if (hdr) hdr.hidden = true;
+			  const bc = document.querySelector('#editor-breadcrumb');
+			  if (bc) bc.hidden = true;
+			}
 
 		function _explorerRenderLocalAnalysis(analysis) {
 		  const $ = (sel) => document.querySelector(sel);
