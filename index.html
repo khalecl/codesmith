@@ -988,7 +988,7 @@
 
 		/* File tree panel */
 		.explorer-tree {
-		  width: 220px; min-width: 180px; max-width: 300px;
+		  width: var(--explorer-tree-w, 220px); min-width: 140px; max-width: 480px;
 		  border-right: 1px solid rgba(255,255,255,0.06);
 		  display: flex; flex-direction: column; overflow: hidden;
 		  background: #0f1319;
@@ -1128,7 +1128,7 @@
 		.fold-ellipsis:hover { background: rgba(255,255,255,0.08); color: #8b92a1; }
 		/* Right panel: AI analysis & pair programmer */
 		.explorer-ai {
-		  width: 380px; min-width: 300px; max-width: 480px;
+		  width: var(--explorer-ai-w, 380px); min-width: 240px; max-width: 640px;
 		  border-left: 1px solid rgba(255,255,255,0.06);
 		  display: flex; flex-direction: column; overflow: hidden;
 		  background: #141820;
@@ -1312,10 +1312,12 @@
 		/* Resizable panels */
 		.explorer-resize-handle {
 		  width: 4px; cursor: col-resize; background: transparent;
-		  transition: background 80ms; flex-shrink: 0;
+		  transition: background 80ms; flex-shrink: 0; touch-action: none;
 		}
 		.explorer-resize-handle:hover { background: rgba(79,140,255,0.3); }
-		.explorer-resize-handle:active { background: #4f8cff; }
+		.explorer-resize-handle:active, .explorer-resize-handle.dragging { background: #4f8cff; }
+		body.explorer-resizing { cursor: col-resize; user-select: none; }
+		body.explorer-resizing iframe, body.explorer-resizing .monaco-editor { pointer-events: none; }
 
 		/* Mobile pane switcher — hidden on desktop, enabled by the media query */
 		#epane-switch {
@@ -1791,6 +1793,10 @@
 						  </div>
 						  <div id="explorer-tree-body" class="explorer-tree-body"></div>
 						  <div class="explorer-tree-actions">
+							<button id="btn-explorer-new" class="btn btn-ghost" style="font-size:10px;flex:1;" title="New empty file">
+							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+							  New
+							</button>
 							<button id="btn-explorer-upload" class="btn btn-ghost" style="font-size:10px;flex:1;">
 							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 							  Upload
@@ -1801,6 +1807,10 @@
 							</button>
 							<button id="btn-explorer-folder" class="btn btn-ghost" style="font-size:10px;flex:1;">📁 Folder</button>
 							<button id="btn-explorer-url" class="btn btn-ghost" style="font-size:10px;flex:1;">🌐 URL</button>
+							<button id="btn-explorer-download-all" class="btn btn-ghost" style="font-size:10px;flex:1;" title="Download all files as .zip">
+							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+							  Zip
+							</button>
 							<button id="btn-explorer-clear" class="btn btn-ghost" style="font-size:10px;color:#5b6474;">✕</button>
 						  </div>
 						</div>
@@ -11959,6 +11969,83 @@ case 'symbols_requested':
 			      if (btn) btn.click();
 			    }
 			  });
+		  // ---- Panel resize handles (drag to resize, persisted) ----
+		  function _wireResizeHandle(handleId, cssVar, direction) {
+		    const handle = document.getElementById(handleId);
+		    if (!handle) return;
+		    handle.addEventListener('pointerdown', (ev) => {
+		      ev.preventDefault();
+		      handle.setPointerCapture(ev.pointerId);
+		      handle.classList.add('dragging');
+		      document.body.classList.add('explorer-resizing');
+		      const startX = ev.clientX;
+		      const startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue(cssVar), 10)
+		        || (cssVar === '--explorer-tree-w' ? 220 : 380);
+		      const onMove = (e) => {
+		        const delta = (e.clientX - startX) * direction;
+		        const w = Math.max(140, Math.min(640, startW + delta));
+		        document.documentElement.style.setProperty(cssVar, w + 'px');
+		      };
+		      const onUp = () => {
+		        handle.classList.remove('dragging');
+		        document.body.classList.remove('explorer-resizing');
+		        handle.removeEventListener('pointermove', onMove);
+		        handle.removeEventListener('pointerup', onUp);
+		        handle.removeEventListener('pointercancel', onUp);
+		        try { CodeSmith.monaco.getEditor()?.layout(); } catch (_) {}
+		        // Persist widths
+		        try {
+		          const s = CodeSmith.state.settings || {};
+		          const next = { ...s, explorerTreeW: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--explorer-tree-w'), 10) || undefined, explorerAiW: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--explorer-ai-w'), 10) || undefined };
+		          delete next.id;
+		          CodeSmith.db.saveSettings(next).then(() => { CodeSmith.state.settings = { ...next, id: 'app' }; }).catch(() => {});
+		        } catch {}
+		      };
+		      handle.addEventListener('pointermove', onMove);
+		      handle.addEventListener('pointerup', onUp);
+		      handle.addEventListener('pointercancel', onUp);
+		    });
+		  }
+		  _wireResizeHandle('explorer-resize-left', '--explorer-tree-w', 1);
+		  _wireResizeHandle('explorer-resize-right', '--explorer-ai-w', -1);
+		  // Restore persisted widths
+		  try {
+		    const s = CodeSmith.state.settings || {};
+		    if (s.explorerTreeW) document.documentElement.style.setProperty('--explorer-tree-w', s.explorerTreeW + 'px');
+		    if (s.explorerAiW) document.documentElement.style.setProperty('--explorer-ai-w', s.explorerAiW + 'px');
+		  } catch {}
+
+		  // ---- New file button ----
+		  const newBtn = $('#btn-explorer-new');
+		  if (newBtn) newBtn.addEventListener('click', () => {
+		    const name = prompt('New file name (e.g. scratch.py):', 'untitled.py');
+		    if (!name || !name.trim()) return;
+		    const clean = name.trim();
+		    if (CodeSmith.explorer.getFile(clean)) { alert('A file named "' + clean + '" already exists.'); return; }
+		    CodeSmith.explorer.addFile(clean, '');
+		    CodeSmith.explorer.openTab(clean);
+		    _explorerRenderTree();
+		    _explorerRenderTabs();
+		    _explorerShowFile(clean);
+		  });
+
+		  // ---- Download all as zip ----
+		  const dlAllBtn = $('#btn-explorer-download-all');
+		  if (dlAllBtn) dlAllBtn.addEventListener('click', async () => {
+		    const files = CodeSmith.explorer.getAllFiles();
+		    const names = Object.keys(files);
+		    if (names.length === 0) { alert('No files to download.'); return; }
+		    if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
+		    const zip = new JSZip();
+		    for (const n of names) zip.file(n, files[n].content);
+		    const blob = await zip.generateAsync({ type: 'blob' });
+		    const url = URL.createObjectURL(blob);
+		    const a = document.createElement('a');
+		    a.href = url;
+		    a.download = 'workspace.zip';
+		    a.click();
+		    URL.revokeObjectURL(url);
+		  });
 		}
 		 
 		let _diagDebounce = null;
@@ -12325,20 +12412,7 @@ case 'symbols_requested':
 		      } catch {}
 		    }, 800);
 		  }
-		  function _saveWorkspaceNow() {
-		    clearTimeout(_persistTimer);
-		    try {
-		      const data = CodeSmith.explorer.serialize();
-		      if (!data.files || Object.keys(data.files).length === 0) return;
-			  		      _recordWorkspaceHistory();
 
-		      CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).then(() => {
-		        const toast = el('div', { style: 'position:fixed;bottom:20px;right:20px;background:#4f8cff;color:#0b0d10;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;z-index:200;' }, '✓ Workspace saved');
-		        document.body.appendChild(toast);
-		        setTimeout(() => toast.remove(), 1500);
-		      }).catch(() => {});
-		    } catch {}
-		  }
 		  async function _restoreWorkspace() {
 		    try {
 		      const rec = await CodeSmith.db.getArtifact('explorer_workspace');
