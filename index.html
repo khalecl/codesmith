@@ -6167,17 +6167,9 @@ CodeSmith.explorer = Explorer;
 				- Keep edits minimal — change only what's needed.
 				- For Python: maintain PEP 8, type hints on public functions
 				- For JS: use modern ES6+, const/let, arrow functions where appropriate
+				- NEVER repeat the original line inside <new> when using type="replace". If you are adding lines around code that stays, emit separate type="add" edits instead.
 
-				WRONG EXAMPLE (do not do this):
-				<edit type="replace" start="100" end="100">
-				<old>console.log('hi');</old>
-				<new>console.log('before');
-				console.log('hi');
-				console.log('after');</new>
-				</edit>
-				This is wrong because it should be TWO add edits (before line 100 and after line 100), not a replace that embeds the original.
-
-				CORRECT EXAMPLE:
+				CORRECT EXAMPLE (adding lines around an untouched line 100):
 				<edit type="add" after="99"><new>console.log('before');</new></edit>
 				<edit type="add" after="100"><new>console.log('after');</new></edit>`;
 
@@ -7658,10 +7650,20 @@ function renderChat() {
     _scrollBottom();
 
     // Build messages array with system prompt
-    const systemPrompt = 'You are a helpful AI assistant embedded in CodeSmith, a browser-based code-generation tool. The user has not yet started a build — answer general questions and help them think about what they want to build.';
+    const _explorerFiles = (() => {
+      try { return CodeSmith.explorer.getFileList().map(f => f.name).join(', '); } catch { return ''; }
+    })();
+    const systemPrompt = 'You are an expert programming assistant embedded in CodeSmith, a browser-based code-generation tool.'
+      + (_explorerFiles ? ' The user currently has these files open in the Explorer: ' + _explorerFiles + '.' : '')
+      + ' Be concise and concrete. When you give code, give complete runnable blocks, not fragments.';
     const apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...sess.messages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content })),
+      ...sess.messages.filter(m => !m.isError).map(m => {
+        const msg = { role: m.role, content: m.content };
+        if (m.role === 'assistant' && m.thinking) msg.reasoning_content = m.thinking;
+        if (m.role === 'assistant' && m.tool_calls) msg.tool_calls = m.tool_calls;
+        return msg;
+      }),
     ];
 
     let fullText = '';
