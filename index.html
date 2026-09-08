@@ -624,15 +624,20 @@ window.addEventListener('load', function () {
 
  /* ---- Day 4: build mode ------------------------------------------------- */
   .mode-toggle {
-    display: inline-flex; border-radius: 6px; overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.06);
+    display: inline-flex; border-radius: 7px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.25);
+    padding: 2px;
+    gap: 2px;
   }
   .mode-btn {
-    padding: 4px 14px; font-size: 12px; cursor: pointer; background: transparent;
-    color: #8b92a1; border: none; font-family: inherit; transition: all 120ms;
+    padding: 5px 16px; font-size: 12.5px; font-weight: 500;
+    cursor: pointer; background: transparent; border-radius: 5px;
+    color: #8b92a1; border: none; font-family: inherit;
+    transition: background-color 120ms, color 120ms;
   }
-  .mode-btn:hover { color: #e8ecf1; }
-  .mode-btn.active { background: rgba(79,140,255,0.15); color: #4f8cff; }
+  .mode-btn:hover { color: #e8ecf1; background: rgba(255,255,255,0.05); }
+  .mode-btn.active { background: #4f8cff; color: #0b0d10; font-weight: 600; }
 
   .split-layout { display: flex; flex: 1; min-h-0: 0; }
   .split-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -1037,8 +1042,20 @@ window.addEventListener('load', function () {
 		}
 		.explorer-tree-actions {
 		  padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.06);
-		  display: flex; gap: 4px; flex-wrap: wrap;
+		  display: flex; flex-direction: column; gap: 5px;
 		}
+		.tree-actions-primary { display: flex; gap: 5px; }
+		.tree-actions-primary .btn {
+		  flex: 1; font-size: 11px; padding: 5px 8px; font-weight: 500;
+		}
+		.tree-actions-secondary {
+		  display: flex; gap: 2px; justify-content: space-between;
+		}
+		.tree-actions-secondary .btn {
+		  flex: 1; font-size: 13px; padding: 4px 0; color: #5b6474;
+		  min-width: 0;
+		}
+		.tree-actions-secondary .btn:hover { color: #e8ecf1; }
 
 		/* File tree items */
 		.ftree-item {
@@ -1708,13 +1725,13 @@ kbd {
         <span class="font-semibold tracking-tight text-[15px]">CodeSmith</span>
         <span class="text-muted text-[11px] font-mono">v0.8</span>
       </div>
-      <span id="stage-pill" class="pill" aria-live="polite">
-        <span class="dot gray" aria-hidden="true"></span><span>Idle</span>
-		<div class="mode-toggle" style="margin-left:8px;">
+      <div class="mode-toggle">
         <button class="mode-btn active" data-mode="chat">Chat</button>
         <button class="mode-btn" data-mode="build">Build</button>
-		<button class="mode-btn" data-mode="explore">Explore</button>
+        <button class="mode-btn" data-mode="explore">Explore</button>
       </div>
+      <span id="stage-pill" class="pill" aria-live="polite">
+        <span class="dot gray" aria-hidden="true"></span><span>Idle</span>
       </span>
     </div>
     <div class="flex items-center gap-1">
@@ -1957,25 +1974,27 @@ kbd {
 						  </div>
 						  <div id="explorer-tree-body" class="explorer-tree-body"></div>
 						  <div class="explorer-tree-actions">
-							<button id="btn-explorer-new" class="btn btn-ghost" style="font-size:10px;flex:1;" title="New empty file">
-							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-							  New
-							</button>
-							<button id="btn-explorer-upload" class="btn btn-ghost" style="font-size:10px;flex:1;">
-							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-							  Upload
-							</button>
-							<button id="btn-explorer-paste" class="btn btn-ghost" style="font-size:10px;flex:1;">
-							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-							  Paste
-							</button>
-							<button id="btn-explorer-folder" class="btn btn-ghost" style="font-size:10px;flex:1;">📁 Folder</button>
-							<button id="btn-explorer-url" class="btn btn-ghost" style="font-size:10px;flex:1;">🌐 URL</button>
-							<button id="btn-explorer-download-all" class="btn btn-ghost" style="font-size:10px;flex:1;" title="Download all files as .zip">
-							  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-							  Zip
-							</button>
-							<button id="btn-explorer-clear" class="btn btn-ghost" style="font-size:10px;color:#5b6474;">✕</button>
+							<div class="tree-actions-primary">
+							  <button id="btn-explorer-new" class="btn btn-ghost" title="New empty file">
+								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+								New
+							  </button>
+							  <button id="btn-explorer-upload" class="btn btn-ghost" title="Upload files">
+								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+								Upload
+							  </button>
+							</div>
+							<div class="tree-actions-secondary">
+							  <button id="btn-explorer-paste" class="btn btn-ghost" title="Paste code as new file">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+							  </button>
+							  <button id="btn-explorer-folder" class="btn btn-ghost" title="Open folder">📁</button>
+							  <button id="btn-explorer-url" class="btn btn-ghost" title="Import from URL">🌐</button>
+							  <button id="btn-explorer-download-all" class="btn btn-ghost" title="Download all files as .zip">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+							  </button>
+							  <button id="btn-explorer-clear" class="btn btn-ghost" title="Clear all files">✕</button>
+							</div>
 						  </div>
 						</div>
 
@@ -1991,11 +2010,11 @@ kbd {
 					        <span class="file-path" id="explorer-file-path">—</span>
 					        <span style="margin-left:auto;font-size:10px;color:#5b6474;" id="explorer-cursor-pos">Ln 1, Col 1</span>
 					        <span style="font-size:10px;color:#5b6474;" id="explorer-line-info"></span>
-					        <button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">Copy</button>
-						<button id="btn-explorer-run" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" title="Run active file in terminal (F5)">▶ Run</button>
-							<button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;">📸 Snapshot</button>
-							<button id="btn-explorer-zen" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" title="Focus mode (Ctrl+Shift+Z)">⛶</button>
-					        <button id="btn-explorer-preview" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" hidden>👁 Preview</button>					      </div>
+        <button id="btn-explorer-run" class="btn btn-primary" style="font-size:11px;padding:3px 12px;font-weight:600;" title="Run active file in terminal (F5)">▶ Run</button>
+        <button id="btn-explorer-copy-file" class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" title="Copy file contents">Copy</button>
+        <button id="btn-explorer-snapshot" class="btn btn-ghost" style="font-size:12px;padding:3px 7px;" title="Take snapshot">📸</button>
+        <button id="btn-explorer-zen" class="btn btn-ghost" style="font-size:12px;padding:3px 7px;" title="Focus mode (Ctrl+Shift+Z)">⛶</button>
+        <button id="btn-explorer-preview" class="btn btn-ghost" style="font-size:12px;padding:3px 7px;" hidden title="Preview">👁</button>       </div>
 					 
 					      <!-- Monaco editor container -->
 					      <div id="monaco-container" class="monaco-container">
@@ -3413,6 +3432,14 @@ const LLM = (() => {
     const m = model.toLowerCase();
     return m.includes('kimi') || m.includes('k2-thinking') ||
            m.includes('deepseek-r1') || m.includes('qwq');
+  }
+  function _isThinkingModel(model) {
+    if (!model) return false;
+    const m = model.toLowerCase();
+    return m.includes('kimi') || m.includes('k2-thinking') ||
+           m.includes('deepseek-r1') || m.includes('qwq') ||
+           m.includes('muse-glimmer') || m.includes('muse-spark') ||
+           m.includes('glimmer');
   }
 
   // ---- core streaming chat ------------------------------------------------
@@ -6430,17 +6457,17 @@ CodeSmith.explorer = Explorer;
 				const TASK_PROFILES = {
 					// Task → { tier, reason, maxTokens, temperature }
 					'analyze':      { tier: 'orchestrator', reason: 'deep reasoning needed for quality analysis', maxTokens: 4000, temperature: 0.2 },
-					'fix':          { tier: 'orchestrator', reason: 'bug fixing needs careful reasoning', maxTokens: 6000, temperature: 0.15 },
+					'fix':          { tier: 'worker',       reason: 'diagnose-and-repair — worker is tuned for this', maxTokens: 8000, temperature: 0.15 },
 					'optimize':     { tier: 'orchestrator', reason: 'optimization needs architectural thinking', maxTokens: 6000, temperature: 0.2 },
-					'refactor':     { tier: 'worker',       reason: 'refactoring is code transformation — worker strength', maxTokens: 8000, temperature: 0.2 },
-					'tests':        { tier: 'worker',       reason: 'test generation is routine code — worker is fast', maxTokens: 8000, temperature: 0.2 },
+					'refactor':     { tier: 'worker',       reason: 'refactoring is code transformation — worker strength', maxTokens: 10000, temperature: 0.2 },
+					'tests':        { tier: 'worker',       reason: 'test generation is routine code — worker is fast', maxTokens: 10000, temperature: 0.2 },
 					'docs':         { tier: 'fast',         reason: 'docstrings are formulaic — fast model is enough', maxTokens: 4000, temperature: 0.3 },
-					'types':        { tier: 'fast',         reason: 'type hints follow patterns — fast model handles it', maxTokens: 4000, temperature: 0.1 },
-					'explain':      { tier: 'fast',         reason: 'explanation is straightforward', maxTokens: 3000, temperature: 0.3 },
+					'types':        { tier: 'worker',       reason: 'type inference needs whole-file context', maxTokens: 6000, temperature: 0.1 },
+					'explain':      { tier: 'worker',       reason: 'explanation needs code understanding, not breadth', maxTokens: 4000, temperature: 0.3 },
 					'flowchart':    { tier: 'worker',       reason: 'Mermaid generation needs code understanding', maxTokens: 3000, temperature: 0.1 },
 					'security':     { tier: 'orchestrator', reason: 'security review needs careful analysis', maxTokens: 4000, temperature: 0.1 },
 					'general':      { tier: 'orchestrator', reason: 'complex query — using strongest model', maxTokens: 6000, temperature: 0.2 },
-				};
+					};
 				
 				function classify(query) {
 					const q = query.toLowerCase();
@@ -6448,9 +6475,9 @@ CodeSmith.explorer = Explorer;
 					if (/\b(optimi[zs]e|perf|fast|slow|speed|efficien|bottleneck)\b/.test(q)) return 'optimize';
 					if (/\b(refactor|clean|restructure|reorgani[zs]e|simplif)\b/.test(q)) return 'refactor';
 					if (/\b(test|spec|assert|coverage|pytest|unittest)\b/.test(q)) return 'tests';
-					if (/\b(doc|comment|docstring|jsdoc|explain|what does)\b/.test(q)) return 'docs';
-					if (/\b(type|hint|annotation|typing|mypy)\b/.test(q)) return 'types';
-					if (/\b(explain|how|why|what|describe|walk through)\b/.test(q)) return 'explain';
+					if (/\b(explain|describe|walk through|how does|why does|what does)\b/.test(q)) return 'explain';
+					if (/\b(docstring|jsdoc|add docs|write docs|add comments)\b/.test(q)) return 'docs';
+					if (/\b(type hint|annotation|typing|mypy|add types)\b/.test(q)) return 'types';
 					if (/\b(flow|chart|diagram|visual|algorithm|mermaid)\b/.test(q)) return 'flowchart';
 					if (/\b(secur|vulnerab|inject|xss|csrf|auth|exploit|sanitiz)\b/.test(q)) return 'security';
 					if (/\b(analy[zs]e|review|audit|assess|evaluat)\b/.test(q)) return 'analyze';
@@ -7666,13 +7693,21 @@ function renderChat() {
       chatList.appendChild(liveRow);
     }
 
-    try {
-      for await (const ev of CodeSmith.llm.chat({
-        messages: apiMessages,
-        tier: 'orchestrator',
-        signal: abortCtrl.signal,
-      })) {
-        if (ev.type === 'thinking') {
+			let _chatRoute;
+			try {
+				_chatRoute = CodeSmith.router.route(t, 'auto');
+			} catch (e) {
+				_chatRoute = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
+			}
+			try {
+				for await (const ev of CodeSmith.llm.chat({
+					messages: apiMessages,
+					tier: _chatRoute.tier,
+					temperature: _chatRoute.temperature,
+					maxTokens: _chatRoute.maxTokens,
+					signal: abortCtrl.signal,
+				})) {
+					if (ev.type === 'thinking') {
           ensureLiveBubble();
           thinkingText += ev.delta;
           // Build thinking block if not yet present
