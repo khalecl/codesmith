@@ -283,30 +283,46 @@ window.addEventListener('load', function () {
 	  .md-content th { background: rgba(255,255,255,0.04); font-weight: 600; }
 		
   /* Chat bubbles */
-  .bubble {
-    max-width: 760px;
+   .bubble {
+    max-width: 100%;
     padding: 10px 14px;
     border-radius: 10px;
     font-size: 14px;
     line-height: 1.55;
-    white-space: pre-wrap;
     word-wrap: break-word;
     overflow-wrap: anywhere;
   }
   .bubble-user {
-    background: rgba(79,140,255,0.14);
-    border: 1px solid rgba(79,140,255,0.28);
+    background: rgba(79,140,255,0.10);
+    border: 1px solid rgba(79,140,255,0.22);
     color: #e8ecf1;
+    max-width: 72%;
+    margin-left: auto;
+    white-space: pre-wrap;
   }
   .bubble-assistant {
-    background: #1a1f2a;
-    border: 1px solid rgba(255,255,255,0.06);
+    background: transparent;
+    border: none;
+    border-left: 2px solid rgba(255,255,255,0.10);
+    border-radius: 0;
+    padding: 2px 0 2px 14px;
     color: #e8ecf1;
   }
+  .bubble-assistant pre {
+    background: #0d1117;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .bubble-assistant code { font-size: 12.5px; }
+  .bubble-assistant.is-live { border-left-color: #4f8cff; }
   .bubble-meta {
     font-size: 11px;
     color: #8b92a1;
     margin-top: 4px;
+    font-family: ui-monospace, monospace;
   }
 
   /* Session list */
@@ -1760,7 +1776,7 @@ kbd {
 			<!-- Left: chat (always visible) -->
 			<div id="split-left" class="split-left">
 			  <div id="chat-scroll" class="flex-1 min-h-0 overflow-y-auto">
-				<div id="chat-list" class="flex flex-col gap-4 p-6 max-w-[920px] mx-auto"></div>
+				<div id="chat-list" class="flex flex-col gap-5 px-8 py-6 max-w-[1240px] mx-auto"></div>
 				<div id="chat-empty" class="empty" hidden>
 					<div class="text-[15px] text-text">What do you want to build?</div>
 					<div class="text-[12px]" style="max-width:400px;">Describe a program in plain English, or pick a template to get started.</div>
@@ -2164,12 +2180,14 @@ kbd {
 				  </svg>
 				</button>
 			  </div>
-			  <div id="composer-help" class="mt-2 text-[11px] text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
-				<span>Orchestrator:&nbsp;<span id="help-model" class="font-mono text-text/80">—</span></span>
-				<span class="text-muted/50">·</span>
-				<span>API:&nbsp;<span id="help-api" class="font-mono text-text/80">—</span></span>
-				<span class="text-muted/50">·</span>
-				<span class="text-muted/80"><kbd class="font-mono">Enter</kbd> to send, <kbd class="font-mono">Shift+Enter</kbd> for newline</span>
+			  <div id="composer-help" class="mt-2 flex items-center gap-1.5">
+				<button class="pair-quick-btn" data-chat-q="explain">explain</button>
+				<button class="pair-quick-btn" data-chat-q="fix">fix</button>
+				<button class="pair-quick-btn" data-chat-q="optimize">optimize</button>
+				<button class="pair-quick-btn" data-chat-q="tests">tests</button>
+				<span class="ml-auto text-[11px] text-muted font-mono">
+				  <span id="help-model">—</span> · <span id="help-api">—</span>
+				</span>
 			  </div>
 			</div>
 		  </div>
@@ -7642,8 +7660,8 @@ function renderChat() {
       if (tr) tr.remove();
       liveRow = el('div', { class: 'flex justify-start' });
       liveCol = el('div', { class: 'flex flex-col', style: 'max-width:760px;width:100%;' });
-      liveBubble = el('div', { class: 'bubble bubble-assistant' });
-      liveCol.appendChild(liveBubble);
+      liveBubble = el('div', { class: 'bubble bubble-assistant is-live' });
+	  liveCol.appendChild(liveBubble);
       liveRow.appendChild(liveCol);
       chatList.appendChild(liveRow);
     }
@@ -7839,6 +7857,18 @@ function wireComposer() {
     $('#btn-send').addEventListener('click', () => {
       handleSendOrStop();
     });
+
+    for (const b of document.querySelectorAll('[data-chat-q]')) {
+      b.addEventListener('click', () => {
+        const map = { explain: 'Explain this code: ', fix: 'Find and fix the bugs in: ',
+                      optimize: 'Optimize this for performance: ', tests: 'Write tests for: ' };
+        const c = document.getElementById('composer');
+        c.value = map[b.dataset.chatQ] + c.value;
+        c.focus();
+        autogrow();
+      });
+    }
+
     autogrow();
   }
 
