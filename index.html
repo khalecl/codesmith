@@ -37,16 +37,33 @@
   </script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js"></script>
+<script>
+// Extra grammars not in the hljs common bundle. Loaded after first paint,
+// so they cost nothing on startup. Re-highlights any code already on screen.
+window.addEventListener('load', function () {
+  var extras = [
+    'c','r','dart','scala','haskell','elixir','erlang','clojure','julia',
+    'matlab','fortran','x86asm','powershell','dockerfile','nginx','apache',
+    'ini','lisp','ocaml','fsharp','groovy','prolog','scheme','vim','latex',
+    'protobuf','handlebars','twig','pug','stylus','coffeescript','crystal',
+    'nim','zephir','arduino','verilog','vhdl','awk','basic','delphi'
+  ];
+  var base = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/';
+  var pending = extras.length;
+  extras.forEach(function (lang) {
+    var s = document.createElement('script');
+    s.src = base + lang + '.min.js';
+    s.async = true;
+    s.onload = s.onerror = function () {
+      if (--pending === 0 && window.hljs) {
+        document.querySelectorAll('pre code:not([data-highlighted])')
+          .forEach(function (el) { try { hljs.highlightElement(el); } catch (e) {} });
+      }
+    };
+    document.head.appendChild(s);
+  });
+});
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
@@ -6760,14 +6777,18 @@ CodeSmith.explorer = Explorer;
 		    });
 		 
 		    // Track content changes
+		    let _changeDebounce = null;
 		    _editor.onDidChangeModelContent(() => {
 		      const model = _editor.getModel();
 		      if (!model) return;
-		      const filename = _getFilenameForModel(model);
-		      if (filename) {
-		        CodeSmith.explorer.updateFileContent(filename, model.getValue());
-		        for (const cb of _onChangeCallbacks) cb(filename, model.getValue());
-		      }
+		      const filename = model.uri.path.replace(/^\//, '');
+		      if (!filename) return;
+		      clearTimeout(_changeDebounce);
+		      _changeDebounce = setTimeout(() => {
+		        const value = model.getValue();
+		        CodeSmith.explorer.updateFileContent(filename, value);
+		        for (const cb of _onChangeCallbacks) cb(filename, value);
+		      }, 150);
 		    });
 		 
 				window.addEventListener('resize', () => {
@@ -7352,7 +7373,12 @@ function renderChat() {
 		                      : isError ? 'bubble bubble-error'
 		                      : 'bubble bubble-assistant';
 		      const bubble = el('div', { class: bubbleCls });
-		      bubble.textContent = m.content;
+		      if (m.role === 'assistant' && !isError) {
+				if (!m._html) m._html = renderMarkdown(m.content);
+				bubble.innerHTML = m._html;
+				} else {
+				bubble.textContent = m.content;
+				}
 		      col.appendChild(bubble);
 		
 		      // Detect code blocks in assistant messages and add Copy/Run buttons
@@ -7650,10 +7676,10 @@ function renderChat() {
 	          fullText += ev.delta;
 	          if (!_renderPending) {
 	            _renderPending = true;
-	            requestAnimationFrame(() => {
-	              liveBubble.innerHTML = renderMarkdown(fullText);
+	            setTimeout(() => {
+	              liveBubble.textContent = fullText;
 	              _renderPending = false;
-	            });
+	            }, 80);
 	          }
 	          if (!_scrollPending) {
 	            _scrollPending = true;
@@ -12402,10 +12428,11 @@ case 'symbols_requested':
 			for await (const ev of CodeSmith.pair.askPair(file.content, name, file.language, question)) {
 			  if (ev.type === 'token') {
 				fullText += ev.delta;
-				aiBubble.innerHTML = renderMarkdown(fullText);
+							aiBubble.textContent = fullText;
 				chat.scrollTop = chat.scrollHeight;
 			  } else if (ev.type === 'done') {
 				fullText = ev.text || fullText;
+				aiBubble.innerHTML = renderMarkdown(fullText);
 			  } else if (ev.type === 'error') {
 				aiBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
 				aiBubble.className = 'bubble bubble-error';
@@ -13410,7 +13437,6 @@ case 'symbols_requested':
 		      try {
 		        const data = CodeSmith.explorer.serialize();
 		        if (data.files && Object.keys(data.files).length > 0) {
-					  _recordWorkspaceHistory();
 		          CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).catch(() => {});
 		        }
 		      } catch {}
