@@ -10,7 +10,7 @@
   </a>
   
   <a href="https://github.com/khalecl/codesmith">
-    <img src="https://img.shields.io/badge/Version-v0.1.0-blue?style=for-the-badge" alt="Version">
+    <img src="https://img.shields.io/badge/Version-v0.8.0-blue?style=for-the-badge" alt="Version">
   </a>
 </div>
 
