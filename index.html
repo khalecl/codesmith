@@ -3248,29 +3248,47 @@ tb
   }
 
   // ---- package installation ----
-  async function installPackage(name) {
+  // Both loadPackage() and micropip.install() hit the network with no internal
+  // timeout. Unbounded, a stalled fetch hangs the caller forever with no error.
+  // Every call site inherits this bound; do not add per-call Promise.race wrappers.
+  function _withTimeout(promise, timeoutMs, label) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
+  async function installPackage(name, opts = {}) {
     if (typeof name !== 'string') throw new TypeError('installPackage: name must be a string');
+    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 60000;
     await warmUp();
 
     if (_installedPackages.has(name)) return; // already cached
 
+    let prebuiltErr = null;
     try {
       // Try pre-built first
-      await _pyodide.loadPackage(name);
+      await _withTimeout(_pyodide.loadPackage(name), timeoutMs, `loadPackage('${name}')`);
       _installedPackages.add(name);
       return;
-    } catch {
-      // Fall back to micropip
+    } catch (err) {
+      // Fall back to micropip — but remember why the fast path failed
+      prebuiltErr = err;
     }
 
     try {
       const micropip = _pyodide.pyimport('micropip');
-      await micropip.install(name);
+      await _withTimeout(micropip.install(name), timeoutMs, `micropip.install('${name}')`);
       _installedPackages.add(name);
     } catch (err) {
+      const timedOut = /timed out after/.test(err && err.message || '');
       throw new Error(
-        `Package '${name}' is not available in Pyodide. Pure-Python packages and prebuilt WASM packages only.` +
-        (err.message ? ' (' + err.message + ')' : '')
+        timedOut
+          ? `Package '${name}' install timed out after ${timeoutMs}ms (network or CDN stall).`
+          : `Package '${name}' is not available in Pyodide. Pure-Python packages and prebuilt WASM packages only.` +
+            (err.message ? ' (' + err.message + ')' : '') +
+            (prebuiltErr && prebuiltErr.message ? ' [prebuilt: ' + prebuiltErr.message + ']' : '')
       );
     }
   }
@@ -3502,9 +3520,12 @@ const LLM = (() => {
 
     // Retry wrapper
     let lastError = null;
-    const maxRetries = 3;
+    // 3 retries = 2+4+8 = 14s total, which is far shorter than a typical
+    // provider rate-limit window. 5 gives 2+4+8+16+30 = 60s.
+    const maxRetries = (options && Number.isFinite(options.maxRetries)) ? options.maxRetries : 5;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      await _throttleGate();
       if (signal && signal.aborted) return;
 
       const controller = new AbortController();
@@ -3564,8 +3585,9 @@ const LLM = (() => {
         // 429 — rate limit
         if (status === 429 && attempt < maxRetries) {
           const retryAfter = response.headers.get('Retry-After');
-          const waitSec = retryAfter ? Math.min(parseInt(retryAfter, 10) || 2, 30) : Math.min(2 * Math.pow(2, attempt), 30);
-          lastError = new Error('Rate limited (429). Retrying in ' + waitSec + 's…');
+          const waitSec = retryAfter ? Math.min(parseInt(retryAfter, 10) || 2, 60) : Math.min(2 * Math.pow(2, attempt), 30);
+          _lastRateLimitAt = Date.now();
+          lastError = new Error('Rate limited (429), attempt ' + (attempt + 1) + '/' + maxRetries + '. Retrying in ' + waitSec + 's…');
           yield { type: 'error', error: lastError, recoverable: true };
           await _sleep(waitSec * 1000);
           continue;
@@ -3601,6 +3623,7 @@ const LLM = (() => {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let _dbgDeltaCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -3645,6 +3668,14 @@ const LLM = (() => {
 
             // Content with <think> tags (some models)
             let content = delta.content;
+            // TEMPORARY: trace the first few deltas to locate the dropped prefix.
+            if (_dbgDeltaCount < 4) {
+              console.log('[sse delta ' + _dbgDeltaCount + ']',
+                'keys=' + Object.keys(delta).join(','),
+                'content=' + JSON.stringify(content),
+                'fullTextLen=' + fullText.length);
+              _dbgDeltaCount++;
+            }
             if (content == null) continue;
 
             if (isThinking) {
@@ -3761,6 +3792,24 @@ const LLM = (() => {
   }
 
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // Serialise outbound calls with a floor between them. Without this a build
+  // fires requests back-to-back and re-enters the rate limit immediately.
+  let _lastCallAt = 0;
+  let _lastRateLimitAt = 0;
+  let _throttleChain = Promise.resolve();
+  function _throttleGate() {
+    const run = async () => {
+      // Widen the gap for 60s after any 429.
+      const recentLimit = (Date.now() - _lastRateLimitAt) < 60000;
+      const minGap = recentLimit ? 3000 : 700;
+      const wait = minGap - (Date.now() - _lastCallAt);
+      if (wait > 0) await _sleep(wait);
+      _lastCallAt = Date.now();
+    };
+    _throttleChain = _throttleChain.then(run, run);
+    return _throttleChain;
+  }
 
 	return {
 	    chat, chatComplete, tokenEstimate, getModelForTier, getMaxTokensForTier,
@@ -4090,10 +4139,23 @@ print('\\n__EXIT_CODE__=' + str(exit_code))
     }
     // Try direct parse
     try { return JSON.parse(cleaned); } catch {}
-    // Try extracting first { ... } block
+
+    // Repair a dropped opening prefix. Streams have been observed losing the
+    // leading `{"` so the text begins mid-key, e.g. `code":"import pandas...`.
+    // Must run BEFORE the indexOf('{') salvage below, which would otherwise
+    // latch onto a dict literal inside the generated source and slice garbage.
+    if (!cleaned.startsWith('{') && /^[A-Za-z_][A-Za-z0-9_]*"\s*:/.test(cleaned)) {
+      try { return JSON.parse('{"' + cleaned); } catch {}
+    }
+    if (!cleaned.startsWith('{') && /^"[A-Za-z_][A-Za-z0-9_]*"\s*:/.test(cleaned)) {
+      try { return JSON.parse('{' + cleaned); } catch {}
+    }
+
+    // Try extracting first { ... } block — only when the text actually looks
+    // like it opens with an object, not when it opens mid-value.
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
-    if (start >= 0 && end > start) {
+    if (start >= 0 && end > start && cleaned.slice(0, start).trim().length === 0) {
       try { return JSON.parse(cleaned.slice(start, end + 1)); } catch {}
     }
     // Log truncated JSON attempts for debugging
@@ -4181,7 +4243,11 @@ RULES:
 - Prefer "give me an example" over abstract questions
 - Maximum 5 questions total, then proceed with best guesses
 - No implementation details in questions
-- All JSON must use double quotes, Superior models need explicit structure</spec_update>
+- All JSON must use double quotes
+- Only include fields you are actually filling in. NEVER echo back empty strings,
+  empty arrays, or "—" placeholders — omit the field entirely instead.
+- Preserve detail from the user's original request verbatim where possible;
+  do not summarise their requirements away.
 
 Current spec:
 {spec_json}`;
@@ -4357,13 +4423,24 @@ const StageA = (() => {
   function requestAdvance() {
     _ready = true;
   }
-
+			// An empty value is the model echoing the template back, not new
+			// information. Treating it as an update wiped the whole spec —
+			// including the goal seeded from the user's original prompt.
+			function _isEmptyVal(v) {
+			    if (v === null || v === undefined) return true;
+			    if (typeof v === 'string') return v.trim() === '' || v.trim() === '—' || v.trim() === '-';
+			    if (Array.isArray(v)) return v.length === 0 || v.every(x => typeof x === 'string' && (x.trim() === '' || x.trim() === '—'));
+			    if (typeof v === 'object') return Object.keys(v).length === 0 || Object.values(v).every(x => _isEmptyVal(x));
+			    return false;
+			}
 			function _mergeSpec(update) {
 			    if (!update || typeof update !== 'object' || Array.isArray(update)) return;
 			    if (!_spec) _spec = JSON.parse(JSON.stringify(EMPTY_SPEC));
 			    for (const key of Object.keys(update)) {
 		      const val = update[key];
 		      if (val === null || val === undefined) continue;
+		      // Never let a blank overwrite something we already have
+		      if (_isEmptyVal(val) && !_isEmptyVal(_spec[key])) continue;
 		
 		      if (key in _spec) {
 		        // Known field — merge normally
@@ -4387,6 +4464,7 @@ const StageA = (() => {
 		            for (const subKey of Object.keys(val)) {
 		              if (subKey in _spec[key]) {
 		                const sv = val[subKey];
+		                if (_isEmptyVal(sv) && !_isEmptyVal(_spec[key][subKey])) continue;
 		                if (typeof sv === 'string') {
 		                  const isa = sv.includes('(assumed)');
 		                  _spec[key][subKey] = sv.replace(/\s*\(assumed\)\s*/g, '').trim();
@@ -4969,9 +5047,25 @@ const StageC = (() => {
   const INTEGRATION_REPAIR_MAX = 2;
 
   function getState() { return _state; }
-  function getModuleStates() { return { ..._moduleStates }; }
+    function getModuleStates() { return { ..._moduleStates }; }
+  // The skeleton this build is actually running. Stage B's copy can be mutated
+  // mid-build (autosave, Quick build, re-generate), which desynchronises the UI.
+  function getBuildSkeleton() { return _skeleton ? JSON.parse(JSON.stringify(_skeleton)) : null; }
   function getModuleArtifacts() { return _moduleArtifacts.slice(); }
   function getCurrentModuleId() { return _currentModuleId; }
+
+  // Stdlib modules workers routinely list in imports_needed. micropip has no
+  // wheels for these and each miss costs a failed network round-trip.
+  // MUST live inside the StageC IIFE — the build loop at ~5378 references it.
+  const _STDLIB_MODULES = new Set([
+    'abc','argparse','ast','asyncio','base64','bisect','builtins','collections','concurrent',
+    'contextlib','copy','csv','dataclasses','datetime','decimal','difflib','enum','functools',
+    'glob','gzip','hashlib','heapq','html','http','importlib','inspect','io','itertools','json',
+    'logging','math','multiprocessing','operator','os','pathlib','pickle','platform','pprint',
+    'queue','random','re','shutil','signal','socket','sqlite3','statistics','string','struct',
+    'subprocess','sys','tempfile','textwrap','threading','time','timeit','traceback','types',
+    'typing','unittest','urllib','uuid','warnings','weakref','xml','zipfile','zlib',
+  ]);
 
   async function* run(skeleton, spec) {
     _skeleton = JSON.parse(JSON.stringify(skeleton));
@@ -4985,6 +5079,11 @@ const StageC = (() => {
     // Init module states
     _moduleStates = {};
 		const parallelN = (CodeSmith.state.settings && CodeSmith.state.settings.parallelWorkers) || 1;
+		// Declared before the parallel/serial split so BOTH branches and Phase 2
+		// share one counter. Previously these lived inside the serial else block,
+		// so Phase 2 threw ReferenceError on its first module_start yield.
+		const totalModules = _skeleton.build_order.length;
+		let completedModules = 0;
 		if (parallelN > 1) {
 		// Parallel mode: build modules in waves where deps are satisfied
 		const built = new Set();
@@ -5048,10 +5147,120 @@ const StageC = (() => {
       _state = 'stopped';
       return;
     }
-    try { await CodeSmith.sandbox.installPackage('pytest'); } catch {}
+    // pytest is optional at this stage — bounded inside installPackage.
+    // Never swallow silently: a hang here used to stall the whole build.
+    try {
+      yield { type: 'log', message: 'Installing pytest…' };
+      await CodeSmith.sandbox.installPackage('pytest', { timeoutMs: 60000 });
+      yield { type: 'log', message: 'pytest ready.' };
+    } catch (err) {
+      yield { type: 'log', message: 'pytest install failed: ' + (err && err.message ? err.message : String(err)) + ' — continuing; tests may be skipped.' };
+    }
 
-    const totalModules = _skeleton.build_order.length;
-    let completedModules = 0;
+    // ---- Emit _shared.py from skeleton.shared_types ----
+    // The symbol table registers these with origin_module '_shared' and the
+    // workers emit `from _shared import ...`, but nothing ever wrote the file.
+    if (_skeleton.shared_types && Object.keys(_skeleton.shared_types).length > 0
+        && _spec.target_type !== 'webapp' && _spec.target_type !== 'single_page_webapp') {
+      try {
+        const _lines = [
+          '"""Shared types for this package. Generated from skeleton.shared_types."""',
+          'from __future__ import annotations',
+          'from dataclasses import dataclass, field',
+          'from typing import Any, Dict, List, Optional',
+          '',
+        ];
+        // Split on commas that are NOT inside brackets, so `dict[str, float]`
+        // survives as one token.
+        const _splitTop = (s) => {
+          const out = []; let depth = 0, cur = '';
+          for (const ch of s) {
+            if (ch === '[' || ch === '(' || ch === '{') depth++;
+            else if (ch === ']' || ch === ')' || ch === '}') depth--;
+            if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+            cur += ch;
+          }
+          if (cur.trim()) out.push(cur);
+          return out.map(x => x.trim()).filter(Boolean);
+        };
+        // Pull `name: type` pairs out of a prose description like
+        // "dataclass with scope_name: str, total_tco2e: float, breakdown: dict[str, float]"
+        const _fieldsFromProse = (s) => {
+          let t = String(s || '');
+          t = t.replace(/\([^()]*->[^()]*\)/g, '');           // drop "(category -> tCO2e)" asides
+          t = t.replace(/^[^:]*?\b(?:dataclass|typeddict|namedtuple|class)\b\s*(?:with)?\s*/i, '');
+          const fields = [];
+          for (const part of _splitTop(t)) {
+            const m = part.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/);
+            if (m) {
+              const fname = m[1];
+              let ftype = m[2].trim().replace(/[.;]+$/, '');
+              if (!ftype || /\s(and|or|the|a|an)\s/i.test(ftype)) ftype = 'Any';
+              fields.push([fname, ftype]);
+            }
+          }
+          return fields;
+        };
+
+        for (const [name, def] of Object.entries(_skeleton.shared_types)) {
+          const body = typeof def === 'string' ? def : '';
+          const _prose = body ? _fieldsFromProse(body) : [];
+          if (body && /^\s*(@|class |def )/m.test(body)) {
+            // Skeleton already gave us real Python — use it verbatim
+            _lines.push(body.replace(/\r\n/g, '\n'), '');
+          } else if (def && typeof def === 'object') {
+            // Field map → dataclass
+            _lines.push('@dataclass');
+            _lines.push('class ' + name + ':');
+            const entries = Object.entries(def);
+            if (entries.length === 0) _lines.push('    pass');
+            for (const [f, t] of entries) {
+              _lines.push('    ' + f + ': ' + (typeof t === 'string' && t ? t : 'Any') + ' = None');
+            }
+            _lines.push('');
+          } else if (_prose.length > 0) {
+            // Prose description with parseable `name: type` pairs
+            _lines.push('@dataclass');
+            _lines.push('class ' + name + ':');
+            _lines.push('    """' + String(body).replace(/"""/g, "'''") + '"""');
+            for (const [fname, ftype] of _prose) {
+              _lines.push('    ' + fname + ': ' + ftype);
+            }
+            _lines.push('');
+          } else {
+            // No parseable fields — permissive stub so kwargs don't TypeError
+            _lines.push('@dataclass');
+            _lines.push('class ' + name + ':');
+            _lines.push('    """' + String(body || name).replace(/"""/g, "'''") + '"""');
+            _lines.push('    def __init__(self, **kwargs):');
+            _lines.push('        for k, v in kwargs.items():');
+            _lines.push('            setattr(self, k, v)');
+            _lines.push('');
+          }
+        }
+        _lines.push('__all__ = [' + Object.keys(_skeleton.shared_types).map(n => "'" + n + "'").join(', ') + ']');
+        const _sharedSrc = _lines.join('\n') + '\n';
+        await CodeSmith.sandbox.writeFile('/workdir/_shared.py', _sharedSrc);
+        _moduleArtifacts.push({
+          id: '_shared_' + Date.now(),
+          sessionId: CodeSmith.state.currentId,
+          moduleName: '_shared',
+          code: _sharedSrc,
+          tests: '',
+          spec: { id: '_shared', name: '_shared', kind: 'py', generated: true },
+          createdAt: Date.now(),
+          status: 'built',
+          _imports: [],
+        });
+        try { await CodeSmith.db.putArtifact(_moduleArtifacts[_moduleArtifacts.length - 1]); } catch {}
+        yield { type: 'log', message: 'Generated _shared.py (' + Object.keys(_skeleton.shared_types).length + ' types).' };
+      } catch (err) {
+        yield { type: 'error', stage: 'shared_types', error: err };
+      }
+    }
+
+    // totalModules / completedModules are declared above the parallelN split —
+    // Phase 2 lives outside this else branch and must see them.
 
     // ---- Build each module ----
     // ---- PHASE 1: Build all modules (no testing) ----
@@ -5115,8 +5324,15 @@ const StageC = (() => {
 		try {
 			workerResult = _parseJSON(workerText);
 			if (!workerResult || !workerResult.code) throw new Error('Missing code');
-			if (workerResult.code.trim().length < 20) {
-					throw new Error('Module code too short (length=' + workerResult.code.length + ')');
+			// ---- Emptiness gate ----
+			// A near-empty module used to pass and get written as a 0-byte file.
+			const _src = workerResult.code.trim();
+			if (_src.length < 50) {
+					throw new Error('Module source too short (' + _src.length + ' bytes) — worker returned a stub');
+					}
+					const _isPy = !(_spec.target_type === 'webapp' || _spec.target_type === 'single_page_webapp');
+					if (_isPy && !/^[ \t]*(def|class|async\s+def)\s+\w/m.test(_src)) {
+					throw new Error('Module source contains no def/class declaration — worker returned prose or a stub');
 					}
 					// Webapp: validate HTML structure
 					if ((_spec.target_type === 'webapp' || _spec.target_type === 'single_page_webapp') && mod.kind === 'html') {
@@ -5134,7 +5350,17 @@ const StageC = (() => {
 					}
 					}
 		} catch (err) {
+			// Attach evidence — "Failed to parse JSON" alone is undiagnosable.
+			const _len = (workerText || '').length;
+			const _tail = (workerText || '').slice(-220).replace(/\s+/g, ' ');
+			const _head = (workerText || '').slice(0, 120).replace(/\s+/g, ' ');
+			const _looksTruncated = _len > 0 && !/}\s*$/.test((workerText || '').trim());
 			yield { type: 'error', stage: 'worker_parse', moduleId: modId, error: err };
+			yield { type: 'log', message:
+				'  ↳ ' + modId + ': ' + _len + ' chars received' +
+				(_looksTruncated ? ' — TRUNCATED (no closing brace; raise maxTokens)' : ' — parse error, not truncation') +
+				'\n  ↳ head: ' + _head +
+				'\n  ↳ tail: ' + _tail };
 			_moduleStates[modId] = 'failed';
 			continue;
 		}
@@ -5248,11 +5474,19 @@ const StageC = (() => {
 				continue;
 			}
 		for (const pkg of (workerResult.imports_needed || [])) {
-			try { await CodeSmith.sandbox.installPackage(pkg); } catch (err) {
+			const _p = String(pkg || '').trim().split(/[<>=!\[]/)[0].trim();
+			if (!_p) continue;
+			yield { type: 'log', message: '  installing ' + _p + '…' };
+			// Never ask micropip for stdlib or for our own modules — both fail noisily.
+			if (_STDLIB_MODULES.has(_p)) continue;
+			if (_p === '_shared' || _p.startsWith('_')) continue;
+			if (_skeleton.modules.some(m => (m.name || m.id) === _p || m.id === _p)) continue;
+			try { await CodeSmith.sandbox.installPackage(_p); } catch (err) {
 			yield { type: 'error', stage: 'install', moduleId: modId, error: err };
 			}
 			}
 
+		yield { type: 'log', message: '  deps resolved for ' + modId };
 		_moduleStates[modId] = 'built';
 		const artifact = {
 			id: modId + '_' + Date.now(),
@@ -5266,6 +5500,11 @@ const StageC = (() => {
 			_imports: workerResult.imports_needed || [],
 		};
 		_moduleArtifacts.push(artifact);
+		// Persist as soon as it's built, not only when it passes tests.
+		// Otherwise an escalation or reload discards every untested module.
+		try { await CodeSmith.db.putArtifact(artifact); } catch (err) {
+			yield { type: 'log', message: 'Warning: could not persist ' + modId + ': ' + (err && err.message ? err.message : String(err)) };
+		}
 		SymbolTable.markImplemented(modId);
 			yield { type: 'module_built', moduleId: modId, table: SymbolTable.get() };
 			}
@@ -5273,6 +5512,36 @@ const StageC = (() => {
 
 			if (parallelN <= 1) {
 			yield { type: 'all_built', count: _moduleArtifacts.length };
+
+			// ---- Import smoke test: every module must at least import ----
+			// Deliberately does NOT use pytest — pytest may have failed to install.
+			if (_spec.target_type !== 'webapp' && _spec.target_type !== 'single_page_webapp') {
+				const smokeFailures = [];
+				for (const art of _moduleArtifacts) {
+					const m = _skeleton.modules.find(x => x.id === art.moduleName);
+					const modName = m && m.name ? m.name : art.moduleName;
+					yield { type: 'log', message: 'Smoke: importing ' + modName + '…' };
+					try {
+						const r = await CodeSmith.sandbox.runPython(
+							"import sys, importlib\nsys.path.insert(0, '/workdir')\nimportlib.invalidate_caches()\nimportlib.import_module('" + modName + "')\nprint('OK')",
+							{ timeoutMs: 20000, sessionGlobals: false }
+						);
+						const failed = r && (r.error || (r.stdout || '').indexOf('OK') === -1);
+						if (failed) {
+							const why = r && r.error ? (r.error.message || r.error.type || 'import failed') : 'no OK marker';
+							smokeFailures.push(modName + ': ' + why);
+							_moduleStates[art.moduleName] = 'failed';
+						}
+					} catch (err) {
+						smokeFailures.push(modName + ': ' + (err && err.message ? err.message : String(err)));
+						_moduleStates[art.moduleName] = 'failed';
+					}
+				}
+				yield { type: 'smoke_done', failures: smokeFailures, total: _moduleArtifacts.length };
+				if (smokeFailures.length > 0) {
+					yield { type: 'log', message: '⚠ ' + smokeFailures.length + ' of ' + _moduleArtifacts.length + ' modules failed to import:\n  ' + smokeFailures.join('\n  ') };
+				}
+			}
 
 			_state = 'paused';
 			_paused = true;
@@ -5296,6 +5565,9 @@ const StageC = (() => {
 		const modId = artifact.moduleName;
 		const mod = _skeleton.modules.find(m => m.id === modId);
 		if (!mod) continue;
+		// Used by both the test block and the repair path below it. Previously
+		// declared inside the non-webapp else branch, so repair threw ReferenceError.
+		const safeName = mod.name;
 		_currentModuleId = modId;
 		_moduleStates[modId] = 'testing';
 		yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules, phase: 'test' };
@@ -5333,17 +5605,21 @@ const StageC = (() => {
 					break;
 				}
 				} else {
-				const safeName = mod.name;
-				const pytestCode = `
-					import sys, os
-					sys.path.insert(0, '/workdir')
-					os.chdir('/workdir')
-					for mn in list(sys.modules):
-						if mn == '${safeName}' or mn.startswith('${safeName}.'):
-							del sys.modules[mn]
-					import pytest
-					exit_code = pytest.main(['-v', '/workdir/test_${safeName}.py', '--tb=short', '--no-header'])
-					`;
+				// safeName is declared at per-module scope above — the repair
+				// path below this else branch needs it too.
+				// MUST be left-aligned — leading whitespace here becomes leading
+				// whitespace in the Python source and raises IndentationError.
+				const pytestCode = [
+					'import sys, os',
+					"sys.path.insert(0, '/workdir')",
+					"os.chdir('/workdir')",
+					'for mn in list(sys.modules):',
+					"    if mn == '" + safeName + "' or mn.startswith('" + safeName + ".'):",
+					'        del sys.modules[mn]',
+					'import pytest',
+					"exit_code = pytest.main(['-v', '/workdir/test_" + safeName + ".py', '--tb=short', '--no-header'])",
+					"print('__EXIT_CODE__=' + str(exit_code))",
+				].join('\n');
 							try {
 								testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
 							} catch (err) {
@@ -5538,10 +5814,18 @@ const StageC = (() => {
     for (let intAttempt = 1; intAttempt <= INTEGRATION_REPAIR_MAX + 1; intAttempt++) {
       const integCode = await _generateIntegrationTest(intAttempt > 1);
       if (!integCode) {
-        yield { type: 'error', stage: 'integration_gen', error: new Error('Failed to generate integration test') };
+        const _why = _lastIntegrationError || 'no reason captured';
+        yield { type: 'error', stage: 'integration_gen', error: new Error('Failed to generate integration test: ' + _why) };
+        // Rate limits and timeouts are transient — back off and retry rather
+        // than abandoning integration on the first miss.
+        if (/429|rate|timeout|Too Many/i.test(_why) && intAttempt <= INTEGRATION_REPAIR_MAX) {
+          const _wait = 5000 * intAttempt;
+          yield { type: 'log', message: 'Retrying integration generation in ' + (_wait / 1000) + 's…' };
+          await _sleep(_wait);
+          continue;
+        }
         break;
       }
-
       try {
         await CodeSmith.sandbox.writeFile('/workdir/test_integration.py', integCode);
       } catch {}
@@ -5590,6 +5874,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     }
   }
 
+  let _lastIntegrationError = '';
   async function _generateIntegrationTest(isRetry) {
     const modsJson = JSON.stringify(_skeleton.modules.map(m => ({
       id: m.id, name: m.name, public_functions: (m.public_functions || []).map(f => f.signature),
@@ -5618,7 +5903,11 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
       let code = (result.text || '').trim();
       if (code.startsWith('```')) code = code.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
       return code;
-    } catch { return null; }
+    } catch (err) {
+      // Preserve the reason — a bare null loses 429s, timeouts and auth errors alike.
+      _lastIntegrationError = (err && err.message) ? err.message : String(err);
+      return null;
+    }
   }
 //------------------
 
@@ -5832,11 +6121,25 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     let cleaned = text.trim();
     if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     try { return JSON.parse(cleaned); } catch {}
+
+    // Repair a dropped opening prefix. The stream has been observed losing the
+    // leading `{"`, leaving text that begins mid-key: `code":"import pandas...`.
+    // Must run BEFORE the indexOf('{') salvage, which would otherwise latch onto
+    // a dict literal inside the generated Python and slice garbage.
+    if (!cleaned.startsWith('{') && /^[A-Za-z_][A-Za-z0-9_]*"\s*:/.test(cleaned)) {
+      try { return JSON.parse('{"' + cleaned); } catch {}
+    }
+    if (!cleaned.startsWith('{') && /^"[A-Za-z_][A-Za-z0-9_]*"\s*:/.test(cleaned)) {
+      try { return JSON.parse('{' + cleaned); } catch {}
+    }
+
+    // Only salvage when the text actually opens with an object, not mid-value.
     const s = cleaned.indexOf('{');
     const e = cleaned.lastIndexOf('}');
-    if (s >= 0 && e > s) {
+    if (s >= 0 && e > s && cleaned.slice(0, s).trim().length === 0) {
       try { return JSON.parse(cleaned.slice(s, e + 1)); } catch {}
     }
+    console.warn('[stageC parseJSON] failed. len=', text.length, 'head=', text.slice(0, 120));
     throw new Error('Failed to parse JSON');
   }
 
@@ -5909,7 +6212,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 	}
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  return { run, getState, getModuleStates, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision };
+  return { run, getState, getModuleStates, getBuildSkeleton, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision };
 })();
 CodeSmith.stageC = StageC;
 
@@ -8800,18 +9103,20 @@ function wireComposer() {
 		// Download button
 		$('#btn-build-download').addEventListener('click', downloadArtifact);
 	  }
-
   function setBuildBadge(status) {
     const badge = $('#build-badge');
     badge.className = 'build-badge badge-' + status;
     badge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    // Remember it, so updateBuildPanel() below can't overwrite a live status
+    // with a stale _currentBuild.status. This was the "Idle during build" bug.
+    if (_currentBuild) _currentBuild.status = status;
   }
 
   function updateBuildPanel(data) {
     if (!data) return;
     _currentBuild = data;
     $('#build-module-name').textContent = data.moduleName || '—';
-    setBuildBadge(data.status || 'draft');
+    if (data.status) setBuildBadge(data.status);
     $('#build-attempts').textContent = data.attempt ? 'attempt ' + data.attempt : '';
 
     if (data.spec) {
@@ -8911,6 +9216,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
     if (passed) await saveArtifact(_currentBuild);
   }
+
 
 	async function runBuildPipeline(userPrompt) {
 	    // Day 4 single-block build — works WITHOUT skeleton
@@ -9713,7 +10019,11 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       CodeSmith.stageC.stop();
     });
     $('#btn-sc-symtable').addEventListener('click', _showSymbolTable);
-    $('#btn-sc-download-all').addEventListener('click', _scDownloadAll);
+        // Pass explicit booleans — a bare handler receives the click Event as the
+    // first arg, and an Event is truthy, so isDraft was always true.
+    $('#btn-sc-download-all').addEventListener('click', () => _scDownloadAll(false));
+    const _draftBtn = $('#btn-sc-download-draft');
+    if (_draftBtn) _draftBtn.addEventListener('click', () => _scDownloadAll(true));
 
     // Escalation buttons
    
@@ -9771,7 +10081,10 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     const list = $('#sc-module-list');
     list.replaceChildren();
     const states = CodeSmith.stageC.getModuleStates();
-    const skeleton = CodeSmith.stageB.getSkeleton();
+    // Prefer the skeleton the build is running over Stage B's live copy —
+    // otherwise a mid-build mutation of Stage B swaps the list out from under us.
+    const skeleton = (CodeSmith.stageC.getBuildSkeleton && CodeSmith.stageC.getBuildSkeleton())
+      || CodeSmith.stageB.getSkeleton();
     if (!skeleton) return;
 
     for (const modId of skeleton.build_order) {
@@ -10034,6 +10347,30 @@ case 'symbols_requested':
 					_scLog('🔨 ' + ev.moduleId + ' built (untested)', 'log-info');
 					break;
 
+			// ---- Diagnostics: these were previously dropped by the switch ----
+			case 'log':
+					_scLog(ev.message, 'log-info');
+					break;
+
+			case 'error': {
+					const _e = ev.error;
+					const _msg = _e ? (_e.message || _e.type || String(_e)) : 'unknown error';
+					_scLog('✗ ' + (ev.stage || 'error') + (ev.moduleId ? ' [' + ev.moduleId + ']' : '') + ': ' + _msg, 'log-fail');
+					if (ev.moduleId) {
+						if (!_scModuleData[ev.moduleId]) _scModuleData[ev.moduleId] = { code: '', tests: '', output: '' };
+						_scModuleData[ev.moduleId]._lastError = { stage: ev.stage, reason: _msg, timestamp: Date.now() };
+						_scModuleData[ev.moduleId].output = (_scModuleData[ev.moduleId].output || '') + '\n[' + (ev.stage || 'error') + '] ' + _msg + '\n';
+					}
+					_scRenderModuleList();
+					break;
+			}
+
+			case 'smoke_done':
+					_scLog(ev.failures && ev.failures.length
+						? '✗ Smoke test: ' + ev.failures.length + '/' + ev.total + ' modules failed to import'
+						: '✓ Smoke test: all ' + ev.total + ' modules import cleanly',
+						ev.failures && ev.failures.length ? 'log-fail' : 'log-pass');
+					break;
 
 			case 'all_built':
 						_scLog('━━━ Phase 1 complete: ' + ev.count + ' modules built ━━━', 'log-info');
@@ -10176,9 +10513,21 @@ case 'symbols_requested':
   }
 
 	async function _scDownloadAll(isDraft) {
-   		 const arts = isDraft
-		? Object.entries(_scModuleData).map(([id, d]) => ({ moduleName: id, code: d.code || '', tests: d.tests || '', status: 'draft', id }))
-		: CodeSmith.stageC.getModuleArtifacts();
+		// Start from real artifacts either way — _scModuleData is a UI cache and
+		// misses generated modules like _shared that emit no module_built event.
+		const _real = CodeSmith.stageC.getModuleArtifacts() || [];
+		let arts;
+		if (isDraft) {
+			const _byName = new Map(_real.map(a => [a.moduleName, a]));
+			for (const [id, d] of Object.entries(_scModuleData)) {
+				if (!d || !d.code) continue;
+				const prev = _byName.get(id) || {};
+				_byName.set(id, { ...prev, moduleName: id, code: d.code, tests: d.tests || prev.tests || '', status: 'draft', id });
+			}
+			arts = Array.from(_byName.values());
+		} else {
+			arts = _real;
+		}
     	if (arts.length === 0) { alert('Nothing to download yet.'); return; }
 		if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
 		const zip = new JSZip();
@@ -10277,6 +10626,29 @@ case 'symbols_requested':
 
 			const reqs = Array.from(allImports).sort().join('\n');
 			zip.file('requirements.txt', reqs || '# no external dependencies\n');
+
+			// pyproject.toml — the spec's acceptance criteria routinely require
+			// `pip install -e .`, which needs this file to exist.
+			const _pkgName = (spec.package_name || 'package').replace(/\W+/g, '_');
+			const _deps = Array.from(allImports).sort().map(d => '    "' + d + '",').join('\n');
+			const _cliMod = (skel && (skel.modules || []).find(m => /^cli$/i.test(m.name || m.id)));
+			const _scripts = _cliMod
+				? '\n[project.scripts]\n' + _pkgName.replace(/_/g, '-') + ' = "' + (_cliMod.name || _cliMod.id) + ':main"\n'
+				: '';
+			zip.file('pyproject.toml',
+				'[build-system]\n' +
+				'requires = ["setuptools>=61"]\n' +
+				'build-backend = "setuptools.build_meta"\n\n' +
+				'[project]\n' +
+				'name = "' + _pkgName.replace(/_/g, '-') + '"\n' +
+				'version = "0.1.0"\n' +
+				'description = ' + JSON.stringify(String(spec.goal || _pkgName).slice(0, 200)) + '\n' +
+				'requires-python = ">=3.10"\n' +
+				'dependencies = [\n' + _deps + '\n]\n' +
+				_scripts + '\n' +
+				'[tool.setuptools]\n' +
+				'py-modules = [' + arts.map(a => '"' + (a.moduleName || a.id) + '"').join(', ') + ']\n'
+			);
 			zip.file('.gitignore', `__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n*.egg-info/\ndist/\nbuild/\n.env\nvenv/\n`);
 
 			// Generate run.py + README via orchestrator
