@@ -4023,10 +4023,18 @@ Return the same JSON schema.`;
 
       // ---- Stage E: Run pytest ----
       yield { type: 'tests_start', attempt };
+      // ---- Stage E: Run pytest ----
       let testResult;
       try {
-        // Install pytest if needed
-        try { await CodeSmith.sandbox.installPackage('pytest'); } catch {}
+        // Install pytest if needed — bounded, since micropip hits the network
+        try {
+          await Promise.race([
+            CodeSmith.sandbox.installPackage('pytest'),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('pytest install timed out after 60s')), 60000)),
+          ]);
+        } catch (e) {
+          yield { type: 'log', message: 'pytest install failed: ' + e.message + ' — tests will be skipped' };
+        }
 
         const pytestCode = `
 import sys, os
