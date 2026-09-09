@@ -5284,6 +5284,21 @@ const StageC = (() => {
 			const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
 			const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
 			const workOrder = {
+				// Project-level requirements. Without these the worker writes to a
+				// bare signature and produces minimal, untargeted implementations.
+				project_goal: _spec.goal || '',
+				acceptance_criteria: _spec.acceptance_criteria || [],
+				constraints: _spec.constraints || {},
+				non_goals: _spec.non_goals || [],
+				code_style: _spec.style || 'type hints, docstrings, production-ready',
+				// Only the criteria that plausibly bind this module
+				relevant_criteria: (_spec.acceptance_criteria || []).filter(c => {
+					const t = String(c).toLowerCase();
+					const names = [(mod.name || ''), (mod.id || '')].concat(
+						(mod.public_functions || []).map(f => f.name || '')
+					).filter(Boolean).map(s => s.toLowerCase());
+					return names.some(n => n && t.includes(n));
+				}),
 				module_spec: mod,
 				symbol_table: SymbolTable.get(),
 				dependency_code: depCode,
@@ -5304,7 +5319,7 @@ const StageC = (() => {
 					{ role: 'system', content: workerSystem },
 					{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
 				],
-				tier: 'worker', temperature: 0.2, maxTokens: 20000,
+								tier: 'worker', temperature: 0.2, maxTokens: 32000,
 				})) {
 				
 			if (ev.type === 'token') {
