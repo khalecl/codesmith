@@ -3445,13 +3445,7 @@ const LLM = (() => {
   }
 
   // ---- SSE parser ---------------------------------------------------------
-  function _isThinkingModel(model) {
-    if (!model) return false;
-    const m = model.toLowerCase();
-    return m.includes('kimi') || m.includes('k2-thinking') ||
-           m.includes('deepseek-r1') || m.includes('qwq');
-  }
-  function _isThinkingModel(model) {
+    function _isThinkingModel(model) {
     if (!model) return false;
     const m = model.toLowerCase();
     return m.includes('kimi') || m.includes('k2-thinking') ||
@@ -6612,7 +6606,7 @@ CodeSmith.explorer = Explorer;
 			  if (ev.type === 'token') yield { type: 'token', delta: ev.delta };
 			  else if (ev.type === 'thinking') yield { type: 'thinking', delta: ev.delta };
 			  else if (ev.type === 'done') yield { type: 'done', text: ev.text, thinking: ev.thinking };
-			  else if (ev.type === 'error') yield { type: 'error', error: ev.error };
+			 			  else if (ev.type === 'error') yield { type: 'error', error: ev.error, recoverable: ev.recoverable };
 			}
 		  }
 
@@ -12156,7 +12150,7 @@ case 'symbols_requested':
 							// Show routing preview
 								let routing;
 								try {
-									routing = CodeSmith.router.route(question, userModelChoice);
+									routing = CodeSmith.router.route(queryText, $('#explorer-model-select')?.value || 'auto');
 								} catch (e) {
 									routing = { tier: 'orchestrator', temperature: 0.2, maxTokens: 6000, reason: 'router fallback' };
 								}
@@ -12889,15 +12883,20 @@ case 'symbols_requested':
 		  try {
 			for await (const ev of CodeSmith.pair.askPair(file.content, name, file.language, question)) {
 			  if (ev.type === 'token') {
+				if (aiBubble.className !== 'bubble bubble-assistant') {
+				  aiBubble.className = 'bubble bubble-assistant';
+				  fullText = '';
+				}
 				fullText += ev.delta;
-							aiBubble.textContent = fullText;
+				aiBubble.textContent = fullText;
 				chat.scrollTop = chat.scrollHeight;
 			  } else if (ev.type === 'done') {
 				fullText = ev.text || fullText;
+				aiBubble.className = 'bubble bubble-assistant';
 				aiBubble.innerHTML = renderMarkdown(fullText);
 			  } else if (ev.type === 'error') {
 				aiBubble.textContent = 'Error: ' + (ev.error ? ev.error.message : 'Unknown');
-				aiBubble.className = 'bubble bubble-error';
+				aiBubble.className = ev.recoverable ? 'bubble bubble-assistant' : 'bubble bubble-error';
 			  }
 			}
 
