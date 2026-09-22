@@ -100,6 +100,7 @@ window.addEventListener('load', function () {
     function loadScript(src) {
       return new Promise(function(resolve, reject) {
         var s = document.createElement('script');
+        s.crossOrigin = 'anonymous';
         s.src = src;
         s.onload = resolve;
         s.onerror = function() { reject(new Error('Failed to load ' + src)); };
@@ -2980,10 +2981,14 @@ const API = (() => {
       if (!r.ok) {
         const txt = await r.text().catch(() => '');
         const clean = txt.slice(0, 240).replace(/Bearer\s+\S+/gi, 'Bearer ***');
-        if (r.status === 401) throw new Error('401 — API key rejected. Check your nvapi-… key.');
-        if (r.status === 403) throw new Error('403 — forbidden. This model may not be available on your tier.');
-        if (r.status === 404) throw new Error('404 — model not found on this endpoint. Try "Fetch models" to see what\'s available.');
-        if (r.status === 429) throw new Error('429 — rate limited. Wait and retry.');
+        const detail = clean ? ' — ' + clean : '';
+        console.error('[CodeSmith] API ' + r.status + ' on ' + url, clean);
+        if (r.status === 401) throw new Error('401 — API key rejected. Check your nvapi-… key.' + detail);
+        if (r.status === 402) throw new Error('402 — out of credits on this model.' + detail);
+        if (r.status === 403) throw new Error('403 — forbidden. This model may not be available on your tier.' + detail);
+        if (r.status === 404) throw new Error('404 — model not found on this endpoint. Try "Fetch models" to see what\'s available.' + detail);
+        if (r.status === 410) throw new Error('410 — this model has been retired by the provider. Pick a different model.' + detail);
+        if (r.status === 429) throw new Error('429 — rate limited. Wait and retry.' + detail);
         throw new Error('HTTP ' + r.status + (clean ? ' — ' + clean : ''));
       }
       const j = await r.json();
@@ -7123,8 +7128,18 @@ CodeSmith.explorer = Explorer;
 		      renderLineHighlight: 'all',
 		      contextmenu: true,
 				mouseWheelZoom: !('ontouchstart' in window),
-					padding: { top: 8 },
+				padding: { top: 8 },
 		    });
+		 
+		    // Guard: extensions / IMEs sometimes dispatch a plain Event('keydown')
+		    // at Monaco's hidden textarea. StandardKeyboardEvent then throws on
+		    // e.getModifierState(). Drop non-native key events before Monaco sees them.
+		    containerEl.addEventListener('keydown', (ev) => {
+		      if (typeof ev.getModifierState !== 'function') {
+		        ev.stopImmediatePropagation();
+		        console.warn('[CodeSmith] dropped synthetic keydown (not a KeyboardEvent)');
+		      }
+		    }, true);
 		 
 		    // Track cursor position
 		    _editor.onDidChangeCursorPosition((e) => {
@@ -13720,7 +13735,8 @@ case 'symbols_requested':
 	  // ---- Day 7: Error recovery ---------------------------------------------
 	  function wireErrorRecovery() {
 		window.addEventListener('error', (ev) => {
-		  console.error('[CodeSmith] Uncaught:', ev.error);
+		  console.error('[CodeSmith] Uncaught:', ev.error || ev.message,
+			'@', (ev.filename || '?') + ':' + (ev.lineno || 0) + ':' + (ev.colno || 0));
 		});
 		window.addEventListener('unhandledrejection', (ev) => {
 		  console.error('[CodeSmith] Unhandled rejection:', ev.reason);
