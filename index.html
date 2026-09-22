@@ -2623,9 +2623,9 @@ kbd {
 				id: 'app',
 				apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
 				apiKey: '',
-				modelOrchestrator: 'moonshotai/kimi-k2-thinking',
-				modelWorker:       'mistralai/devstral-2-123b-instruct-2512',
-				modelFast:         'meta/llama-3.1-8b-instruct',
+				modelOrchestrator: 'moonshotai/kimi-k3',
+				modelWorker:       'moonshotai/kimi-k2.6',
+				modelFast:         'nvidia/nemotron-nano-3-30b-a3b',
 				tokenBudgetCap: 100000,
 				rateLimitRpm: 40,
 				endpoints: [],  // [{name, apiUrl, apiKey, forTier: 'orchestrator'|'worker'|'fast'}]
@@ -2640,9 +2640,9 @@ kbd {
 			CodeSmith.PRESETS = {
 			nvidia: {
 				apiUrl: 'https://nvidia-proxy.khaled-mohamed-rady.workers.dev/v1',
-				modelOrchestrator: 'moonshotai/kimi-k2-thinking',
-				modelWorker: 'mistralai/devstral-2-123b-instruct-2512',
-				modelFast: 'meta/llama-3.1-8b-instruct',
+				modelOrchestrator: 'moonshotai/kimi-k3',
+				modelWorker: 'moonshotai/kimi-k2.6',
+				modelFast: 'nvidia/nemotron-nano-3-30b-a3b',
 			},
 			groq: {
 				apiUrl: 'https://api.groq.com/openai/v1',
@@ -2966,7 +2966,7 @@ const API = (() => {
       stream: false,
     };
     const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), 60000);
+    const to = setTimeout(() => controller.abort(), 200000);
     try {
       const r = await fetch(url, {
         method: 'POST',
@@ -2989,6 +2989,7 @@ const API = (() => {
         if (r.status === 404) throw new Error('404 — model not found on this endpoint. Try "Fetch models" to see what\'s available.' + detail);
         if (r.status === 410) throw new Error('410 — this model has been retired by the provider. Pick a different model.' + detail);
         if (r.status === 429) throw new Error('429 — rate limited. Wait and retry.' + detail);
+        if (r.status === 502) throw new Error('502 — proxy timeout. The model may be slow to start; raise the Worker timeout.' + detail);
         throw new Error('HTTP ' + r.status + (clean ? ' — ' + clean : ''));
       }
       const j = await r.json();
