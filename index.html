@@ -1883,6 +1883,7 @@ kbd {
 					  <button id="btn-sc-resume" class="btn btn-primary" style="font-size:12px;" hidden>Resume</button>
 					  <button id="btn-sc-stop" class="btn" style="font-size:12px;color:#ff6b6b;" hidden>Stop</button>
 					  <button id="btn-sc-symtable" class="btn btn-ghost" style="font-size:11px;" title="View symbol table">Symbols</button>
+					 <button id="btn-sc-validate" class="btn btn-ghost" style="font-size:11px;" title="Check imports, cycles and entry points">Validate structure</button>
 					  <label style="font-size:11px;color:#8b92a1;display:flex;align-items:center;gap:4px;cursor:pointer;">
 						<input type="checkbox" id="sc-review-tests" style="accent-color:#4f8cff;"> Review tests
 						</label>
@@ -5039,6 +5040,506 @@ Requirements:
 
 Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). Runnable with: pytest test_integration.py -v`;
 const _CS_outer = CodeSmith;
+// =====================================================================
+// ProjectCore — ProjectManifest + dependency graph + RepairPolicy
+// Pure logic, no DOM, no LLM. Safe to unit-test in isolation.
+// Exposed as CodeSmith.manifest and CodeSmith.repairPolicy.
+// Self-test from the console: CodeSmith.coreSelfTest()
+// =====================================================================
+const Manifest = (() => {
+  // Python stdlib top-level names (subset that matters for generated code).
+  // Pyodide's sys.stdlib_module_names can extend this at runtime via addStdlib().
+  const _STDLIB = new Set(('abc argparse array ast asyncio base64 bisect builtins calendar cmath collections ' +
+    'concurrent contextlib copy csv dataclasses datetime decimal difflib email enum errno functools gc getpass ' +
+    'glob gzip hashlib heapq hmac html http importlib inspect io itertools json keyword logging math mimetypes ' +
+    'numbers operator os pathlib pickle platform pprint queue random re sched secrets shlex shutil signal ' +
+    'socket sqlite3 statistics string struct subprocess sys tempfile textwrap threading time timeit tokenize ' +
+    'traceback types typing unicodedata unittest urllib uuid warnings weakref xml zipfile zlib __future__ ' +
+    'pytest _shared').split(/\s+/));
+  function addStdlib(names) { (names || []).forEach(n => _STDLIB.add(n)); }
+
+  const ROLES = ['source', 'test', 'config', 'asset'];
+  const TARGETS = ['python', 'webapp', 'cli', 'api', 'notebook'];
+
+  function _norm(p) {
+    const out = [];
+    for (const seg of String(p).replace(/\\/g, '/').split('/')) {
+      if (!seg || seg === '.') continue;
+      if (seg === '..') out.pop(); else out.push(seg);
+    }
+    return out.join('/');
+  }
+  function _dir(p) { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); }
+  function _lang(path) {
+    const ext = (path.split('.').pop() || '').toLowerCase();
+    return ({ py: 'python', js: 'javascript', mjs: 'javascript', html: 'html', css: 'css',
+      json: 'json', toml: 'toml', md: 'markdown', txt: 'text', ipynb: 'json' })[ext] || 'text';
+  }
+  function _role(path) {
+    const base = path.split('/').pop();
+    if (/^test_.*\.py$|_test\.py$|\.test\.js$|\.spec\.js$/.test(base) || path.startsWith('tests/')) return 'test';
+    if (/^(requirements\.txt|pyproject\.toml|setup\.cfg|package\.json|LICENSE|\.gitignore)$/.test(base)) return 'config';
+    if (/\.(py|js|mjs|html|css)$/.test(base)) return 'source';
+    return 'asset';
+  }
+
+  function create({ name = 'project', target = 'python', license = 'MIT' } = {}) {
+    return { name, target: TARGETS.includes(target) ? target : 'python', root: '/', license,
+      files: {}, entryPoints: [], dependencies: {}, buildOrder: [], testFiles: [], decisions: {}, version: 1 };
+  }
+
+  function setFile(m, path, content, role) {
+    const p = _norm(path);
+    const r = ROLES.includes(role) ? role : _role(p);
+    m.files[p] = { content: content == null ? '' : String(content), language: _lang(p), role: r };
+    if (r === 'test' && !m.testFiles.includes(p)) m.testFiles.push(p);
+    return p;
+  }
+  function removeFile(m, path) {
+    const p = _norm(path);
+    delete m.files[p];
+    m.testFiles = m.testFiles.filter(t => t !== p);
+    m.entryPoints = m.entryPoints.filter(t => t !== p);
+  }
+
+  // Python module path for a file: "src/pkg/util.py" -> "src.pkg.util"
+  function pyModuleName(path) {
+    return _norm(path).replace(/\.py$/, '').replace(/\/__init__$/, '').split('/').join('.');
+  }
+
+  // Build a manifest from an approved Stage B skeleton. Paths come from
+  // mod.path when the skeleton provides one; otherwise a flat layout is used
+  // (matches what Stage C writes to /workdir today, so nothing breaks).
+  function fromSkeleton(skeleton, spec) {
+    const target = (spec && spec.target_type === 'single_page_webapp') ? 'webapp' : ((spec && spec.target_type) || 'python');
+    const m = create({ name: (spec && (spec.project_name || spec.name)) || 'project', target,
+      license: (CodeSmith.state && CodeSmith.state.settings && CodeSmith.state.settings.license) || 'MIT' });
+    const idToPath = {};
+    for (const mod of (skeleton && skeleton.modules) || []) {
+      const kind = mod.kind || 'python';
+      const ext = kind === 'python' ? '.py' : '.' + kind;
+      const base = mod.name || mod.id;
+      const path = _norm(mod.path || (base.includes('.') ? base : base + ext));
+      idToPath[mod.id] = path;
+      setFile(m, path, '', 'source');
+      if (kind === 'python') {
+        const tp = 'tests/test_' + path.split('/').pop();
+        setFile(m, tp, '', 'test');
+      }
+    }
+    // Declared dependencies (pip) if the skeleton lists them.
+    for (const d of (skeleton && (skeleton.dependencies || skeleton.packages)) || []) {
+      if (typeof d === 'string') m.dependencies[d.split(/[=<>~!]/)[0].trim()] = d.match(/[=<>~!].*$/)?.[0] || 'any';
+    }
+    // Entry points: explicit, else main.py/app.py/index.html if present.
+    const declared = (skeleton && skeleton.entry_points) || [];
+    m.entryPoints = declared.length ? declared.map(_norm)
+      : Object.keys(m.files).filter(p => /(^|\/)(main|app|run|cli)\.py$|(^|\/)index\.html$/.test(p));
+    // Edges declared in the skeleton (depends_on), keyed by path.
+    m._declaredEdges = {};
+    for (const mod of (skeleton && skeleton.modules) || []) {
+      m._declaredEdges[idToPath[mod.id]] = (mod.depends_on || []).map(id => idToPath[id]).filter(Boolean);
+    }
+    m.buildOrder = topoSort(buildGraph(m)).order;
+    return m;
+  }
+
+  // ---- import extraction ----
+  function extractImports(content, language) {
+    const out = [];
+    const lines = String(content || '').split('\n');
+    if (language === 'python') {
+      lines.forEach((ln, i) => {
+        let mm;
+        if ((mm = ln.match(/^\s*from\s+(\.*[\w.]*)\s+import\s+(.+)$/))) {
+          out.push({ spec: mm[1], names: mm[2].replace(/[()]/g, '').split(',').map(s => s.trim().split(/\s+as\s+/)[0]).filter(Boolean), line: i + 1, kind: 'from' });
+        } else if ((mm = ln.match(/^\s*import\s+(.+)$/))) {
+          mm[1].split(',').forEach(part => {
+            const spec = part.trim().split(/\s+as\s+/)[0];
+            if (spec) out.push({ spec, names: [], line: i + 1, kind: 'import' });
+          });
+        }
+      });
+    } else if (language === 'javascript') {
+      lines.forEach((ln, i) => {
+        const re = /(?:import\s[^'"]*?from\s*|import\s*\(?\s*|require\s*\(\s*)['"]([^'"]+)['"]/g;
+        let mm; while ((mm = re.exec(ln))) out.push({ spec: mm[1], names: [], line: i + 1, kind: 'import' });
+      });
+    }
+    return out;
+  }
+
+  // Resolve one import to a manifest path, or { external } / { unresolved }.
+  function resolveImport(m, fromPath, imp, language) {
+    const files = m.files;
+    if (language === 'python') {
+      let spec = imp.spec;
+      let baseDir;
+      if (spec.startsWith('.')) {
+        const dots = spec.match(/^\.+/)[0].length;
+        baseDir = _dir(fromPath);
+        for (let k = 1; k < dots; k++) baseDir = _dir(baseDir);
+        spec = spec.slice(dots);
+      }
+      const rel = spec ? spec.split('.').join('/') : '';
+      const roots = baseDir !== undefined ? [baseDir] : ['', 'src', _dir(fromPath)];
+      for (const r of roots) {
+        const stem = _norm((r ? r + '/' : '') + rel);
+        const cands = stem ? [stem + '.py', stem + '/__init__.py'] : [];
+        // "from . import x" / "from pkg import submodule"
+        for (const n of imp.names) cands.push(_norm((stem ? stem + '/' : '') + n + '.py'));
+        for (const c of cands) if (files[c]) return { path: c };
+        if (stem && Object.keys(files).some(p => p.startsWith(stem + '/'))) return { path: stem, namespace: true };
+      }
+      if (baseDir !== undefined) return { unresolved: true };
+      const top = imp.spec.split('.')[0];
+      if (_STDLIB.has(top)) return { external: 'stdlib' };
+      const depKey = Object.keys(m.dependencies).find(d => d.toLowerCase().replace(/-/g, '_') === top.toLowerCase());
+      if (depKey) return { external: depKey };
+      return { unresolved: true };
+    }
+    if (language === 'javascript') {
+      if (!/^\.{1,2}\//.test(imp.spec)) {
+        return m.dependencies[imp.spec.split('/')[0]] ? { external: imp.spec } : { unresolved: true, bare: true };
+      }
+      const stem = _norm(_dir(fromPath) + '/' + imp.spec);
+      for (const c of [stem, stem + '.js', stem + '.mjs', stem + '/index.js']) if (files[c]) return { path: c };
+      return { unresolved: true };
+    }
+    return { external: 'n/a' };
+  }
+
+  // path -> [paths it imports] (internal edges only). Declared skeleton
+  // edges are merged in so buildOrder is valid before any code exists.
+  function buildGraph(m) {
+    const g = {};
+    for (const [p, f] of Object.entries(m.files)) {
+      if (f.role !== 'source') continue;
+      const set = new Set((m._declaredEdges && m._declaredEdges[p]) || []);
+      for (const imp of extractImports(f.content, f.language)) {
+        const r = resolveImport(m, p, imp, f.language);
+        if (r.path && m.files[r.path] && r.path !== p) set.add(r.path);
+      }
+      g[p] = [...set].filter(x => m.files[x]);
+    }
+    return g;
+  }
+
+  // Kahn's algorithm, deterministic (alphabetical tie-break).
+  // Dependencies come BEFORE dependents. Cycle members are appended at the
+  // end in alphabetical order so a build can still proceed (and is reported).
+  function topoSort(g) {
+    const nodes = Object.keys(g).sort();
+    const indeg = {}; const rev = {};
+    nodes.forEach(n => { indeg[n] = 0; rev[n] = []; });
+    for (const n of nodes) for (const d of g[n]) {
+      if (!(d in indeg)) continue;
+      indeg[n]++; rev[d].push(n);
+    }
+    const ready = nodes.filter(n => indeg[n] === 0);
+    const order = [];
+    while (ready.length) {
+      ready.sort();
+      const n = ready.shift();
+      order.push(n);
+      for (const dep of rev[n]) if (--indeg[dep] === 0) ready.push(dep);
+    }
+    const leftover = nodes.filter(n => !order.includes(n));
+    return { order: order.concat(leftover), cycles: leftover.length ? findCycles(g) : [] };
+  }
+
+  function findCycles(g) {
+    const cycles = []; const color = {}; const stack = [];
+    const seen = new Set();
+    const visit = (n) => {
+      color[n] = 1; stack.push(n);
+      for (const d of g[n] || []) {
+        if (!(d in g)) continue;
+        if (color[d] === 1) {
+          const cyc = stack.slice(stack.indexOf(d)).concat(d);
+          const key = cyc.slice(0, -1).sort().join('|');
+          if (!seen.has(key)) { seen.add(key); cycles.push(cyc); }
+        } else if (!color[d]) visit(d);
+      }
+      color[n] = 2; stack.pop();
+    };
+    Object.keys(g).sort().forEach(n => { if (!color[n]) visit(n); });
+    return cycles;
+  }
+
+  // Diagnostics shape matches what the Stage C diagnostics panel needs:
+  // { severity: 'error'|'warning'|'info', file, line, message, code }
+  function validate(m) {
+    const diags = [];
+    for (const [p, f] of Object.entries(m.files)) {
+      if (f.role !== 'source' && f.role !== 'test') continue;
+      for (const imp of extractImports(f.content, f.language)) {
+        const r = resolveImport(m, p, imp, f.language);
+        if (r.unresolved) diags.push({ severity: 'error', file: p, line: imp.line, code: 'import-unresolved',
+          message: 'Import "' + imp.spec + '" does not resolve to a project file or a declared dependency' });
+      }
+    }
+    const { cycles } = topoSort(buildGraph(m));
+    for (const c of cycles) diags.push({ severity: 'error', file: c[0], line: 1, code: 'import-cycle',
+      message: 'Circular import: ' + c.join(' → ') });
+    if (!m.entryPoints.length) diags.push({ severity: 'warning', file: '', line: 0, code: 'no-entry', message: 'No entry point declared' });
+    for (const e of m.entryPoints) if (!m.files[e]) diags.push({ severity: 'error', file: e, line: 0, code: 'entry-missing',
+      message: 'Entry point "' + e + '" is not in the project' });
+    for (const [p, f] of Object.entries(m.files)) {
+      if (f.role === 'source' && f.language === 'python' && f.content.trim().length > 0 && f.content.trim().length < 40)
+        diags.push({ severity: 'warning', file: p, line: 1, code: 'near-empty', message: 'Module is nearly empty (' + f.content.trim().length + ' chars)' });
+    }
+    return diags;
+  }
+
+  // Move a file and rewrite absolute Python imports that pointed at it.
+  // Relative imports inside the moved file are converted to absolute ones
+  // first so they stay valid after the move.
+  function moveFile(m, from, to) {
+    const a = _norm(from), b = _norm(to);
+    if (!m.files[a] || m.files[b]) return { ok: false, error: !m.files[a] ? 'source missing' : 'target exists' };
+    const f = m.files[a];
+    if (f.language === 'python') {
+      f.content = f.content.split('\n').map(ln => {
+        const mm = ln.match(/^(\s*from\s+)(\.+[\w.]*)(\s+import\s+.+)$/);
+        if (!mm) return ln;
+        const r = resolveImport(m, a, { spec: mm[2], names: [] }, 'python');
+        return r.path ? mm[1] + pyModuleName(r.path) + mm[3] : ln;
+      }).join('\n');
+    }
+    m.files[b] = f; delete m.files[a];
+    const oldMod = pyModuleName(a), newMod = pyModuleName(b);
+    const esc = oldMod.replace(/\./g, '\\.');
+    const reFrom = new RegExp('^(\\s*from\\s+)' + esc + '(\\s+import\\s)', 'gm');
+    const reImp = new RegExp('^(\\s*import\\s+)' + esc + '(\\s|$|,)', 'gm');
+    for (const g of Object.values(m.files)) {
+      if (g.language !== 'python') continue;
+      g.content = g.content.replace(reFrom, '$1' + newMod + '$2').replace(reImp, '$1' + newMod + '$2');
+    }
+    m.testFiles = m.testFiles.map(t => t === a ? b : t);
+    m.entryPoints = m.entryPoints.map(t => t === a ? b : t);
+    m.buildOrder = topoSort(buildGraph(m)).order;
+    return { ok: true };
+  }
+
+  function recordDecision(m, path, decision, note) {
+    m.decisions[_norm(path)] = { decision, note: note || '', at: Date.now() };
+  }
+
+  // Strip runtime-only keys before persisting.
+  function serialize(m) { const { _declaredEdges, ...rest } = m; return JSON.parse(JSON.stringify({ ...rest, declaredEdges: _declaredEdges || {} })); }
+  function restore(o) { if (!o) return null; const m = { ...create(), ...o }; m._declaredEdges = o.declaredEdges || {}; delete m.declaredEdges; return m; }
+
+  return { create, fromSkeleton, setFile, removeFile, moveFile, extractImports, resolveImport, buildGraph,
+    topoSort, findCycles, validate, recordDecision, pyModuleName, addStdlib, serialize, restore };
+})();
+CodeSmith.manifest = Manifest;
+
+// ---------------------------------------------------------------------
+// RepairPolicy — the bounded, converging repair state machine.
+// Stage C owns I/O (running tests, calling the LLM, writing files);
+// this module owns every DECISION, so it is deterministic and testable.
+//
+//   init → [run tests] → onResult():
+//      action 'pass'     → done
+//      action 'repair'   → current code is the best seen; ask for a patch
+//      action 'revert'   → last patch made things worse; code rolled back
+//                          to the best version, then ask for a patch
+//      action 'escalate' → attempts exhausted; caller restores best version
+// ---------------------------------------------------------------------
+const RepairPolicy = (() => {
+  const MAX_ATTEMPTS = 4;
+
+  function init(code, tests) {
+    return { attempt: 0, code, tests, best: null, history: [], status: 'testing', action: null };
+  }
+
+  // Higher is better. A collection/import error (0 passed, 0 failed) is
+  // treated as worse than any run where tests actually executed.
+  function score(r) {
+    const fails = Math.max(r.failCount || 0, (r.passCount || 0) === 0 ? 1 : 0);
+    return (r.passCount || 0) * 10 - fails * 10 - ((r.passCount || 0) === 0 && (r.failCount || 0) === 0 ? 1000 : 0);
+  }
+
+  function onResult(st, result, maxAttempts = MAX_ATTEMPTS) {
+    const s = { ...st, history: st.history.slice() };
+    const last = s.history[s.history.length - 1];
+    if (last && !last.resultAfter) {
+      s.history[s.history.length - 1] = { ...last, resultAfter: { passCount: result.passCount, failCount: result.failCount, allPassed: !!result.allPassed } };
+    }
+    if (result.allPassed && result.passCount > 0) return { ...s, status: 'passed', action: 'pass' };
+    const cur = { code: st.code, tests: st.tests, passCount: result.passCount || 0, failCount: result.failCount || 0 };
+    let action = 'repair';
+    if (!s.best || score(cur) >= score(s.best)) {
+      s.best = cur;
+    } else {
+      action = 'revert';
+      if (s.history.length) s.history[s.history.length - 1] = { ...s.history[s.history.length - 1], regressed: true };
+      s.code = s.best.code; s.tests = s.best.tests;
+    }
+    if (s.attempt >= maxAttempts) {
+      return { ...s, code: s.best.code, tests: s.best.tests, status: 'escalated', action: 'escalate' };
+    }
+    return { ...s, status: 'repairing', action };
+  }
+
+  function fingerprint(edits) {
+    return (edits || []).map(e => [e.target || 'code', e.type, (e.newCode || '').replace(/\s+/g, ' ').trim()].join(':')).sort().join('||');
+  }
+  function isRepeat(st, edits) {
+    const fp = fingerprint(edits);
+    return !!fp && st.history.some(h => h.fingerprint === fp);
+  }
+
+  function recordAttempt(st, entry, newCode, newTests) {
+    return { ...st, attempt: st.attempt + 1, code: newCode, tests: newTests,
+      history: [...st.history, { ...entry, attempt: st.attempt + 1 }] };
+  }
+
+  // Count of real test assertions. Used to refuse "fixes" that delete tests.
+  function _testWeight(src) {
+    const s = String(src || '');
+    return (s.match(/^\s*def test_/gm) || []).length * 100 + (s.match(/\bassert\b|pytest\.raises|expect\(/g) || []).length;
+  }
+  function weakensTests(before, after) { return _testWeight(after) < _testWeight(before); }
+
+  // Apply line-based edits bottom-up so earlier edits never shift the line
+  // numbers of later ones. If oldCode doesn't match at the stated lines,
+  // relocate it by searching for a UNIQUE exact block match.
+  function applyEdits(content, edits) {
+    let lines = String(content || '').split('\n');
+    const errors = [];
+    const anchor = e => e.type === 'add' ? (e.afterLine || lines.length) + 0.5 : (e.startLine || 1);
+    const sorted = (edits || []).slice().sort((a, b) => anchor(b) - anchor(a));
+    let applied = 0;
+    for (const e0 of sorted) {
+      const e = { ...e0 };
+      if (e.type === 'replace' || e.type === 'delete') {
+        let start = Math.max(0, (e.startLine || 1) - 1);
+        let end = Math.min(lines.length, e.endLine || e.startLine || 1);
+        if (e.oldCode != null && e.oldCode !== '') {
+          const want = String(e.oldCode).split('\n').map(l => l.trimEnd());
+          const actual = lines.slice(start, end).map(l => l.trimEnd());
+          if (actual.join('\n').trim() !== want.join('\n').trim()) {
+            const hits = [];
+            const w = want.map(l => l.trim());
+            for (let i = 0; i + w.length <= lines.length; i++) {
+              let ok = true;
+              for (let k = 0; k < w.length; k++) if (lines[i + k].trim() !== w[k]) { ok = false; break; }
+              if (ok) hits.push(i);
+            }
+            if (hits.length !== 1) { errors.push('oldCode ' + (hits.length ? 'ambiguous' : 'not found') + ' near line ' + e.startLine); continue; }
+            start = hits[0]; end = hits[0] + w.length;
+          }
+        }
+        if (e.type === 'replace') lines.splice(start, end - start, ...String(e.newCode || '').split('\n'));
+        else lines.splice(start, end - start);
+        applied++;
+      } else if (e.type === 'add') {
+        const at = Math.min(lines.length, Math.max(0, e.afterLine == null ? lines.length : e.afterLine));
+        lines.splice(at, 0, ...String(e.newCode || '').split('\n'));
+        applied++;
+      } else errors.push('Unknown edit type: ' + e.type);
+    }
+    return { content: lines.join('\n'), applied, errors };
+  }
+
+  return { MAX_ATTEMPTS, init, onResult, score, fingerprint, isRepeat, recordAttempt, weakensTests, applyEdits };
+})();
+CodeSmith.repairPolicy = RepairPolicy;
+
+// ---------------------------------------------------------------------
+// Core self-test: CodeSmith.coreSelfTest() → { passed, failed, results }
+// ---------------------------------------------------------------------
+CodeSmith.coreSelfTest = function coreSelfTest() {
+  const results = [];
+  const t = (name, fn) => { try { fn(); results.push({ name, ok: true }); } catch (e) { results.push({ name, ok: false, error: e.message }); } };
+  const eq = (a, b, msg) => { const A = JSON.stringify(a), B = JSON.stringify(b); if (A !== B) throw new Error((msg || '') + ' expected ' + B + ' got ' + A); };
+  const ok = (v, msg) => { if (!v) throw new Error(msg || 'assertion failed'); };
+  const M = Manifest, R = RepairPolicy;
+
+  t('topoSort: deps before dependents', () => {
+    eq(M.topoSort({ 'a.py': ['b.py'], 'b.py': ['c.py'], 'c.py': [] }).order, ['c.py', 'b.py', 'a.py']);
+  });
+  t('topoSort: deterministic tie-break', () => {
+    eq(M.topoSort({ 'z.py': [], 'a.py': [], 'm.py': ['z.py'] }).order, ['a.py', 'z.py', 'm.py']);
+  });
+  t('topoSort: cycle detected and reported', () => {
+    const r = M.topoSort({ 'a.py': ['b.py'], 'b.py': ['a.py'], 'c.py': [] });
+    eq(r.order[0], 'c.py'); ok(r.cycles.length === 1, 'one cycle');
+  });
+  t('resolve: absolute, package, relative, src/ layout', () => {
+    const m = M.create();
+    M.setFile(m, 'src/pkg/__init__.py', '');
+    M.setFile(m, 'src/pkg/util.py', 'def f(): return 1');
+    M.setFile(m, 'src/pkg/core.py', 'from .util import f\nfrom . import util\nimport pkg.util\nimport os\nimport requests');
+    m.dependencies.requests = 'any';
+    eq(M.validate(m).filter(d => d.code === 'import-unresolved'), []);
+  });
+  t('validate: unresolved import, cycle, missing entry point', () => {
+    const m = M.create();
+    M.setFile(m, 'a.py', 'import b\nimport nosuchpkg');
+    M.setFile(m, 'b.py', 'import a');
+    m.entryPoints = ['main.py'];
+    const codes = M.validate(m).map(d => d.code).sort();
+    ok(codes.includes('import-unresolved') && codes.includes('import-cycle') && codes.includes('entry-missing'), codes.join(','));
+  });
+  t('moveFile rewrites importers and relative imports', () => {
+    const m = M.create();
+    M.setFile(m, 'util.py', 'X = 1'); M.setFile(m, 'helpers.py', 'Y = 2');
+    M.setFile(m, 'main.py', 'from util import X\nimport util');
+    M.setFile(m, 'pkg/__init__.py', '');
+    M.moveFile(m, 'util.py', 'pkg/util.py');
+    eq(m.files['main.py'].content, 'from pkg.util import X\nimport pkg.util');
+    eq(M.validate(m).filter(d => d.code === 'import-unresolved'), []);
+  });
+  t('applyEdits: bottom-up keeps line numbers valid', () => {
+    const r = R.applyEdits('a\nb\nc\nd', [
+      { type: 'replace', startLine: 1, endLine: 1, oldCode: 'a', newCode: 'A1\nA2' },
+      { type: 'replace', startLine: 3, endLine: 3, oldCode: 'c', newCode: 'C' }]);
+    eq(r.content, 'A1\nA2\nb\nC\nd'); eq(r.errors, []);
+  });
+  t('applyEdits: relocates drifted oldCode, rejects ambiguous', () => {
+    eq(R.applyEdits('x\ny = 1\nz', [{ type: 'replace', startLine: 1, endLine: 1, oldCode: 'y = 1', newCode: 'y = 2' }]).content, 'x\ny = 2\nz');
+    eq(R.applyEdits('p\np', [{ type: 'replace', startLine: 5, endLine: 5, oldCode: 'p', newCode: 'q' }]).applied, 0);
+  });
+  t('weakensTests: removing an assert is rejected', () => {
+    ok(R.weakensTests('def test_a():\n    assert f() == 1', 'def test_a():\n    pass'));
+    ok(!R.weakensTests('def test_a():\n    assert f() == 1', 'def test_a():\n    assert f() == 1\n    assert g()'));
+  });
+  t('repair FSM: converges on pass', () => {
+    let s = R.init('c0', 't');
+    s = R.onResult(s, { passCount: 1, failCount: 2 }); eq(s.action, 'repair');
+    s = R.recordAttempt(s, { fingerprint: 'f1' }, 'c1', 't');
+    s = R.onResult(s, { passCount: 3, failCount: 0, allPassed: true }); eq(s.action, 'pass');
+    eq(s.history[0].resultAfter.allPassed, true);
+  });
+  t('repair FSM: regression reverts to best', () => {
+    let s = R.init('good', 't');
+    s = R.onResult(s, { passCount: 2, failCount: 1 });
+    s = R.recordAttempt(s, { fingerprint: 'f1' }, 'worse', 't');
+    s = R.onResult(s, { passCount: 0, failCount: 0 });
+    eq(s.action, 'revert'); eq(s.code, 'good'); eq(s.history[0].regressed, true);
+  });
+  t('repair FSM: bounded — escalates with best code', () => {
+    let s = R.init('c0', 't');
+    for (let i = 1; i <= R.MAX_ATTEMPTS; i++) {
+      s = R.onResult(s, { passCount: 1, failCount: 1 });
+      s = R.recordAttempt(s, { fingerprint: 'f' + i }, 'c' + i, 't');
+    }
+    s = R.onResult(s, { passCount: 0, failCount: 3 });
+    eq(s.action, 'escalate'); eq(s.code, 'c' + (R.MAX_ATTEMPTS - 1)); // ties keep the newest eq(s.history.length, R.MAX_ATTEMPTS);
+  });
+  t('repair FSM: repeated patch detected', () => {
+    let s = R.recordAttempt(R.init('c', 't'), { fingerprint: R.fingerprint([{ type: 'replace', newCode: 'x = 1' }]) }, 'c', 't');
+    ok(R.isRepeat(s, [{ type: 'replace', newCode: 'x  =  1' }]), 'whitespace-only change is still a repeat');
+    ok(!R.isRepeat(s, [{ type: 'replace', newCode: 'x = 2' }]));
+  });
+
+  const failed = results.filter(r => !r.ok);
+  console.log('[coreSelfTest] ' + (results.length - failed.length) + '/' + results.length + ' passed', failed);
+  return { passed: results.length - failed.length, failed: failed.length, results };
+};
 const StageC = (() => {
 	let _abortCtl = new AbortController();
 	const CodeSmith = Object.assign(Object.create(_CS_outer), {
@@ -5097,6 +5598,7 @@ const StageC = (() => {
     _aborted = false;
     _paused = false;
     _moduleArtifacts = [];
+    try { _manifest = Manifest.fromSkeleton(_skeleton, _spec); } catch (err) { console.warn('[StageC] manifest init failed', err); _manifest = null; }
     _currentModuleId = null;
 
     // Init module states
@@ -5645,114 +6147,149 @@ const StageC = (() => {
 				continue;
 			}
 
-			for (let attempt = 1; attempt <= REPAIR_MAX + 1; attempt++) {
+					// ---- CONVERGING REPAIR LOOP (RepairPolicy) ----
+			// Every decision (pass / repair / revert / escalate) comes from
+			// RepairPolicy; this block only does I/O. Bounded by MAX_ATTEMPTS.
+			let rs = RepairPolicy.init(artifact.code, artifact.tests);
+			artifact.repairAttempts = artifact.repairAttempts || [];
+			let pytestOutput = '';
+			let parsedTest = { passCount: 0, failCount: 1, allPassed: false };
+			for (let run = 1; run <= RepairPolicy.MAX_ATTEMPTS + 1; run++) {
 				if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
-				yield { type: 'tests_start', moduleId: modId, attempt };
+				yield { type: 'tests_start', moduleId: modId, attempt: run };
 
-				let testResult;
-				let pytestOutput;
-				let parsedTest;
-
-				if (isWebapp) {
-				// Run JS tests in sandboxed iframe
 				try {
-					const result = await _runWebappTests(artifact.code, artifact.tests, _moduleArtifacts.filter(a => a.moduleName !== modId && a.moduleName.endsWith('.js')));
-					pytestOutput = result.output;
-					parsedTest = { passCount: result.passCount, failCount: result.failCount, allPassed: result.allPassed };
+					if (isWebapp) {
+						const result = await _runWebappTests(rs.code, rs.tests, _moduleArtifacts.filter(a => a.moduleName !== modId && a.moduleName.endsWith('.js')));
+						pytestOutput = result.output;
+						parsedTest = { passCount: result.passCount, failCount: result.failCount, allPassed: result.allPassed };
+					} else {
+						const r = await _runPytestFor(safeName);
+						pytestOutput = r.output;
+						parsedTest = r.parsed;
+					}
 				} catch (err) {
 					yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
 					break;
 				}
-				} else {
-				// safeName is declared at per-module scope above — the repair
-				// path below this else branch needs it too.
-				// MUST be left-aligned — leading whitespace here becomes leading
-				// whitespace in the Python source and raises IndentationError.
-				const pytestCode = [
-					'import sys, os',
-					"sys.path.insert(0, '/workdir')",
-					"os.chdir('/workdir')",
-					'for mn in list(sys.modules):',
-					"    if mn == '" + safeName + "' or mn.startswith('" + safeName + ".'):",
-					'        del sys.modules[mn]',
-					'import pytest',
-					"exit_code = pytest.main(['-v', '/workdir/test_" + safeName + ".py', '--tb=short', '--no-header'])",
-					"print('__EXIT_CODE__=' + str(exit_code))",
-				].join('\n');
-							try {
-								testResult = await CodeSmith.sandbox.runPython(pytestCode, { sessionGlobals: true, timeoutMs: 30000 });
-							} catch (err) {
-								yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
-								break;
-							}
-							pytestOutput = (testResult.stdout || '') + (testResult.stderr || '');
-							parsedTest = _parsePytest(pytestOutput);
-							}
-			lastOutput = pytestOutput;
+				lastOutput = pytestOutput;
+				yield {
+					type: 'tests_result', moduleId: modId, attempt: run,
+					passed: parsedTest.allPassed, passCount: parsedTest.passCount,
+					failCount: parsedTest.failCount, output: pytestOutput,
+				};
 
-			yield {
-			type: 'tests_result', moduleId: modId, attempt,
-			passed: parsedTest.allPassed, passCount: parsedTest.passCount,
-			failCount: parsedTest.failCount, output: pytestOutput,
-			};
-
-			if (parsedTest.allPassed && parsedTest.passCount > 0) {
-					passed = true;
-					artifact.status = 'passed';
-					try { await CodeSmith.db.putArtifact(artifact); } catch {}
-					break;
-					}
-					if (_moduleDecisions[modId] === 'bypass') {
+				// User decisions take priority over the policy (unchanged behaviour).
+				if (_moduleDecisions[modId] === 'bypass') {
 					passed = true;
 					artifact.status = 'bypassed';
+					if (_manifest) Manifest.recordDecision(_manifest, safeName + '.py', 'force-pass', 'tests failing: ' + parsedTest.failCount);
 					try { await CodeSmith.db.putArtifact(artifact); } catch {}
 					delete _moduleDecisions[modId];
 					break;
-					}
-					if (_moduleDecisions[modId] === 'skip') {
+				}
+				if (_moduleDecisions[modId] === 'skip') {
 					artifact.status = 'skipped';
+					if (_manifest) Manifest.recordDecision(_manifest, safeName + '.py', 'skip');
 					delete _moduleDecisions[modId];
 					break;
+				}
+
+				rs = RepairPolicy.onResult(rs, parsedTest);
+				// keep the persisted history in step (resultAfter / regressed flags)
+				artifact.repairAttempts = rs.history.map(h => ({ ...h }));
+
+				if (rs.action === 'pass') {
+					passed = true;
+					artifact.code = rs.code; artifact.tests = rs.tests;
+					artifact.status = 'passed';
+					try { await CodeSmith.db.putArtifact(artifact); } catch {}
+					try { CodeSmith.snapshots && CodeSmith.snapshots.take(safeName + (isWebapp ? '' : '.py'), rs.code, 'Stage C passed after ' + rs.attempt + ' repair(s)'); } catch {}
+					if (!isWebapp && rs.attempt > 0) {
+						const broken = await _rerunDependents(safeName, modId);
+						if (broken.length) yield { type: 'repair_failed', moduleId: modId, reason: 'Repair broke dependent module(s): ' + broken.join(', ') + ' — they will be re-checked in integration' };
 					}
-					if (attempt > REPAIR_MAX) break;
+					break;
+				}
 
-			// ---- PATCH-BASED REPAIR ----
-			yield { type: 'repair_start', moduleId: modId, attempt: attempt + 1 };
-			const currentCode = await CodeSmith.sandbox.readFile('/workdir/' + safeName + '.py').catch(() => artifact.code);
-			const currentTests = await CodeSmith.sandbox.readFile('/workdir/test_' + safeName + '.py').catch(() => artifact.tests);
+				if (rs.action === 'revert' || rs.action === 'escalate') {
+					// roll files back to the best version seen so far
+					artifact.code = rs.code; artifact.tests = rs.tests;
+					if (!isWebapp) {
+						try {
+							await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', rs.code);
+							await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', rs.tests);
+						} catch {}
+					}
+					try { await CodeSmith.db.putArtifact(artifact); } catch {}
+					if (rs.action === 'revert') yield { type: 'repair_failed', moduleId: modId, reason: 'Last patch made results worse — reverted to best version' };
+				}
+				if (rs.action === 'escalate') break;
 
-			const patch = await _diagnoseAndPatch(modId, mod, currentCode, currentTests, pytestOutput);
-			yield { type: 'repair_diagnosis', moduleId: modId, attempt: attempt + 1, patch };
+				// ---- ask the worker for a patch, with full RepairContext ----
+				yield { type: 'repair_start', moduleId: modId, attempt: rs.attempt + 1 };
+				const patch = await _diagnoseAndPatchV2({
+					moduleId: modId, mod, isWebapp,
+					code: rs.code, tests: rs.tests, output: pytestOutput,
+					history: rs.history,
+				});
+				yield { type: 'repair_diagnosis', moduleId: modId, attempt: rs.attempt + 1, patch };
 
-			if (!patch || !patch.edits || patch.edits.length === 0) {
-			yield { type: 'repair_failed', moduleId: modId, reason: 'No patches generated' };
-			continue;
+				const entry = {
+					diagnosis: (patch && patch.diagnosis) || '', category: (patch && patch.category) || 'other',
+					before: { passCount: parsedTest.passCount, failCount: parsedTest.failCount },
+					outputTail: String(pytestOutput).slice(-800), at: Date.now(),
+					codeBefore: rs.code, testsBefore: rs.tests,
+				};
+				const edits = (patch && Array.isArray(patch.edits)) ? patch.edits : [];
+				if (!edits.length) {
+					yield { type: 'repair_failed', moduleId: modId, reason: 'No patches generated' };
+					rs = RepairPolicy.recordAttempt(rs, { ...entry, noop: true, codeAfter: rs.code, testsAfter: rs.tests }, rs.code, rs.tests);
+					artifact.repairAttempts = rs.history.map(h => ({ ...h }));
+					continue;
+				}
+				if (RepairPolicy.isRepeat(rs, edits)) {
+					yield { type: 'repair_failed', moduleId: modId, reason: 'Model repeated an earlier patch — not re-applying' };
+					rs = RepairPolicy.recordAttempt(rs, { ...entry, repeat: true, fingerprint: RepairPolicy.fingerprint(edits), codeAfter: rs.code, testsAfter: rs.tests }, rs.code, rs.tests);
+					artifact.repairAttempts = rs.history.map(h => ({ ...h }));
+					continue;
+				}
+
+				const rc = RepairPolicy.applyEdits(rs.code, edits.filter(e => e.target !== 'tests'));
+				const rt = RepairPolicy.applyEdits(rs.tests, edits.filter(e => e.target === 'tests'));
+				for (const er of rc.errors.concat(rt.errors)) yield { type: 'repair_failed', moduleId: modId, reason: 'Patch apply failed: ' + er };
+
+				let newCode = rc.content;
+				let newTests = rt.content;
+				if (RepairPolicy.weakensTests(rs.tests, newTests)) {
+					yield { type: 'repair_failed', moduleId: modId, reason: 'Rejected test edits that removed tests/assertions' };
+					newTests = rs.tests;
+					entry.testEditsRejected = true;
+				}
+				if (!isWebapp) { newCode = _flattenPkgImports(newCode); newTests = _flattenPkgImports(newTests); }
+
+				try {
+					if (!isWebapp) {
+						await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', newCode);
+						await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', newTests);
+					}
+				} catch (err) {
+					yield { type: 'error', stage: 'patch_write', moduleId: modId, error: err };
+					break;
+				}
+				rs = RepairPolicy.recordAttempt(rs, {
+					...entry,
+					fingerprint: RepairPolicy.fingerprint(edits),
+					edits: edits.map(e => ({ target: e.target || 'code', type: e.type, startLine: e.startLine, endLine: e.endLine, afterLine: e.afterLine, reason: e.reason || '' })),
+					applyErrors: rc.errors.concat(rt.errors),
+					codeAfter: newCode, testsAfter: newTests,
+				}, newCode, newTests);
+				artifact.code = newCode;
+				artifact.tests = newTests;
+				artifact.repairAttempts = rs.history.map(h => ({ ...h }));
+				try { await CodeSmith.db.putArtifact(artifact); } catch {}
 			}
-
-			let newCode = currentCode;
-			let newTests = currentTests;
-			for (const edit of patch.edits) {
-			const target = edit.target === 'tests' ? newTests : newCode;
-			const result = _applyPatchEdit(target, edit);
-			if (!result.ok) {
-				yield { type: 'repair_failed', moduleId: modId, reason: 'Patch apply failed: ' + result.error };
-				continue;
-			}
-			if (edit.target === 'tests') newTests = result.newContent;
-			else newCode = result.newContent;
-			}
-
-			try {
-			newCode = _flattenPkgImports(newCode); newTests = _flattenPkgImports(newTests);
-			await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', newCode);
-			await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', newTests);
-			artifact.code = newCode;
-			artifact.tests = newTests;
-			} catch (err) {
-			yield { type: 'error', stage: 'patch_write', moduleId: modId, error: err };
-			break;
-			}
-		}
+			_lastRepairHistory[modId] = rs.history;
 
 		if (passed) {
 			completedModules++;
@@ -5765,6 +6302,7 @@ const StageC = (() => {
 					yield {
 					type: 'module_escalated', moduleId: modId,
 					code: artifact.code, tests: artifact.tests, output: lastOutput,
+					history: _lastRepairHistory[modId] || [],
 					table: SymbolTable.get(),
 					};
 					_state = 'paused';
@@ -5997,7 +6535,104 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     }
   }
 //------------------
+		// ---- Repair helpers (RepairPolicy wiring) ----
+		const _lastRepairHistory = {};   // moduleId -> attempt history (for escalation UI)
+		let _manifest = null;            // ProjectManifest for the current build (set in run())
 
+		async function _runPytestFor(name) {
+			// MUST be left-aligned Python — see note in PHASE 2.
+			const code = [
+				'import sys, os',
+				"sys.path.insert(0, '/workdir')",
+				"os.chdir('/workdir')",
+				'for mn in list(sys.modules):',
+				"    if mn == '" + name + "' or mn.startswith('" + name + ".'):",
+				'        del sys.modules[mn]',
+				'import pytest',
+				"exit_code = pytest.main(['-v', '/workdir/test_" + name + ".py', '--tb=short', '--no-header', '-p', 'no:cacheprovider'])",
+				"print('__EXIT_CODE__=' + str(exit_code))",
+			].join('\n');
+			const r = await CodeSmith.sandbox.runPython(code, { sessionGlobals: true, timeoutMs: 30000 });
+			const output = (r.stdout || '') + (r.stderr || '');
+			return { output, parsed: _parsePytest(output) };
+		}
+
+		// Re-run tests of already-passed modules that import `name`.
+		// Returns the list of dependent module ids that now fail.
+		async function _rerunDependents(name, selfId) {
+			const re = new RegExp('^\\s*(from\\s+' + name + '\\b|import\\s+' + name + '\\b)', 'm');
+			const broken = [];
+			for (const a of _moduleArtifacts) {
+				if (a.moduleName === selfId || a.status !== 'passed' || !re.test(a.code || '')) continue;
+				const dm = _skeleton.modules.find(m => m.id === a.moduleName);
+				if (!dm || (dm.kind && dm.kind !== 'python')) continue;
+				try {
+					const r = await _runPytestFor(dm.name);
+					a.dependentCheck = { after: selfId, passed: r.parsed.allPassed, at: Date.now() };
+					if (!r.parsed.allPassed) broken.push(a.moduleName);
+				} catch { broken.push(a.moduleName); }
+			}
+			return broken;
+		}
+
+		// RepairContext → structured patch. Previous attempts are included so
+		// the model does not repeat itself; code-first fixes are enforced.
+		async function _diagnoseAndPatchV2(ctx) {
+			const ext = ctx.isWebapp ? '.js' : '.py';
+			const num = s => String(s || '').split('\n').map((l, i) => (i + 1) + '\t' + l).join('\n');
+			const specText = JSON.stringify(ctx.mod || {}, null, 1).slice(0, 3000);
+			const hist = (ctx.history || []).map(h =>
+				'- Attempt ' + h.attempt + ': ' + (h.diagnosis || '(no diagnosis)') +
+				(h.noop ? ' [no edits produced]' : '') + (h.repeat ? ' [repeated earlier patch]' : '') +
+				(h.regressed ? ' [MADE THINGS WORSE — reverted]' : '') +
+				(h.testEditsRejected ? ' [test edits rejected: removed assertions]' : '') +
+				(h.resultAfter ? ' → result: ' + h.resultAfter.passCount + ' passed, ' + h.resultAfter.failCount + ' failed' : '') +
+				(h.edits ? '\n    edits: ' + h.edits.map(e => e.target + ':' + e.type + '@' + (e.startLine || e.afterLine) + ' ' + (e.reason || '')).join('; ') : '')
+			).join('\n') || '(none — this is the first repair)';
+
+			const prompt = `Module ${ctx.moduleId} is failing its tests. Produce the MINIMAL set of edits that make the failing tests pass.
+
+ORIGINAL STAGE B SPEC FOR THIS MODULE:
+${specText}
+
+CURRENT SOURCE (${ctx.moduleId}${ext}, line-numbered):
+${num(ctx.code)}
+
+CURRENT TESTS (line-numbered):
+${num(ctx.tests)}
+
+TEST OUTPUT (tail):
+${String(ctx.output || '').slice(-2500)}
+
+PREVIOUS REPAIR ATTEMPTS — do NOT repeat any of these:
+${hist}
+
+Rules:
+- Fix the IMPLEMENTATION, not the tests. Prefer fixing the implementation over weakening tests.
+- Only edit tests ("target":"tests") if a test contradicts the Stage B spec above; never delete tests or assertions.
+- Do not change public API signatures unless the spec requires it.
+- If a previous attempt made things worse, take a different approach.
+- "replace"/"delete": oldCode must equal lines startLine..endLine exactly. "add": newCode inserted after afterLine.
+
+Output ONLY valid JSON (no markdown):
+{"diagnosis":"one-line root cause","category":"syntax|logic|signature|import|exception|test_wrong|other",
+ "edits":[{"target":"code|tests","type":"replace|add|delete","startLine":1,"endLine":1,"afterLine":null,"oldCode":"...","newCode":"...","reason":"..."}]}`;
+
+			try {
+				const result = await CodeSmith.llm.chatComplete({
+					messages: [
+						{ role: 'system', content: 'You are a precise debugger producing minimal line-level patches. Output only valid JSON.' },
+						{ role: 'user', content: prompt },
+					],
+					tier: 'worker',
+					temperature: 0.1,
+					maxTokens: 8000,
+				});
+				return _parseJSON(result.text) || { diagnosis: 'Unparseable patch response', edits: [] };
+			} catch (err) {
+				return { diagnosis: 'Patch generation failed: ' + (err.message || err), edits: [] };
+			}
+		}
 		async function _diagnoseAndPatch(moduleId, mod, code, tests, pytestOutput) {
 			const numberedCode = code.split('\n').map((l, i) => (i + 1) + '\t' + l).join('\n');
 			const numberedTests = tests.split('\n').map((l, i) => (i + 1) + '\t' + l).join('\n');
@@ -6324,9 +6959,33 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 		}, 10000);
 		});
 	}
+		// ---- Validate Project Structure (Stage C button) ----
+		// Builds a manifest from the CURRENT module artifacts and checks:
+		// imports resolve, no circular imports, entry points exist.
+		function validateStructure() {
+			const m = _manifest ? Manifest.restore(Manifest.serialize(_manifest))
+				: (_skeleton ? Manifest.fromSkeleton(_skeleton, _spec || {}) : Manifest.create());
+			Manifest.addStdlib([..._STDLIB_MODULES]);
+			for (const a of _moduleArtifacts) {
+				const mod = _skeleton && _skeleton.modules.find(x => x.id === a.moduleName);
+				if (!mod) continue;
+				const kind = mod.kind || 'python';
+				const path = kind === 'python' ? mod.name + '.py' : (mod.name || a.moduleName);
+				if (a.code) Manifest.setFile(m, path, a.code, 'source');
+				if (a.tests && kind === 'python') Manifest.setFile(m, 'tests/test_' + mod.name + '.py', a.tests, 'test');
+				for (const p of (a._imports || [])) {
+					const k = String(p).split(/[=<>~!\[\s]/)[0].trim();
+					if (k && !m.dependencies[k]) m.dependencies[k] = 'any';
+				}
+			}
+			m.buildOrder = Manifest.topoSort(Manifest.buildGraph(m)).order;
+			return { manifest: Manifest.serialize(m), diagnostics: Manifest.validate(m) };
+		}
+		function getManifest() { return _manifest ? Manifest.serialize(_manifest) : null; }
+		function getRepairHistory(modId) { return (_lastRepairHistory[modId] || []).slice(); }
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  return { run, getState, getModuleStates, getBuildSkeleton, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision };
+  return { run, getState, getModuleStates, getBuildSkeleton, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision, validateStructure, getManifest, getRepairHistory };
 })();
 CodeSmith.stageC = StageC;
 
@@ -10192,6 +10851,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       CodeSmith.stageC.stop();
     });
     $('#btn-sc-symtable').addEventListener('click', _showSymbolTable);
+	    $('#btn-sc-validate').addEventListener('click', _scValidateStructure);
         // Pass explicit booleans — a bare handler receives the click Event as the
     // first arg, and an Event is truthy, so isDraft was always true.
     $('#btn-sc-download-all').addEventListener('click', () => _scDownloadAll(false));
@@ -10237,7 +10897,37 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       CodeSmith.stageC.resume();
     });
   }
+	// ---- Validate Project Structure → diagnostics panel + Stage C log ----
+	function _scValidateStructure() {
+		let res;
+		try { res = CodeSmith.stageC.validateStructure(); }
+		catch (err) { _scLog('Structure check failed: ' + (err.message || err), 'log-fail'); return; }
+		const diags = res.diagnostics;
+		const errs = diags.filter(d => d.severity === 'error').length;
+		const warns = diags.filter(d => d.severity === 'warning').length;
+		_scLog('Structure: ' + Object.keys(res.manifest.files).length + ' files, build order ' + res.manifest.buildOrder.join(' → '));
+		if (!diags.length) _scLog('✓ Project structure valid — all imports resolve, no cycles, entry points present', 'log-pass');
+		for (const d of diags) _scLog((d.severity === 'error' ? '✗ ' : '⚠ ') + (d.file || 'project') + (d.line ? ':' + d.line : '') + ' — ' + d.message, d.severity === 'error' ? 'log-fail' : 'log-warn');
 
+		const panel = document.getElementById('diagnostics-panel');
+		const list = document.getElementById('diagnostics-list');
+		if (!panel || !list) return;
+		const errEl = document.getElementById('diag-error-count');
+		const warnEl = document.getElementById('diag-warn-count');
+		if (errEl) { errEl.hidden = !errs; errEl.textContent = errs + ' errors'; }
+		if (warnEl) { warnEl.hidden = !warns; warnEl.textContent = warns + ' warnings'; }
+		list.replaceChildren();
+		for (const d of diags) {
+			// textContent only — messages contain model-generated import names.
+			const item = el('div', { class: 'diag-item' });
+			const icon = el('span', { class: 'diag-icon' }); icon.textContent = d.severity === 'error' ? '🔴' : d.severity === 'warning' ? '🟡' : '🔵';
+			const loc = el('span', { class: 'diag-loc' }); loc.textContent = (d.file || 'project') + ':' + (d.line || 0);
+			const msg = el('span', { class: 'diag-msg' }); msg.textContent = d.message;
+			item.append(icon, loc, msg);
+			list.appendChild(item);
+		}
+		panel.hidden = diags.length === 0;
+	}
   function _scLog(text, cls) {
     const log = $('#sc-log');
     const entry = el('div', { class: 'log-entry ' + (cls || 'log-info') });
