@@ -4263,8 +4263,21 @@ const StageA = (() => {
     _messages = [];
     _assumptions = {};
     _ready = false;
-    // Seed goal from user's initial request
-    if (initialPrompt) _spec.goal = initialPrompt;
+    // Seed from the user's initial request. If it is a JSON spec, merge
+    // its fields directly instead of hoping the model copies them over.
+    if (initialPrompt) {
+      let seeded = false;
+      try {
+        const m = String(initialPrompt).match(/\{[\s\S]*\}/);
+        const obj = m ? JSON.parse(m[0]) : null;
+        if (obj && typeof obj === 'object' && !Array.isArray(obj) &&
+            ('goal' in obj || 'core_operations' in obj || 'acceptance_criteria' in obj)) {
+          _mergeSpec(obj);
+          seeded = true;
+        }
+      } catch {}
+      if (!seeded) _spec.goal = initialPrompt;
+    }
   }
 
   function getSpec() { return JSON.parse(JSON.stringify(_spec || EMPTY_SPEC)); }
@@ -4981,7 +4994,9 @@ REQUIRED JSON SCHEMA:
 	0. SANDBOX: Code runs in Pyodide (browser WASM Python). Do NOT use: real network calls (requests/urllib/socket), subprocess, threading, multiprocessing, GUI libraries (tkinter/PyQt), or C extensions. For tests, use local data/fixtures, never live HTTP.
 	2. Use exact signatures from the symbol table for dependency calls.
 	3. If you genuinely need a symbol not in the table, list it in requested_symbols. Do not use it until approved.
-	4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises.
+	4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises. For any numerical function, also at least one REFERENCE test that compares against an independent result (analytic formula, scipy routine, or a known special case such as order=1 reducing to the classical method) with an explicit tolerance taken from project_requirements.tests or acceptance_criteria when given. Never test a function only against its own output.
+	4b. Imports: import project modules plainly (e.g. `from models import X`). Never wrap project imports in try/except, and never define fallback copies of shared types; a failed import must fail loudly.
+	4c. Write the simplest correct implementation. No speculative options, no duplicate validation layers, no wrapper functions that only forward arguments. If a shared state must be integrated jointly (e.g. coupled ODE states), take vector inputs rather than iterating single-state solves.
 	5. PEP 8; type hints on public functions.
 	6. Do not catch exceptions you cannot handle meaningfully.
 	7. If the user provides REFERENCE DOCS, use the latest API signatures from those docs — not outdated patterns.
@@ -5019,7 +5034,7 @@ Acceptance criteria:
 Requirements:
 - Import every module listed above
 - Write at least 3 tests: (1) end-to-end happy path through the data_flow, (2) cross-module integration testing the main use case, (3) one criterion-based test per acceptance_criterion
-- Verify outputs match acceptance_criteria
+- Verify outputs match acceptance_criteria. Items marked TEST: must each become a test with the exact tolerance stated. Items marked SAFETY: must each become a test that asserts the code refuses or raises.
 - Use realistic dummy data, not just None/empty values
 
 Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). Runnable with: pytest test_integration.py -v`;
@@ -5294,7 +5309,11 @@ const StageC = (() => {
 			const workOrder = {
 				// Project-level requirements. Without these the worker writes to a
 				// bare signature and produces minimal, untargeted implementations.
-				project_goal: _spec.goal || '',
+				project_goal: _spec.goal || _spec.description || (_skeleton && _skeleton.summary) || '',
+				// Every non-core spec key (package_structure, tests, safety_rules,
+				// stage_api, v1_scope_corrections, config_policy …). Previously dropped.
+				project_requirements: Object.fromEntries(Object.entries(_spec)
+					.filter(([k]) => !(k in EMPTY_SPEC))),
 				acceptance_criteria: _spec.acceptance_criteria || [],
 				constraints: _spec.constraints || {},
 				non_goals: _spec.non_goals || [],
@@ -5503,6 +5522,7 @@ const StageC = (() => {
 				outputFilename = safeName + '.py';
 			}
 			try {
+								if (!isWebapp) { workerResult.code = _flattenPkgImports(workerResult.code); workerResult.tests = _flattenPkgImports(workerResult.tests); }
 				await CodeSmith.sandbox.writeFile('/workdir/' + outputFilename, workerResult.code);
 				if (workerResult.tests && !isWebapp) {
 				await CodeSmith.sandbox.writeFile('/workdir/test_' + (mod.name) + '.py', workerResult.tests);
@@ -5723,6 +5743,7 @@ const StageC = (() => {
 			}
 
 			try {
+			newCode = _flattenPkgImports(newCode); newTests = _flattenPkgImports(newTests);
 			await CodeSmith.sandbox.writeFile('/workdir/' + safeName + '.py', newCode);
 			await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', newTests);
 			artifact.code = newCode;
@@ -5903,7 +5924,30 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
       // Targeted repair: let orchestrator pick culprit
       // (simplified: just retry with error context)
     }
-
+    // ---- Whole-suite gate: every test file must load and pass ----
+    if (integrationPassed && !_isWebapp(_spec)) {
+      let suiteOk = false;
+      try {
+        const r = await CodeSmith.sandbox.runPython(
+			`import sys, os, glob
+			sys.path.insert(0, '/workdir')
+			os.chdir('/workdir')
+			import pytest
+			exit_code = pytest.main(['-q', '--tb=line', '--no-header'] + sorted(glob.glob('/workdir/test_*.py')))
+			print('__EXIT_CODE__=' + str(exit_code))`, { sessionGlobals: true, timeoutMs: 120000 });
+					const out = (r.stdout || '') + (r.stderr || '');
+					const p = _parsePytest(out);
+					suiteOk = p.allPassed && /__EXIT_CODE__=0/.test(out);
+					yield { type: 'log', message: 'Full suite: ' + p.passCount + ' passed, ' + p.failCount + ' failed/errors' + (suiteOk ? '' : '\n' + out.slice(-3000)) };
+				} catch (err) {
+					yield { type: 'error', stage: 'suite_gate', error: err };
+				}
+				const weak = _moduleArtifacts.filter(a => a.moduleName !== '_shared' && a.status !== 'passed').map(a => a.moduleName + ':' + a.status);
+				if (!suiteOk || weak.length) {
+					integrationPassed = false;
+					yield { type: 'error', stage: 'suite_gate', error: new Error('Build not complete. ' + (!suiteOk ? 'Full pytest suite failed. ' : '') + (weak.length ? 'Unverified modules: ' + weak.join(', ') : '')) };
+				}
+				}
     if (integrationPassed) {
       _state = 'complete';
       yield { type: 'build_complete', modules: _moduleArtifacts.length, table: SymbolTable.get() };
@@ -5920,7 +5964,11 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     })), null, 2);
     const dataFlowJson = JSON.stringify(_skeleton.data_flow || [], null, 2);
     const dummyInputs = _spec.inputs ? JSON.stringify(_spec.inputs) : '{}';
-    const criteria = JSON.stringify(_spec.acceptance_criteria || []);
+    const criteria = JSON.stringify([].concat(
+      _spec.acceptance_criteria || [],
+      Array.isArray(_spec.tests) ? _spec.tests.map(t => 'TEST: ' + t) : [],
+      Array.isArray(_spec.safety_rules) ? _spec.safety_rules.map(r => 'SAFETY: ' + r) : []
+    ));
 
     const prompt = STAGE_C_INTEGRATION_PROMPT
       .replace('{MODULES_JSON}', modsJson)
@@ -6089,6 +6137,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 							outputFilename = safeName + '.py';
 						}
 				try {
+					if (!isWebapp) { parsed.code = _flattenPkgImports(parsed.code); parsed.tests = _flattenPkgImports(parsed.tests); }
 					await CodeSmith.sandbox.writeFile('/workdir/' + outputFilename, parsed.code);
 					if (parsed.tests && !isWebapp) {
 					await CodeSmith.sandbox.writeFile('/workdir/test_' + mod.name + '.py', parsed.tests);
@@ -6141,7 +6190,32 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     // Returns data needed to re-attempt the escalated module
     return { moduleId, code: editedCode, tests: editedTests };
   }
-
+			// Files are written flat (/workdir/data.py), but workers often import
+			// dotted names (foturbine.data). Rewrite imports to match the files.
+			let _pkgPrefixCache = null;
+			function _pkgPrefixes() {
+				if (_pkgPrefixCache) return _pkgPrefixCache;
+				const set = new Set();
+				for (const m of (_skeleton && _skeleton.modules) || []) {
+					const parts = String(m.name || '').split('.');
+					if (parts.length > 1) set.add(parts[0]);
+				}
+				if (_spec && _spec.project_name) set.add(String(_spec.project_name).replace(/\W+/g, '_'));
+				if (_spec && _spec.package_name) set.add(String(_spec.package_name).replace(/\W+/g, '_'));
+				_pkgPrefixCache = [...set].filter(Boolean);
+				return _pkgPrefixCache;
+			}
+			function _flattenPkgImports(src) {
+				if (!src) return src;
+				let out = String(src);
+				for (const P of _pkgPrefixes()) {
+					const e = P.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+					out = out.replace(new RegExp('^(\\s*)from ' + e + ' import ', 'gm'), '$1import ');
+					out = out.replace(new RegExp('^\\s*import ' + e + '\\s*$', 'gm'), '');
+					           out = out.replace(new RegExp('\\b' + e + '\\.(?=[A-Za-z_])(?!(?:py|pyc|yaml|yml|json|csv|txt|md|toml|cfg|ini|log|pdf|png)\\b)', 'g'), '');
+				}
+				return out;
+			}
    function _sanitizeModuleName(name) {
        if (!name) return 'module';
        name = String(name).split(/[.\/\\]/).filter(Boolean).pop() || name;
@@ -9622,6 +9696,9 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		const skel = CodeSmith.stageB.getSkeleton();
 		const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec();
 		if (!skel) return;
+				const _blank = v => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
+		const _missing = ['goal', 'core_operations'].filter(k => _blank(spec && spec[k]));
+		if (_missing.length && !confirm('Spec has empty fields: ' + _missing.join(', ') + '. Save anyway?')) return;
 		const bundle = { version: 1, spec, skeleton: skel, mermaidDef: CodeSmith.stageB.getMermaidDef(), exportedAt: Date.now() };
 		const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
 		const a = document.createElement('a');
@@ -9639,10 +9716,26 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			const text = await file.text();
 			const bundle = JSON.parse(text);
 			if (!bundle.skeleton || !bundle.skeleton.modules) throw new Error('Invalid skeleton bundle');
+						// Repair blank core spec fields from older saves. The real content
+			// often survives in description / skeleton.summary / extra keys.
+			if (bundle.spec) {
+				const s = bundle.spec;
+				const blank = v => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
+				if (blank(s.goal)) s.goal = s.description || bundle.skeleton.summary || '';
+				const emptyCore = ['goal', 'core_operations', 'non_goals'].filter(k => blank(s[k]))
+					.concat(blank(s.inputs && s.inputs.format) ? ['inputs'] : [])
+					.concat(blank(s.constraints && s.constraints.libraries_allowed) ? ['constraints'] : []);
+				if (emptyCore.length) {
+					alert('Imported spec has empty fields: ' + emptyCore.join(', ') +
+						'.\nThe build will rely on the extra spec keys. Use "Request changes" to refill them if needed.');
+				}
+			}
 			if (bundle.spec) {
 			CodeSmith.stageA.setSpec(bundle.spec);
 			_renderSpecCard(bundle.spec, {});
 			}
+			_skelGenToken++;               // cancel any in-flight generation
+			_lastImportedBundle = bundle;
 			CodeSmith.stageB.setSkeleton(bundle.skeleton, bundle.spec, bundle.mermaidDef);
 			_showStep('b');
 			// Re-render the mermaid + module list
@@ -9861,14 +9954,35 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 
 	
 
+	  // Bumped by every generation and every import. A generation whose
+	  // token is stale when it finishes is discarded, so it can't overwrite
+	  // a skeleton the user loaded in the meantime.
+	  let _skelGenToken = 0;
+	  let _lastImportedBundle = null;
+
+	  function _specIsEmpty(spec) {
+		const blank = v => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
+		return !spec || (blank(spec.goal) && blank(spec.core_operations));
+	  }
+
 	  async function _transitionToB() {
 		const spec = CodeSmith.stageA.getSpec();
 		  console.log('[StageB] Spec passed to skeleton:', JSON.stringify(spec).slice(0, 500));
 		_showStep('b');
+		if (_specIsEmpty(spec)) {
+		  // Nothing to design from: wait for Load JSON or an explicit Regenerate.
+		  const container = $('#mermaid-container');
+		  container.innerHTML = '';
+		  container.appendChild(el('div', { style: 'padding:16px;color:#8b92a1;font-size:13px;' },
+			'No spec yet. Click 📂 Load JSON to open a saved skeleton, or go back to Stage A to describe the project.'));
+		  $('#stage-b-module-list').replaceChildren();
+		  return;
+		}
 		await _generateSkeleton();
 	  }
 
 	async function _generateSkeleton() {
+	    const _myToken = ++_skelGenToken;
 	    const spec = CodeSmith.stageA.getSpec();
 	    const container = $('#mermaid-container');
 	    const moduleList = $('#stage-b-module-list');
@@ -9904,6 +10018,15 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 	
 	      clearInterval(dotInterval);
 	      container.style.alignItems = '';
+	      if (_myToken !== _skelGenToken) {
+	        // A skeleton was imported (or a newer generation started) meanwhile.
+	        // stageB.generate already overwrote its internal skeleton, so restore the import.
+	        if (_lastImportedBundle) {
+	          const b = _lastImportedBundle;
+	          CodeSmith.stageB.setSkeleton(b.skeleton, b.spec, b.mermaidDef);
+	        }
+	        return;
+	      }
 	
 	      // Warn if too many modules
 	      $('#stage-b-warn').hidden = !skeleton.modules || skeleton.modules.length <= 10;
@@ -10699,11 +10822,19 @@ case 'symbols_requested':
 				'[tool.setuptools]\n' +
 				'py-modules = [' + arts.map(a => '"' + (a.moduleName || a.id) + '"').join(', ') + ']\n'
 			);
+						// tests/ must be able to import the flat modules at the project root
+			testsDir.file('conftest.py', 'import os, sys\nsys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))\n');
+			const _specText = JSON.stringify(spec || {});
+			if (/\bMIT\b/.test(_specText)) {
+				zip.file('LICENSE', 'MIT License\n\nCopyright (c) ' + new Date().getFullYear() + ' ' + (spec.project_name || 'Authors') + '\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n');
+			}
+			const _entryName = /run_all\.py/.test(_specText) ? 'run_all.py' : 'run.py';
 			zip.file('.gitignore', `__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n*.egg-info/\ndist/\nbuild/\n.env\nvenv/\n`);
 
 			// Generate run.py + README via orchestrator
 			const fullCode = arts.map(a => '# === ' + a.moduleName + '.py ===\n' + (a.code || '')).join('\n\n');
-				const runPyPrompt = ['You have access to the full source of a Python package. Write a single run.py file at the top level that:',
+				const runPyPrompt = ['You have access to the full source of a Python package. Write a single ' + _entryName + ' file at the top level that:',
+					'0. If the spec defines stage_api or a run_all pipeline, call those stage functions in order, write every result file, and exit non-zero on failure. Spec requirements: ' + JSON.stringify(Object.fromEntries(Object.entries(spec || {}).filter(([k]) => !(k in EMPTY_SPEC)))).slice(0, 3000),
 					'1. Imports the package\'s entry function (look at the modules below — find the main orchestrator function)',
 					'2. Defines 1-3 SAMPLES dicts with realistic input matching the actual function signature and the spec\'s example data',
 					'3. Has a main() that takes optional sys.argv[1] to pick a sample, defaults to running all',
@@ -10731,7 +10862,7 @@ case 'symbols_requested':
 					runPy = (r.text || '').trim();
 					if (runPy.startsWith('```')) runPy = runPy.replace(/^```(?:python)?\s*\n?/, '').replace(/\n?```\s*$/, '');
 					} catch {}
-					if (runPy) zip.file('run.py', runPy);
+					if (runPy) zip.file(_entryName, runPy);
 
 				const readmePrompt = ['Write a README.md for this Python project. The user is non-technical. Required sections in this exact order:',
 					'1. # Title (one line)',
@@ -10746,7 +10877,7 @@ case 'symbols_requested':
 					'Has run.py: ' + !!runPy,
 					'Spec goal: ' + (spec.goal || '')
 				].join('\n');
-					let readme = '# ' + (spec.goal || 'CodeSmith Project') + '\n\nRun: `python run.py`\n';
+					let readme = '# ' + (spec.goal || spec.description || 'CodeSmith Project') + '\n\nRun: `python run.py`\n';
 					const attribution = '\n\n---\n_Generated with [CodeSmith](https://khalecl.github.io/codesmith/) by Khaled Diab._\n';
 
 					try {
@@ -13945,7 +14076,16 @@ case 'symbols_requested':
 		      } catch {}
 		    }, 800);
 		  }
-
+		  // Immediate save, used by Ctrl/Cmd+S (was called but never defined).
+		  function _saveWorkspaceNow() {
+		    clearTimeout(_persistTimer);
+		    try {
+		      const data = CodeSmith.explorer.serialize();
+		      if (data.files && Object.keys(data.files).length > 0) {
+		        CodeSmith.db.putArtifact({ id: 'explorer_workspace', createdAt: Date.now(), ...data }).catch(() => {});
+		      }
+		    } catch {}
+		  }
 		  async function _restoreWorkspace() {
 		    try {
 		      const rec = await CodeSmith.db.getArtifact('explorer_workspace');
