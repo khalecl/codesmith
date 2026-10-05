@@ -4995,7 +4995,7 @@ REQUIRED JSON SCHEMA:
 	2. Use exact signatures from the symbol table for dependency calls.
 	3. If you genuinely need a symbol not in the table, list it in requested_symbols. Do not use it until approved.
 	4. pytest tests: happy path, 1 edge case, 1 error case if spec declares raises. For any numerical function, also at least one REFERENCE test that compares against an independent result (analytic formula, scipy routine, or a known special case such as order=1 reducing to the classical method) with an explicit tolerance taken from project_requirements.tests or acceptance_criteria when given. Never test a function only against its own output.
-	4b. Imports: import project modules plainly (e.g. `from models import X`). Never wrap project imports in try/except, and never define fallback copies of shared types; a failed import must fail loudly.
+	4b. Imports: import project modules plainly (e.g. from models import X). Never wrap project imports in try/except, and never define fallback copies of shared types; a failed import must fail loudly.
 	4c. Write the simplest correct implementation. No speculative options, no duplicate validation layers, no wrapper functions that only forward arguments. If a shared state must be integrated jointly (e.g. coupled ODE states), take vector inputs rather than iterating single-state solves.
 	5. PEP 8; type hints on public functions.
 	6. Do not catch exceptions you cannot handle meaningfully.
