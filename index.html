@@ -5310,25 +5310,41 @@ const StageC = (() => {
 				? STAGE_C_WEBAPP_WORKER_SYSTEM.replace('{style_brief}', _spec.style_brief || 'No specific style — use clean, modern defaults.')
 				: STAGE_C_WORKER_SYSTEM;
 
-			let workerResult = null;
+				let workerResult = null;
 			let workerError = null;
 			let workerText = '';
-			try {
-				for await (const ev of CodeSmith.llm.chat({
-				messages: [
-					{ role: 'system', content: workerSystem },
-					{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
-				],
-								tier: 'worker', temperature: 0.2, maxTokens: 32000,
-				})) {
-				
-			if (ev.type === 'token') {
-				workerText += ev.delta;
-				yield { type: 'worker_stream', moduleId: modId, delta: ev.delta };
-			} else if (ev.type === 'done') { workerText = ev.text || workerText; }
-			else if (ev.type === 'error' && !ev.recoverable) workerError = ev.error;
+			let lastSoftError = null;
+			// Recoverable errors (first-byte timeout, network, 502) used to be dropped,
+			// leaving workerText empty → misleading "Empty response". Retry instead.
+			for (let wTry = 0; wTry < 3 && !workerText.trim() && !workerError; wTry++) {
+				if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
+				if (wTry > 0) {
+					yield { type: 'log', message: '  ↻ ' + modId + ': retry ' + wTry + '/2 after: ' + (lastSoftError ? lastSoftError.message : 'empty stream') };
+					await _sleep(5000 * wTry);
+				}
+				workerText = '';
+				lastSoftError = null;
+				try {
+					for await (const ev of CodeSmith.llm.chat({
+						messages: [
+							{ role: 'system', content: workerSystem },
+							{ role: 'user', content: 'Work order:\n' + JSON.stringify(workOrder, null, 2) },
+						],
+						tier: 'worker', temperature: 0.2, maxTokens: 32000,
+						timeoutMs: 420000, // time-to-first-byte; Kimi thinking on big work orders exceeds 180s
+					})) {
+						if (ev.type === 'token') {
+							workerText += ev.delta;
+							yield { type: 'worker_stream', moduleId: modId, delta: ev.delta };
+						} else if (ev.type === 'done') { workerText = ev.text || workerText; }
+						else if (ev.type === 'error') {
+							if (ev.recoverable) lastSoftError = ev.error;
+							else workerError = ev.error;
+						}
+					}
+				} catch (err) { workerError = err; }
 			}
-		} catch (err) { workerError = err; }
+			if (!workerError && !workerText.trim() && lastSoftError) workerError = lastSoftError;
 
 		if (workerError) {
 			yield { type: 'error', stage: 'worker', moduleId: modId, error: workerError };
@@ -6118,8 +6134,9 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
     return { moduleId, code: editedCode, tests: editedTests };
   }
 
-	function _sanitizeModuleName(name) {
-		if (!name) return 'module';
+   function _sanitizeModuleName(name) {
+       if (!name) return 'module';
+       name = String(name).split(/[.\/\\]/).filter(Boolean).pop() || name;
 		let clean = String(name).trim().toLowerCase()
 		.replace(/[\s-]+/g, '_')
 		.replace(/[^a-z0-9_]/g, '')
