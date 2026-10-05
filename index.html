@@ -3313,6 +3313,9 @@ tb
   async function writeFile(path, content) {
     if (typeof path !== 'string') throw new TypeError('writeFile: path must be a string');
     await warmUp();
+    // Create parent folders so nested paths (src/pkg/x.py, tests/...) work.
+    const _dir = path.slice(0, path.lastIndexOf('/'));
+    if (_dir) { try { _pyodide.FS.mkdirTree(_dir); } catch {} }
     _pyodide.FS.writeFile(path, content);
   }
 
@@ -5311,10 +5314,12 @@ const Manifest = (() => {
     const oldMod = pyModuleName(a), newMod = pyModuleName(b);
     const esc = oldMod.replace(/\./g, '\\.');
     const reFrom = new RegExp('^(\\s*from\\s+)' + esc + '(\\s+import\\s)', 'gm');
-    const reImp = new RegExp('^(\\s*import\\s+)' + esc + '(\\s|$|,)', 'gm');
+    // "import util" keeps working after a move: becomes "import pkg.util as util".
+    const reImp = new RegExp('^(\\s*import\\s+)' + esc + '(\\s+as\\s+\\w+)?(?=\\s*$|\\s*,)', 'gm');
+    const impRepl = (all, pre, alias) => pre + newMod + (alias || (oldMod.includes('.') ? '' : ' as ' + oldMod));
     for (const g of Object.values(m.files)) {
       if (g.language !== 'python') continue;
-      g.content = g.content.replace(reFrom, '$1' + newMod + '$2').replace(reImp, '$1' + newMod + '$2');
+      g.content = g.content.replace(reFrom, '$1' + newMod + '$2').replace(reImp, impRepl);
     }
     m.testFiles = m.testFiles.map(t => t === a ? b : t);
     m.entryPoints = m.entryPoints.map(t => t === a ? b : t);
@@ -5331,7 +5336,8 @@ const Manifest = (() => {
   function restore(o) { if (!o) return null; const m = { ...create(), ...o }; m._declaredEdges = o.declaredEdges || {}; delete m.declaredEdges; return m; }
 
   return { create, fromSkeleton, setFile, removeFile, moveFile, extractImports, resolveImport, buildGraph,
-    topoSort, findCycles, validate, recordDecision, pyModuleName, addStdlib, serialize, restore };
+    topoSort, findCycles, validate, recordDecision, pyModuleName, addStdlib, serialize, restore,
+    isStdlib: (n) => _STDLIB.has(String(n).split('.')[0]) };
 })();
 CodeSmith.manifest = Manifest;
 
@@ -5490,7 +5496,7 @@ CodeSmith.coreSelfTest = function coreSelfTest() {
     M.setFile(m, 'main.py', 'from util import X\nimport util');
     M.setFile(m, 'pkg/__init__.py', '');
     M.moveFile(m, 'util.py', 'pkg/util.py');
-    eq(m.files['main.py'].content, 'from pkg.util import X\nimport pkg.util');
+    eq(m.files['main.py'].content, 'from pkg.util import X\nimport pkg.util as util');
     eq(M.validate(m).filter(d => d.code === 'import-unresolved'), []);
   });
   t('applyEdits: bottom-up keeps line numbers valid', () => {
@@ -5805,7 +5811,7 @@ const StageC = (() => {
 		_moduleStates[modId] = 'building';
 		yield { type: 'module_start', moduleId: modId, progress: completedModules + '/' + totalModules, phase: 'build' };
 
-			const isWebapp = _spec.target_type === 'webapp';
+			const isWebapp = _isWebapp(_spec);
 			const depCode = SymbolTable.getDependencyCode(modId, _skeleton, _moduleArtifacts);
 			const dummyInputs = (_spec.inputs && _spec.inputs.example) ? _spec.inputs.example : '';
 			const workOrder = {
@@ -6136,7 +6142,7 @@ const StageC = (() => {
 		let passed = false;
 		let lastOutput = '';
 
-		const isWebapp = _spec.target_type === 'webapp';
+		const isWebapp = _isWebapp(_spec);
 
 			// Skip tests for HTML and CSS modules in webapp builds — they have no executable logic
 			if (isWebapp && (mod.kind === 'html' || mod.kind === 'css' || !artifact.tests)) {
@@ -6968,20 +6974,24 @@ Output ONLY valid JSON (no markdown):
 			Manifest.addStdlib([..._STDLIB_MODULES]);
 			for (const a of _moduleArtifacts) {
 				const mod = _skeleton && _skeleton.modules.find(x => x.id === a.moduleName);
-				if (!mod) continue;
-				const kind = mod.kind || 'python';
-				const path = kind === 'python' ? mod.name + '.py' : (mod.name || a.moduleName);
+				const kind = (mod && mod.kind) || 'python';
+				const base = mod ? mod.name : String(a.moduleName || '');   // e.g. _shared has no skeleton entry
+				if (!base) continue;
+				const path = kind === 'python' ? (base.endsWith('.py') ? base : base + '.py') : base;
 				if (a.code) Manifest.setFile(m, path, a.code, 'source');
-				if (a.tests && kind === 'python') Manifest.setFile(m, 'tests/test_' + mod.name + '.py', a.tests, 'test');
+				if (a.tests && kind === 'python') Manifest.setFile(m, 'tests/test_' + path.split('/').pop(), a.tests, 'test');
 				for (const p of (a._imports || [])) {
 					const k = String(p).split(/[=<>~!\[\s]/)[0].trim();
-					if (k && !m.dependencies[k]) m.dependencies[k] = 'any';
+					if (k && !Manifest.isStdlib(k) && !m.dependencies[k]) m.dependencies[k] = 'any';
 				}
+				if (a.status === 'bypassed') Manifest.recordDecision(m, path, 'force-pass');
+				if (a.status === 'skipped') Manifest.recordDecision(m, path, 'skip');
 			}
 			m.buildOrder = Manifest.topoSort(Manifest.buildGraph(m)).order;
 			return { manifest: Manifest.serialize(m), diagnostics: Manifest.validate(m) };
 		}
-		function getManifest() { return _manifest ? Manifest.serialize(_manifest) : null; }
+		// Always rebuilt from the live artifacts, so it can never drift from them.
+		function getManifest() { return _skeleton ? validateStructure().manifest : null; }
 		function getRepairHistory(modId) { return (_lastRepairHistory[modId] || []).slice(); }
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -10813,6 +10823,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 			mermaidDef: CodeSmith.stageB.getMermaidDef(),
 		  };
 		}
+		try { const _mf = CodeSmith.stageC.getManifest(); if (_mf) sess.manifest = _mf; } catch {}
 		await CodeSmith.db.putSession(sess);
 	  }
 	  // ---- Day 6: Stage C multi-module UI wiring ------------------------------
@@ -11298,6 +11309,7 @@ case 'symbols_requested':
             break;
 			case 'build_complete':
 				_scLog('BUILD COMPLETE — ' + ev.modules + ' modules', 'log-pass');
+				_persistStageState().catch(() => {});
 				$('#btn-sc-download-all').hidden = false;
 				// Add Run button
 					const runBtn = el('button', { class: 'btn btn-primary', style: 'font-size:12px;', id: 'btn-sc-run' }, '▶ Run it');
@@ -11396,7 +11408,8 @@ case 'symbols_requested':
 		const zip = new JSZip();
 		const testsDir = zip.folder('tests');
 
-		const isWebapp = (CodeSmith.stageA.getSpec() || {}).target_type === 'webapp';
+		const _tt = ((CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec() || {}).target_type) || '';
+		const isWebapp = _tt === 'webapp' || _tt === 'single_page_webapp';
 			const skel = CodeSmith.stageB.getSkeleton();
 			const spec = CodeSmith.stageB.getApprovedSpec() || CodeSmith.stageA.getSpec() || {};
 
@@ -11460,24 +11473,34 @@ case 'symbols_requested':
 			URL.revokeObjectURL(webappUrl);
 			return;
 			}
-
 			// ===== PYTHON BRANCH =====
+			// File names come from the skeleton (mod.name), matching what Stage C
+			// wrote to /workdir and what the modules import. Local modules are
+			// excluded from requirements.txt.
+			const _mf = (() => { try { return CodeSmith.stageC.getManifest(); } catch { return null; } })();
+			const _localMods = new Set(['_shared']);
+			const _artName = (a) => {
+				const sm = skel ? (skel.modules || []).find(m => m.id === a.moduleName) : null;
+				return String((sm && sm.name) || a.moduleName || a.id).replace(/\.py$/, '');
+			};
+			for (const a of arts) _localMods.add(_artName(a).split('/')[0]);
 			const allImports = new Set();
 			for (const a of arts) {
-			const name = a.moduleName || a.id;
+			const name = _artName(a);
 			zip.file(name + '.py', a.code || '');
-			if (a.tests) testsDir.file('test_' + name + '.py', a.tests);
-			const matches = (a.code || '').matchAll(/^(?:import|from)\s+(\w+)/gm);
+			if (a.tests) testsDir.file('test_' + name.split('/').pop() + '.py', a.tests);
+			const matches = (a.code || '').matchAll(/^\s*(?:import|from)\s+(\w+)/gm);
 			for (const m of matches) {
 				const pkg = m[1];
-				if (!['sys','os','json','re','math','datetime','collections','itertools','functools',
-					'pathlib','typing','dataclasses','enum','abc','io','csv','string','textwrap',
-					'unittest','pytest','copy','operator','contextlib','warnings'].includes(pkg)) {
+				if (_localMods.has(pkg)) continue;
+				if (CodeSmith.manifest && CodeSmith.manifest.isStdlib(pkg)) continue;
 				allImports.add(pkg);
-				}
 			}
 			}
-
+			if (_mf) {
+				for (const d of Object.keys(_mf.dependencies || {})) if (!_localMods.has(d)) allImports.add(d);
+				zip.file('manifest.json', JSON.stringify(_mf, null, 2));
+			}
 			try {
 			const integCode = await CodeSmith.sandbox.readFile('/workdir/test_integration.py');
 			if (integCode) testsDir.file('test_integration.py', integCode);
@@ -13139,6 +13162,60 @@ case 'symbols_requested':
 			CodeSmith.explorer.addFile(filename, text);
 		}
 		}
+		
+				// ---- Explorer folder tree (Pass 2) ----
+		// Explorer keys files by path ("src/pkg/util.py"); the tree groups them
+		// into collapsible folders. Collapsed state lives for the session only.
+		const _ftreeCollapsed = new Set();
+		function _ftreeHidden(dir, inclusive) {
+			if (!dir) return false;
+			const parts = dir.split('/');
+			const upto = inclusive ? parts.length : parts.length - 1;
+			for (let i = 1; i <= upto; i++) if (_ftreeCollapsed.has(parts.slice(0, i).join('/'))) return true;
+			return false;
+		}
+		function _ftreeSortKey(p) {
+			const i = p.lastIndexOf('/');
+			return i < 0 ? '0/' + p : '1/' + p;   // root files first, then folders
+		}
+		// Rename / move a file. For .py → .py moves, every import of the old
+		// module across the Explorer is rewritten via CodeSmith.manifest.moveFile.
+		function _explorerRenameFile(oldName) {
+			const nn = prompt('New name or path (folders allowed, e.g. src/util.py):', oldName);
+			if (!nn) return;
+			const target = nn.trim().replace(/\\/g, '/').replace(/^\/+/, '');
+			if (!target || target === oldName) return;
+			if (CodeSmith.explorer.getFile(target)) { alert(target + ' already exists.'); return; }
+			const fl = CodeSmith.explorer.getFile(oldName);
+			if (!fl) return;
+			let content = fl.content;
+			let rewritten = [];
+			if (/\.py$/.test(oldName) && /\.py$/.test(target) && CodeSmith.manifest) {
+				const M = CodeSmith.manifest;
+				const m = M.create();
+				const all = CodeSmith.explorer.getAllFiles();
+				for (const [p, f] of Object.entries(all)) M.setFile(m, p, f.content);
+				const r = M.moveFile(m, oldName, target);
+				if (r.ok) {
+					const _tn = target.split('/').filter(s => s && s !== '.').join('/');
+					if (m.files[_tn]) content = m.files[_tn].content;
+					for (const [p, f] of Object.entries(all)) {
+						if (p === oldName || !m.files[p]) continue;
+						if (m.files[p].content !== f.content) {
+							CodeSmith.explorer.updateFileContent(p, m.files[p].content);
+							if (CodeSmith.monaco.isInitialized()) { try { CodeSmith.monaco.updateContent(p, m.files[p].content); } catch {} }
+							rewritten.push(p);
+						}
+					}
+				}
+			}
+			CodeSmith.explorer.addFile(target, content);
+			CodeSmith.explorer.deleteFile(oldName);
+			if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(oldName);
+			CodeSmith.explorer.openTab(target);
+			_explorerRenderTree(); _explorerRenderTabs(); _explorerShowFile(target);
+			if (rewritten.length) setTimeout(() => alert('Moved ' + oldName + ' → ' + target + '\nUpdated imports in: ' + rewritten.join(', ')), 0);
+		}
 		function _explorerRenderTree() {
 		  const $ = (sel) => document.querySelector(sel);
 		  const files = CodeSmith.explorer.getFileList();
@@ -13152,7 +13229,33 @@ case 'symbols_requested':
 			vue: '💚', sql: '🗄️', yaml: '⚙️',
 		  };
 
-		  for (const f of files) {
+		  const _sortedFiles = files.slice().sort((a, b) => _ftreeSortKey(a.name).localeCompare(_ftreeSortKey(b.name)));
+		  const _seenDirs = new Set();
+		  for (const f of _sortedFiles) {
+			const _parts = f.name.split('/');
+			for (let d = 1; d < _parts.length; d++) {
+			  const dirPath = _parts.slice(0, d).join('/');
+			  if (_seenDirs.has(dirPath)) continue;
+			  _seenDirs.add(dirPath);
+			  if (_ftreeHidden(dirPath, false)) continue;
+			  const row = document.createElement('div');
+			  row.className = 'ftree-item ftree-folder';
+			  row.style.paddingLeft = (10 + (d - 1) * 12) + 'px';
+			  row.title = dirPath;
+			  const ic = document.createElement('span');
+			  ic.className = 'ftree-icon';
+			  ic.textContent = (_ftreeCollapsed.has(dirPath) ? '▸ ' : '▾ ') + '📁';
+			  const nm = document.createElement('span');
+			  nm.className = 'ftree-name';
+			  nm.textContent = _parts[d - 1];
+			  row.append(ic, nm);
+			  row.addEventListener('click', () => {
+			    if (_ftreeCollapsed.has(dirPath)) _ftreeCollapsed.delete(dirPath); else _ftreeCollapsed.add(dirPath);
+			    _explorerRenderTree();
+			  });
+			  body.appendChild(row);
+			}
+			if (_ftreeHidden(_parts.slice(0, -1).join('/'), true)) continue;
 			const active = f.name === CodeSmith.explorer.getActiveFile();
 			const item = document.createElement('div');
 			item.className = 'ftree-item' + (active ? ' active' : '');
@@ -13162,7 +13265,9 @@ case 'symbols_requested':
 			item.appendChild(icon);
 			const name = document.createElement('span');
 			name.className = 'ftree-name';
-			name.textContent = f.name;
+			name.textContent = _parts[_parts.length - 1];
+			name.title = f.name;
+			item.style.paddingLeft = (10 + (_parts.length - 1) * 12) + 'px';
 			item.appendChild(name);
 			if (f.modified) {
 			  const badge = document.createElement('span');
@@ -13188,7 +13293,7 @@ case 'symbols_requested':
 			        { label: 'Copy filename', action: () => navigator.clipboard.writeText(f.name) },
 			        { label: 'Copy contents', action: () => { const fl = CodeSmith.explorer.getFile(f.name); if (fl) navigator.clipboard.writeText(fl.content); } },
 			        'sep',
-        { label: 'Rename', action: () => { const nn = prompt('New name:', f.name); if (nn && nn !== f.name) { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.explorer.addFile(nn, fl.content); CodeSmith.explorer.deleteFile(f.name); if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(f.name); CodeSmith.explorer.openTab(nn); _explorerRenderTree(); _explorerRenderTabs(); _explorerShowFile(nn); } } } },
+     			   { label: 'Rename / move', action: () => _explorerRenameFile(f.name) },
 			        { label: 'Snapshot', action: () => { const fl = CodeSmith.explorer.getFile(f.name); if (fl) { CodeSmith.snapshots.take(f.name, fl.content, 'Manual'); _renderSnapshots(); } } },
 			        'sep',
 					{ label: 'Delete', cls: 'destructive', action: () => { if (confirm('Delete ' + f.name + '?')) { CodeSmith.explorer.deleteFile(f.name); if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.closeFile(f.name); _explorerRenderTree(); _explorerRenderTabs(); const next = CodeSmith.explorer.getActiveFile(); if (next) _explorerShowFile(next); else { if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.dispose(); const mc = document.querySelector('#monaco-container'); if (mc) mc.innerHTML = '<div id="explorer-drop-zone" class="drop-zone" style="margin:40px auto;max-width:360px;"><div class="drop-zone-icon">📂</div><div class="drop-zone-text">Drop files here or click Upload</div></div>'; document.querySelector('#explorer-editor-header').hidden = true; } } } },
