@@ -5023,8 +5023,15 @@ Requirements:
 - Use realistic dummy data, not just None/empty values
 
 Output ONLY valid Python pytest code (no JSON wrapper, no markdown fences). Runnable with: pytest test_integration.py -v`;
-
+const _CS_outer = CodeSmith;
 const StageC = (() => {
+	let _abortCtl = new AbortController();
+	const CodeSmith = Object.assign(Object.create(_CS_outer), {
+		llm: Object.assign(Object.create(_CS_outer.llm), {
+			chat: (o) => _CS_outer.llm.chat({ signal: _abortCtl.signal, ...o }),
+			chatComplete: (o) => _CS_outer.llm.chatComplete({ signal: _abortCtl.signal, ...o }),
+		}),
+	});
 	function _isWebapp(spec) {
 		const t = spec && spec.target_type;
 		return t === 'webapp' || t === 'single_page_webapp';
@@ -5041,6 +5048,7 @@ const StageC = (() => {
 	let _moduleArtifacts = []; // accumulated artifacts
 	let _currentModuleId = null;
 	let _aborted = false;
+	
 	let _paused = false;
 
   const REPAIR_MAX = 3;
@@ -6126,7 +6134,7 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 
 	function pause() { _paused = true; }
 	function resume() { _paused = false; }
-	function stop() { _aborted = true; _paused = false; }
+	function stop() { _aborted = true; _paused = false; try { _abortCtl.abort(); } catch {} }
 	function setModuleDecision(modId, decision) { _moduleDecisions[modId] = decision; }
 
   function resumeAfterEscalation(moduleId, editedCode, editedTests) {
