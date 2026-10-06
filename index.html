@@ -6195,29 +6195,35 @@ const StageC = (() => {
 			artifact.repairAttempts = artifact.repairAttempts || [];
 			let pytestOutput = '';
 			let parsedTest = { passCount: 0, failCount: 1, allPassed: false };
+			let _tr = null;   // TestResult of the latest run
 			for (let run = 1; run <= RepairPolicy.MAX_ATTEMPTS + 1; run++) {
 				if (_aborted) { _state = 'stopped'; yield { type: 'build_stopped' }; return; }
 				yield { type: 'tests_start', moduleId: modId, attempt: run };
 
 				try {
 					if (isWebapp) {
+						const _t0 = Date.now();
 						const result = await _runWebappTests(rs.code, rs.tests, _moduleArtifacts.filter(a => a.moduleName !== modId && a.moduleName.endsWith('.js')));
 						pytestOutput = result.output;
 						parsedTest = { passCount: result.passCount, failCount: result.failCount, allPassed: result.allPassed };
+						_tr = { module: safeName, testFile: '(iframe)', passed: !!result.allPassed, durationMs: Date.now() - _t0, stdout: String(result.output || ''), stderr: '', error: result.allPassed ? null : 'tests failed', coverage: null };
 					} else {
 						const r = await _runPytestFor(safeName);
 						pytestOutput = r.output;
 						parsedTest = r.parsed;
+						_tr = r.testResult;
 					}
 				} catch (err) {
 					yield { type: 'error', stage: 'tests_run', moduleId: modId, error: err };
 					break;
 				}
 				lastOutput = pytestOutput;
+				if (_tr) { artifact.lastTestResult = _tr; artifact.testResults = (artifact.testResults || []).concat(_tr).slice(-10); }
 				yield {
 					type: 'tests_result', moduleId: modId, attempt: run,
 					passed: parsedTest.allPassed, passCount: parsedTest.passCount,
 					failCount: parsedTest.failCount, output: pytestOutput,
+					coverage: _tr ? _tr.coverage : null, testResult: _tr,
 				};
 
 				// User decisions take priority over the policy (unchanged behaviour).
@@ -6244,6 +6250,25 @@ const StageC = (() => {
 					passed = true;
 					artifact.code = rs.code; artifact.tests = rs.tests;
 					artifact.status = 'passed';
+					// ---- Pass 3: generated test cards + coverage gate (warn, not block) ----
+					if (!isWebapp) {
+						const aug = await _augmentTests({ mod, safeName, code: rs.code, tests: rs.tests });
+						if (aug.cards.length) {
+							artifact.testCards = (artifact.testCards || []).concat(aug.cards);
+							if (aug.applied) {
+								artifact.tests = aug.tests;
+								rs = { ...rs, tests: aug.tests };
+								if (aug.testResult) { _tr = aug.testResult; artifact.lastTestResult = aug.testResult; artifact.testResults = (artifact.testResults || []).concat(aug.testResult).slice(-10); }
+							}
+						}
+						if (aug.note) yield { type: 'log', message: '🧪 ' + modId + ': ' + aug.note };
+					}
+					const _cov = artifact.lastTestResult && artifact.lastTestResult.coverage;
+					artifact.lowConfidence = !!(_cov && _cov.percent < _covMin());
+					if (artifact.lowConfidence) {
+						if (_manifest) Manifest.recordDecision(_manifest, safeName + '.py', 'low-confidence', 'coverage ' + _cov.percent + '%');
+						yield { type: 'log', message: '⚠ ' + modId + ' coverage ' + _cov.percent + '% is below ' + _covMin() + '% — marked low confidence' };
+					}
 					try { await CodeSmith.db.putArtifact(artifact); } catch {}
 					try { CodeSmith.snapshots && CodeSmith.snapshots.take(safeName + (isWebapp ? '' : '.py'), rs.code, 'Stage C passed after ' + rs.attempt + ' repair(s)'); } catch {}
 					if (!isWebapp && rs.attempt > 0) {
@@ -6580,24 +6605,172 @@ exit_code = pytest.main(['-v', '/workdir/test_integration.py', '--tb=short', '--
 		const _lastRepairHistory = {};   // moduleId -> attempt history (for escalation UI)
 		let _manifest = null;            // ProjectManifest for the current build (set in run())
 
-		async function _runPytestFor(name) {
-			// MUST be left-aligned Python — see note in PHASE 2.
+		// ---- Pass 3: TestResult, coverage, generated test cards ----
+		// Thresholds are read from settings so they can change without a patch:
+		//   settings.coverageMin        (default 60)  below → "low confidence" (warn, not block)
+		//   settings.testCardsAutoApply (default true) false → cards stay "proposed"
+		function _covMin() {
+			const v = Number((CodeSmith.state && CodeSmith.state.settings || {}).coverageMin);
+			return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 60;
+		}
+		function _autoApplyTestCards() {
+			const v = (CodeSmith.state && CodeSmith.state.settings || {}).testCardsAutoApply;
+			return v !== false;
+		}
+
+		// Runs one module's tests in Pyodide with line coverage of /workdir/<name>.py.
+		// Coverage uses sys.settrace limited to that file (no pip needed); if the
+		// tracer fails, coverage is null and the run is unaffected.
+		// Returns { output, parsed, testResult } — testResult is the TestResult shape:
+		// { module, testFile, passed, durationMs, stdout, stderr, error, coverage }.
+		async function _runPytestFor(name, opts) {
+			const withCov = !(opts && opts.coverage === false);
+			const target = '/workdir/' + name + '.py';
+			// MUST be left-aligned Python.
 			const code = [
-				'import sys, os',
+				'import sys, os, json, ast, time',
 				"sys.path.insert(0, '/workdir')",
 				"os.chdir('/workdir')",
 				'for mn in list(sys.modules):',
 				"    if mn == '" + name + "' or mn.startswith('" + name + ".'):",
 				'        del sys.modules[mn]',
+				'_cs_target = ' + JSON.stringify(target),
+				'_cs_hits = set()',
+				'def _cs_local(frame, event, arg):',
+				"    if event == 'line':",
+				'        _cs_hits.add(frame.f_lineno)',
+				'    return _cs_local',
+				'def _cs_global(frame, event, arg):',
+				'    if frame.f_code.co_filename == _cs_target:',
+				'        _cs_hits.add(frame.f_lineno)',
+				'        return _cs_local',
+				'    return None',
 				'import pytest',
-				"exit_code = pytest.main(['-v', '/workdir/test_" + name + ".py', '--tb=short', '--no-header', '-p', 'no:cacheprovider'])",
+				'_cs_t0 = time.time()',
+				withCov ? 'sys.settrace(_cs_global)' : 'pass',
+				'try:',
+				"    exit_code = pytest.main(['-v', '/workdir/test_" + name + ".py', '--tb=short', '--no-header', '-p', 'no:cacheprovider'])",
+				'finally:',
+				'    sys.settrace(None)',
+				"print('__DURATION_MS__=' + str(int((time.time() - _cs_t0) * 1000)))",
+				'try:',
+				'    _cs_exec = set()',
+				'    for _n in ast.walk(ast.parse(open(_cs_target).read())):',
+				'        if isinstance(_n, ast.stmt):',
+				'            if isinstance(_n, ast.Expr) and isinstance(getattr(_n, "value", None), ast.Constant) and isinstance(_n.value.value, str):',
+				'                continue',
+				'            _cs_exec.add(_n.lineno)',
+				withCov
+					? "    print('__COVERAGE__=' + json.dumps({'lines': len(_cs_exec), 'covered': len(_cs_exec & _cs_hits), 'missing': sorted(_cs_exec - _cs_hits)[:200]}))"
+					: "    print('__COVERAGE__=null')",
+				'except Exception:',
+				"    print('__COVERAGE__=null')",
 				"print('__EXIT_CODE__=' + str(exit_code))",
 			].join('\n');
-			const r = await CodeSmith.sandbox.runPython(code, { sessionGlobals: true, timeoutMs: 30000 });
-			const output = (r.stdout || '') + (r.stderr || '');
-			return { output, parsed: _parsePytest(output) };
+			const t0 = Date.now();
+			const r = await CodeSmith.sandbox.runPython(code, { sessionGlobals: true, timeoutMs: 60000 });
+			let stdout = r.stdout || '';
+			const stderr = r.stderr || '';
+			let coverage = null;
+			const cm = stdout.match(/__COVERAGE__=(.*)/);
+			if (cm) {
+				try {
+					const c = JSON.parse(cm[1]);
+					if (c && c.lines > 0) coverage = { lines: c.lines, covered: c.covered, percent: Math.round(c.covered * 1000 / c.lines) / 10, missing: c.missing || [] };
+				} catch {}
+			}
+			const dm = stdout.match(/__DURATION_MS__=(\d+)/);
+			stdout = stdout.replace(/^__COVERAGE__=.*\n?/m, '').replace(/^__DURATION_MS__=.*\n?/m, '');
+			const output = stdout + stderr;
+			const parsed = _parsePytest(output);
+			const errLine = (output.match(/^E\s+.+$/m) || output.match(/^(FAILED|ERROR) .+$/m) || [null])[0];
+			const testResult = {
+				module: name,
+				testFile: 'test_' + name + '.py',
+				passed: !!parsed.allPassed,
+				durationMs: dm ? Number(dm[1]) : (Date.now() - t0),
+				stdout, stderr,
+				error: r.error ? String(r.error.message || r.error) : (parsed.allPassed ? null : (errLine || 'tests failed')),
+				coverage,
+			};
+			return { output, parsed, testResult };
 		}
 
+		// After a module passes: propose tests for public functions/classes the
+		// tests never mention, plus one smoke test, as edit cards
+		// ({target:'tests', type:'add', ...} — the same shape repair uses).
+		// Cards are applied only if the enlarged suite still passes against the
+		// (already passing) implementation; otherwise they are kept as "rejected"
+		// with the reason, and the tests are left exactly as they were.
+		async function _augmentTests({ mod, safeName, code, tests }) {
+			const out = { cards: [], applied: false, tests, testResult: null, note: '' };
+			const publics = [];
+			for (const m of String(code || '').matchAll(/^(?:async\s+)?(?:def|class)\s+([A-Za-z]\w*)/gm)) publics.push(m[1]);
+			const untested = publics.filter(n => !new RegExp('\\b' + n + '\\b').test(tests || ''));
+			const hasSmoke = /^\s*def\s+test_smoke/m.test(tests || '');
+			if (!untested.length && hasSmoke) return out;
+
+			const num = s => String(s || '').split('\n').map((l, i) => (i + 1) + '\t' + l).join('\n');
+			const lastLine = String(tests || '').split('\n').length;
+			const prompt = `Module ${safeName} PASSES its current tests. Add tests only.
+
+SOURCE (${safeName}.py):
+${num(code)}
+
+CURRENT TESTS (test_${safeName}.py, line-numbered):
+${num(tests)}
+
+Public names with NO test yet: ${untested.length ? untested.join(', ') : '(none)'}
+Smoke test present: ${hasSmoke ? 'yes' : 'no — add one named test_smoke_${safeName} that imports the module and calls its main entry points with realistic inputs'}
+
+Rules:
+- ADD new pytest functions only. Never modify or delete existing tests.
+- One focused test per untested public name: normal case, plus an edge or error case where the code defines one.
+- Import with: from ${safeName} import ...
+- The implementation is correct; tests must pass against it as written. Do not guess behaviour the source does not show.
+- Use only pytest and the standard library.
+
+Output ONLY valid JSON (no markdown):
+{"edits":[{"target":"tests","type":"add","afterLine":${lastLine},"newCode":"...","reason":"which public name this covers"}]}`;
+			let resp = null;
+			try {
+				const result = await CodeSmith.llm.chatComplete({
+					messages: [
+						{ role: 'system', content: 'You write precise pytest unit tests. Output only valid JSON.' },
+						{ role: 'user', content: prompt },
+					],
+					tier: 'worker', temperature: 0.1, maxTokens: 6000,
+				});
+				resp = _parseJSON(result.text);
+			} catch (err) { out.note = 'test generation failed: ' + (err.message || err); return out; }
+			const edits = ((resp && resp.edits) || []).filter(e => e && e.type === 'add' && e.newCode)
+				.map(e => ({ target: 'tests', type: 'add', afterLine: lastLine, newCode: String(e.newCode), reason: e.reason || '' }));
+			if (!edits.length) { out.note = 'no test cards produced'; return out; }
+			out.cards = edits.map(e => ({ ...e, module: mod.id, kind: 'generated-tests', status: 'proposed', at: Date.now() }));
+			if (!_autoApplyTestCards()) { out.note = out.cards.length + ' test card(s) proposed (auto-apply off)'; return out; }
+
+			const applied = RepairPolicy.applyEdits(tests, edits);
+			const newTests = _flattenPkgImports(applied.content);
+			try {
+				await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', newTests);
+				const r = await _runPytestFor(safeName);
+				if (r.parsed.allPassed) {
+					out.applied = true; out.tests = newTests; out.testResult = r.testResult;
+					out.cards.forEach(c => { c.status = 'applied'; });
+					out.note = out.cards.length + ' test card(s) applied; ' + r.parsed.passCount + ' tests pass';
+				} else {
+					await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', tests);
+					const why = String(r.output).slice(-600);
+					out.cards.forEach(c => { c.status = 'rejected'; c.rejectReason = why; });
+					out.note = out.cards.length + ' test card(s) rejected — they failed against the passing implementation; kept for review';
+				}
+			} catch (err) {
+				try { await CodeSmith.sandbox.writeFile('/workdir/test_' + safeName + '.py', tests); } catch {}
+				out.cards.forEach(c => { c.status = 'rejected'; c.rejectReason = String(err.message || err); });
+				out.note = 'test cards not applied: ' + (err.message || err);
+			}
+			return out;
+		}
 		// Re-run tests of already-passed modules that import `name`.
 		// Returns the list of dependent module ids that now fail.
 		async function _rerunDependents(name, selfId) {
@@ -7049,6 +7222,14 @@ Output ONLY valid JSON (no markdown):
 			const layout = Manifest.applyLayout(m, _isWebapp(_spec) ? {} : _layoutMoves());
 			const diagnostics = Manifest.validate(m);
 			for (const e of layout.errors) diagnostics.push({ severity: 'error', file: '', line: 0, code: 'layout-move', message: 'Package layout: ' + e });
+			for (const a of _moduleArtifacts) {
+				const c = a.lastTestResult && a.lastTestResult.coverage;
+				if (!c) continue;
+				const mod = _skeleton && _skeleton.modules.find(x => x.id === a.moduleName);
+				const low = c.percent < _covMin();
+				diagnostics.push({ severity: low ? 'warning' : 'info', file: ((mod && mod.name) || a.moduleName) + '.py', line: 0, code: 'coverage',
+					message: 'Coverage ' + c.percent + '% (' + c.covered + '/' + c.lines + ' lines)' + (low ? ' — below ' + _covMin() + '%, low confidence' : '') });
+			}
 			return { manifest: Manifest.serialize(m), diagnostics, layout: layout.moved.length ? 'package' : 'flat' };
 		}
 		// Always rebuilt from the live artifacts, so it can never drift from them.
@@ -11061,8 +11242,8 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
 		const errs = diags.filter(d => d.severity === 'error').length;
 		const warns = diags.filter(d => d.severity === 'warning').length;
 		_scLog('Structure (' + res.layout + ' layout): ' + Object.keys(res.manifest.files).length + ' files, build order ' + res.manifest.buildOrder.join(' → '));
-		if (!diags.length) _scLog('✓ Project structure valid — all imports resolve, no cycles, entry points present', 'log-pass');
-		for (const d of diags) _scLog((d.severity === 'error' ? '✗ ' : '⚠ ') + (d.file || 'project') + (d.line ? ':' + d.line : '') + ' — ' + d.message, d.severity === 'error' ? 'log-fail' : 'log-warn');
+		if (!diags.some(d => d.severity !== 'info')) _scLog('✓ Project structure valid — all imports resolve, no cycles, entry points present', 'log-pass');
+		for (const d of diags) _scLog((d.severity === 'error' ? '✗ ' : d.severity === 'info' ? '• ' : '⚠ ') + (d.file || 'project') + (d.line ? ':' + d.line : '') + ' — ' + d.message, d.severity === 'error' ? 'log-fail' : 'log-warn');
 
 		const panel = document.getElementById('diagnostics-panel');
 		const list = document.getElementById('diagnostics-list');
@@ -11138,6 +11319,21 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       if (state === 'testing') statusText = 'testing…';
       const statusSpan = el('span', { class: 'sc-mod-status' }, statusText);
       item.appendChild(statusSpan);
+
+      // Pass 3: coverage badge + low-confidence flag from the latest TestResult
+      const _art = (CodeSmith.stageC.getModuleArtifacts() || []).find(a => a.moduleName === modId);
+      const _cov = _art && _art.lastTestResult && _art.lastTestResult.coverage;
+      if (_cov) {
+        const cb = el('span', { class: 'sc-mod-status', title: _cov.covered + '/' + _cov.lines + ' lines covered' }, _cov.percent + '%');
+        cb.style.marginLeft = '6px';
+        cb.style.color = _art.lowConfidence ? '#f0b429' : '#3fb950';
+        item.appendChild(cb);
+      }
+      if (_art && _art.lowConfidence) {
+        const lc = el('span', { class: 'sc-mod-status', title: 'Coverage below the threshold — use Force pass to accept' }, '⚠');
+        lc.style.marginLeft = '4px';
+        item.appendChild(lc);
+      }
 
       item.addEventListener('click', () => _scSelectModule(modId));
       list.appendChild(item);
@@ -11366,7 +11562,8 @@ case 'symbols_requested':
 	            }
 	            _scSelectModule(ev.moduleId);
 	            _scLog(
-	              ev.passed ? '✓ ' + ev.moduleId + ' passed (' + ev.passCount + ')' : '✗ ' + ev.moduleId + ' failed (' + ev.failCount + ' failures)',
+	              (ev.passed ? '✓ ' + ev.moduleId + ' passed (' + ev.passCount + ')' : '✗ ' + ev.moduleId + ' failed (' + ev.failCount + ' failures)')
+	                + (ev.coverage ? ' · coverage ' + ev.coverage.percent + '%' : '') + (ev.testResult ? ' · ' + ev.testResult.durationMs + ' ms' : ''),
 	              ev.passed ? 'log-pass' : 'log-fail'
 	            );
 	            break;
