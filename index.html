@@ -1884,6 +1884,7 @@ kbd {
 					  <button id="btn-sc-stop" class="btn" style="font-size:12px;color:#ff6b6b;" hidden>Stop</button>
 					  <button id="btn-sc-symtable" class="btn btn-ghost" style="font-size:11px;" title="View symbol table">Symbols</button>
 					 <button id="btn-sc-validate" class="btn btn-ghost" style="font-size:11px;" title="Check imports, cycles and entry points">Validate structure</button>
+					<button id="btn-sc-open-explorer" class="btn btn-ghost" style="font-size:11px;" title="Open this build in the Code Explorer, in its package layout">Open in Explorer</button>
 					  <label style="font-size:11px;color:#8b92a1;display:flex;align-items:center;gap:4px;cursor:pointer;">
 						<input type="checkbox" id="sc-review-tests" style="accent-color:#4f8cff;"> Review tests
 						</label>
@@ -4530,6 +4531,7 @@ DESIGN PRINCIPLES:
 - Prefer 2-5 modules (simpler is better)
 - Each module has a single, clear responsibility
 - Dependencies form a DAG (no cycles)
+- path: where the file lives in the final project, e.g. package_name/module.py or src/package_name/module.py. The file name in path MUST equal name + .py. Use plain name + .py for top-level scripts. Folder names must differ from every module name. Omit path for a flat project.
 - Use type hints on all public function signatures
 
 OUTPUT RULES:
@@ -4545,6 +4547,7 @@ REQUIRED JSON SCHEMA:
     {
       "id": "snake_case",
       "name": "snake_case",
+      "path": "package_name/snake_case.py",
       "purpose": "what this module does",
       "public_functions": [
         {
@@ -5107,7 +5110,8 @@ const Manifest = (() => {
 
   // Python module path for a file: "src/pkg/util.py" -> "src.pkg.util"
   function pyModuleName(path) {
-    return _norm(path).replace(/\.py$/, '').replace(/\/__init__$/, '').split('/').join('.');
+    // src-layout: "src/pkg/x.py" imports as "pkg.x"
+    return _norm(path).replace(/^src\//, '').replace(/\.py$/, '').replace(/\/__init__$/, '').split('/').join('.');
   }
 
   // Build a manifest from an approved Stage B skeleton. Paths come from
@@ -5326,7 +5330,27 @@ const Manifest = (() => {
     m.buildOrder = topoSort(buildGraph(m)).order;
     return { ok: true };
   }
-
+  // Move flat files into a package layout ({ "util.py": "pkg/util.py" }).
+  // Importers are rewritten by moveFile; __init__.py is added to every new
+  // package folder (except a leading "src/", which is a src-layout root).
+  function applyLayout(m, moves) {
+    const moved = [], errors = [];
+    for (const [from, to] of Object.entries(moves || {})) {
+      const a = _norm(from), b = _norm(to);
+      if (!a || !b || a === b) continue;
+      const r = moveFile(m, a, b);
+      if (!r.ok) { errors.push(a + ' → ' + b + ': ' + r.error); continue; }
+      moved.push(b);
+      const parts = b.split('/').slice(0, -1);
+      for (let i = 1; i <= parts.length; i++) {
+        if (i === 1 && parts[0] === 'src') continue;
+        const init = parts.slice(0, i).join('/') + '/__init__.py';
+        if (!m.files[init]) setFile(m, init, '', 'source');
+      }
+    }
+    m.buildOrder = topoSort(buildGraph(m)).order;
+    return { moved, errors };
+  }
   function recordDecision(m, path, decision, note) {
     m.decisions[_norm(path)] = { decision, note: note || '', at: Date.now() };
   }
@@ -5336,7 +5360,7 @@ const Manifest = (() => {
   function restore(o) { if (!o) return null; const m = { ...create(), ...o }; m._declaredEdges = o.declaredEdges || {}; delete m.declaredEdges; return m; }
 
   return { create, fromSkeleton, setFile, removeFile, moveFile, extractImports, resolveImport, buildGraph,
-    topoSort, findCycles, validate, recordDecision, pyModuleName, addStdlib, serialize, restore,
+    topoSort, findCycles, validate, recordDecision, pyModuleName, addStdlib, serialize, restore, applyLayout,
     isStdlib: (n) => _STDLIB.has(String(n).split('.')[0]) };
 })();
 CodeSmith.manifest = Manifest;
@@ -5541,7 +5565,18 @@ CodeSmith.coreSelfTest = function coreSelfTest() {
     ok(R.isRepeat(s, [{ type: 'replace', newCode: 'x  =  1' }]), 'whitespace-only change is still a repeat');
     ok(!R.isRepeat(s, [{ type: 'replace', newCode: 'x = 2' }]));
   });
-
+  t('applyLayout: flat build → package tree, imports rewritten', () => {
+    const m = M.create();
+    M.setFile(m, 'util.py', 'def f():\n    return 1');
+    M.setFile(m, 'main.py', 'from util import f\nimport util');
+    M.setFile(m, 'tests/test_util.py', 'from util import f\ndef test_f():\n    assert f() == 1');
+    const r = M.applyLayout(m, { 'util.py': 'src/pkg/util.py' });
+    eq(r.errors, []);
+    ok(m.files['src/pkg/__init__.py'] && !m.files['src/__init__.py'], '__init__ placement');
+    eq(m.files['main.py'].content, 'from pkg.util import f\nimport pkg.util as util');
+    eq(m.files['tests/test_util.py'].content.split('\n')[0], 'from pkg.util import f');
+    eq(M.validate(m).filter(d => d.code === 'import-unresolved'), []);
+  });
   const failed = results.filter(r => !r.ok);
   console.log('[coreSelfTest] ' + (results.length - failed.length) + '/' + results.length + ' passed', failed);
   return { passed: results.length - failed.length, failed: failed.length, results };
@@ -6840,6 +6875,10 @@ Output ONLY valid JSON (no markdown):
 				for (const m of (_skeleton && _skeleton.modules) || []) {
 					const parts = String(m.name || '').split('.');
 					if (parts.length > 1) set.add(parts[0]);
+					// Stage B "path" folders (pkg/sub/x.py → pkg, sub; src too). Workers may
+					// write package imports; Stage C builds flat, so they are flattened here.
+					const _segs = String(m.path || '').replace(/\\/g, '/').split('/').slice(0, -1);
+					for (const s of _segs) if (/^[A-Za-z_]\w*$/.test(s)) set.add(s);
 				}
 				if (_spec && _spec.project_name) set.add(String(_spec.project_name).replace(/\W+/g, '_'));
 				if (_spec && _spec.package_name) set.add(String(_spec.package_name).replace(/\W+/g, '_'));
@@ -6968,9 +7007,25 @@ Output ONLY valid JSON (no markdown):
 		// ---- Validate Project Structure (Stage C button) ----
 		// Builds a manifest from the CURRENT module artifacts and checks:
 		// imports resolve, no circular imports, entry points exist.
-		function validateStructure() {
-			const m = _manifest ? Manifest.restore(Manifest.serialize(_manifest))
-				: (_skeleton ? Manifest.fromSkeleton(_skeleton, _spec || {}) : Manifest.create());
+	
+			// Package layout from Stage B: python modules whose skeleton "path" is
+		// nested (pkg/x.py, src/pkg/x.py). Stage C still builds and tests FLAT
+		// in /workdir; the layout is applied to the manifest afterwards, and
+		// verifyPackagedLayout() re-runs the tests against the nested tree.
+		// The file keeps mod.name as its basename so flat names stay consistent.
+		function _layoutMoves() {
+			const moves = {};
+			for (const mod of (_skeleton && _skeleton.modules) || []) {
+				if ((mod.kind || 'python') !== 'python' || !mod.path || !mod.name) continue;
+				const p = String(mod.path).replace(/\\/g, '/').replace(/^\.?\/+/, '');
+				if (!/^([A-Za-z_]\w*\/)+[A-Za-z_]\w*\.py$/.test(p)) continue;
+				moves[mod.name + '.py'] = p.slice(0, p.lastIndexOf('/')) + '/' + mod.name + '.py';
+			}
+			return moves;
+		}
+		function validateStructure(extraFiles) {
+			const m = _skeleton ? Manifest.fromSkeleton(_skeleton, _spec || {}) : Manifest.create();
+			m.files = {}; m.testFiles = []; m._declaredEdges = {};   // rebuilt FLAT from artifacts below
 			Manifest.addStdlib([..._STDLIB_MODULES]);
 			for (const a of _moduleArtifacts) {
 				const mod = _skeleton && _skeleton.modules.find(x => x.id === a.moduleName);
@@ -6987,15 +7042,73 @@ Output ONLY valid JSON (no markdown):
 				if (a.status === 'bypassed') Manifest.recordDecision(m, path, 'force-pass');
 				if (a.status === 'skipped') Manifest.recordDecision(m, path, 'skip');
 			}
-			m.buildOrder = Manifest.topoSort(Manifest.buildGraph(m)).order;
-			return { manifest: Manifest.serialize(m), diagnostics: Manifest.validate(m) };
+			for (const [p, c] of Object.entries(extraFiles || {})) if (c && !m.files[p]) Manifest.setFile(m, p, c);
+			const declared = (_skeleton && _skeleton.entry_points) || [];
+			m.entryPoints = declared.length ? declared.slice()
+				: Object.keys(m.files).filter(p => /^(main|app|run|cli)\.py$|(^|\/)index\.html$/.test(p));
+			const layout = Manifest.applyLayout(m, _isWebapp(_spec) ? {} : _layoutMoves());
+			const diagnostics = Manifest.validate(m);
+			for (const e of layout.errors) diagnostics.push({ severity: 'error', file: '', line: 0, code: 'layout-move', message: 'Package layout: ' + e });
+			return { manifest: Manifest.serialize(m), diagnostics, layout: layout.moved.length ? 'package' : 'flat' };
 		}
 		// Always rebuilt from the live artifacts, so it can never drift from them.
 		function getManifest() { return _skeleton ? validateStructure().manifest : null; }
+
+		// Files Stage C writes to /workdir that are not module artifacts.
+		async function _workdirExtras() {
+			const extra = {};
+			try { const t = await CodeSmith.sandbox.readFile('/workdir/test_integration.py'); if (t) extra['tests/test_integration.py'] = t; } catch {}
+			if (!_moduleArtifacts.some(a => a.moduleName === '_shared')) {
+				try { const s = await CodeSmith.sandbox.readFile('/workdir/_shared.py'); if (s) extra['_shared.py'] = s; } catch {}
+			}
+			return extra;
+		}
+		// Manifest with the package layout applied, used by export.
+		async function getPackagedManifest() {
+			return _skeleton ? validateStructure(await _workdirExtras()).manifest : null;
+		}
+		// Re-run the whole test suite against the NESTED tree in
+		// /workdir/_pkgcheck, so the package layout is proven, not assumed.
+		async function verifyPackagedLayout() {
+			const res = validateStructure(await _workdirExtras());
+			const m = res.manifest;
+			const root = '/workdir/_pkgcheck';
+			await CodeSmith.sandbox.runPython('import shutil\nshutil.rmtree(' + JSON.stringify(root) + ', ignore_errors=True)', { sessionGlobals: false, timeoutMs: 10000 });
+			const tops = new Set();
+			for (const [p, f] of Object.entries(m.files)) {
+				if (!p.endsWith('.py') || (f.role !== 'source' && f.role !== 'test')) continue;
+				await CodeSmith.sandbox.writeFile(root + '/' + p, f.content);
+				tops.add(Manifest.pyModuleName(p).split('.')[0]);
+			}
+			for (const a of _moduleArtifacts) tops.add(String(a.moduleName || ''));
+			const purge = [
+				'_tops = set(' + JSON.stringify([...tops].filter(Boolean)) + ')',
+				'for _mn in list(sys.modules):',
+				"    if _mn.split('.')[0] in _tops or _mn.startswith('test_'):",
+				'        del sys.modules[_mn]',
+			].join('\n');
+			// MUST be left-aligned Python.
+			const code = [
+				'import sys, os',
+				'_saved_path = list(sys.path)',
+				purge,
+				'sys.path[:0] = [' + JSON.stringify(root) + ', ' + JSON.stringify(root + '/src') + ']',
+				'import pytest',
+				'try:',
+				"    _ec = pytest.main(['-v', " + JSON.stringify(root + '/tests') + ", '--tb=short', '--no-header', '-p', 'no:cacheprovider', '--import-mode=importlib', '--rootdir', " + JSON.stringify(root) + "])",
+				'finally:',
+				'    sys.path[:] = _saved_path',
+				purge.split('\n').map(l => '    ' + l).join('\n'),
+				"print('__EXIT_CODE__=' + str(_ec))",
+			].join('\n');
+			const r = await CodeSmith.sandbox.runPython(code, { sessionGlobals: false, timeoutMs: 60000 });
+			const output = (r.stdout || '') + (r.stderr || '');
+			return { layout: res.layout, output, parsed: _parsePytest(output) };
+		}
 		function getRepairHistory(modId) { return (_lastRepairHistory[modId] || []).slice(); }
   function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  return { run, getState, getModuleStates, getBuildSkeleton, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision, validateStructure, getManifest, getRepairHistory };
+  return { run, getState, getModuleStates, getBuildSkeleton, getModuleArtifacts, getCurrentModuleId, pause, resume, stop, resumeAfterEscalation, setModuleDecision, validateStructure, getManifest, getRepairHistory, getPackagedManifest, verifyPackagedLayout };
 })();
 CodeSmith.stageC = StageC;
 
@@ -10863,6 +10976,7 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
     });
     $('#btn-sc-symtable').addEventListener('click', _showSymbolTable);
 	    $('#btn-sc-validate').addEventListener('click', _scValidateStructure);
+		    $('#btn-sc-open-explorer').addEventListener('click', _scOpenInExplorer);
         // Pass explicit booleans — a bare handler receives the click Event as the
     // first arg, and an Event is truthy, so isDraft was always true.
     $('#btn-sc-download-all').addEventListener('click', () => _scDownloadAll(false));
@@ -10908,36 +11022,80 @@ exit_code = pytest.main(['-v', '/workdir/test_${modName}.py', '--tb=short', '--n
       CodeSmith.stageC.resume();
     });
   }
-	// ---- Validate Project Structure → diagnostics panel + Stage C log ----
-	function _scValidateStructure() {
+  	// ---- Stage C → Explorer: open the build in its package layout (Pass 2c) ----
+	// Loads the PACKAGED manifest (Stage B paths applied, imports rewritten,
+	// __init__.py added) so Explorer, the terminal and Rename/move all see the
+	// same tree the export ships. Read-only towards Stage C.
+	async function _scOpenInExplorer() {
+		let mf;
+		try { mf = await CodeSmith.stageC.getPackagedManifest(); }
+		catch (err) { _scLog('Open in Explorer failed: ' + (err.message || err), 'log-fail'); return; }
+		if (!mf || !Object.keys(mf.files || {}).length) { _scLog('Nothing to open — build at least one module first.', 'log-warn'); return; }
+		const existing = CodeSmith.explorer.getFileList().length;
+		if (existing && !confirm('Replace the ' + existing + ' file(s) currently in the Explorer with this build?')) return;
+		CodeSmith.explorer.clearAll();
+		if (CodeSmith.monaco.isInitialized()) CodeSmith.monaco.dispose();
+		const paths = Object.keys(mf.files).filter(p => {
+			const f = mf.files[p];
+			return f.role !== 'asset';
+		});
+		for (const p of paths) CodeSmith.explorer.addFile(p, mf.files[p].content || '');
+		try { CodeSmith.explorer.addFile('manifest.json', JSON.stringify(mf, null, 2)); } catch {}
+		const first = (mf.entryPoints || []).find(p => mf.files[p]) || mf.buildOrder.find(p => mf.files[p] && mf.files[p].content) || paths[0];
+		document.querySelector('.mode-btn[data-mode="explore"]')?.click();
+		setTimeout(() => {
+			try {
+				_explorerRenderTree(); _explorerRenderTabs();
+				if (first) { CodeSmith.explorer.openTab(first); _explorerShowFile(first); }
+				if (typeof _persistWorkspace === 'function') _persistWorkspace();
+			} catch (err) { console.warn('[CodeSmith] open in explorer render', err); }
+		}, 120);
+		_scLog('Opened ' + paths.length + ' file(s) in the Explorer (' + (paths.some(p => p.includes('/') && !p.startsWith('tests/')) ? 'package' : 'flat') + ' layout)', 'log-pass');
+	}
+		// ---- Validate Project Structure → diagnostics panel + Stage C log ----
+	async function _scValidateStructure() {
 		let res;
 		try { res = CodeSmith.stageC.validateStructure(); }
 		catch (err) { _scLog('Structure check failed: ' + (err.message || err), 'log-fail'); return; }
 		const diags = res.diagnostics;
 		const errs = diags.filter(d => d.severity === 'error').length;
 		const warns = diags.filter(d => d.severity === 'warning').length;
-		_scLog('Structure: ' + Object.keys(res.manifest.files).length + ' files, build order ' + res.manifest.buildOrder.join(' → '));
+		_scLog('Structure (' + res.layout + ' layout): ' + Object.keys(res.manifest.files).length + ' files, build order ' + res.manifest.buildOrder.join(' → '));
 		if (!diags.length) _scLog('✓ Project structure valid — all imports resolve, no cycles, entry points present', 'log-pass');
 		for (const d of diags) _scLog((d.severity === 'error' ? '✗ ' : '⚠ ') + (d.file || 'project') + (d.line ? ':' + d.line : '') + ' — ' + d.message, d.severity === 'error' ? 'log-fail' : 'log-warn');
 
 		const panel = document.getElementById('diagnostics-panel');
 		const list = document.getElementById('diagnostics-list');
-		if (!panel || !list) return;
-		const errEl = document.getElementById('diag-error-count');
-		const warnEl = document.getElementById('diag-warn-count');
-		if (errEl) { errEl.hidden = !errs; errEl.textContent = errs + ' errors'; }
-		if (warnEl) { warnEl.hidden = !warns; warnEl.textContent = warns + ' warnings'; }
-		list.replaceChildren();
-		for (const d of diags) {
-			// textContent only — messages contain model-generated import names.
-			const item = el('div', { class: 'diag-item' });
-			const icon = el('span', { class: 'diag-icon' }); icon.textContent = d.severity === 'error' ? '🔴' : d.severity === 'warning' ? '🟡' : '🔵';
-			const loc = el('span', { class: 'diag-loc' }); loc.textContent = (d.file || 'project') + ':' + (d.line || 0);
-			const msg = el('span', { class: 'diag-msg' }); msg.textContent = d.message;
-			item.append(icon, loc, msg);
-			list.appendChild(item);
+		if (panel && list) {
+			const errEl = document.getElementById('diag-error-count');
+			const warnEl = document.getElementById('diag-warn-count');
+			if (errEl) { errEl.hidden = !errs; errEl.textContent = errs + ' errors'; }
+			if (warnEl) { warnEl.hidden = !warns; warnEl.textContent = warns + ' warnings'; }
+			list.replaceChildren();
+			for (const d of diags) {
+				// textContent only — messages contain model-generated import names.
+				const item = el('div', { class: 'diag-item' });
+				const icon = el('span', { class: 'diag-icon' }); icon.textContent = d.severity === 'error' ? '🔴' : d.severity === 'warning' ? '🟡' : '🔵';
+				const loc = el('span', { class: 'diag-loc' }); loc.textContent = (d.file || 'project') + ':' + (d.line || 0);
+				const msg = el('span', { class: 'diag-msg' }); msg.textContent = d.message;
+				item.append(icon, loc, msg);
+				list.appendChild(item);
+			}
+			panel.hidden = diags.length === 0;
 		}
-		panel.hidden = diags.length === 0;
+
+		// Package layout: prove the nested tree passes the same tests.
+		if (res.layout === 'package' && !errs) {
+			_scLog('Package layout: re-running all tests against the nested tree…');
+			try {
+				const v = await CodeSmith.stageC.verifyPackagedLayout();
+				if (v.parsed.allPassed) _scLog('✓ Package layout verified — ' + v.parsed.passCount + ' tests pass in the nested tree', 'log-pass');
+				else {
+					_scLog('✗ Package layout: ' + v.parsed.failCount + ' failing, ' + v.parsed.passCount + ' passing in the nested tree', 'log-fail');
+					_scLog(String(v.output).slice(-1500), 'log-fail');
+				}
+			} catch (err) { _scLog('Package layout check failed: ' + (err.message || err), 'log-fail'); }
+		}
 	}
   function _scLog(text, cls) {
     const log = $('#sc-log');
@@ -11473,22 +11631,28 @@ case 'symbols_requested':
 			URL.revokeObjectURL(webappUrl);
 			return;
 			}
-			// ===== PYTHON BRANCH =====
-			// File names come from the skeleton (mod.name), matching what Stage C
-			// wrote to /workdir and what the modules import. Local modules are
-			// excluded from requirements.txt.
-			const _mf = (() => { try { return CodeSmith.stageC.getManifest(); } catch { return null; } })();
+				// ===== PYTHON BRANCH =====
+			// Files come from the PACKAGED manifest: Stage B "path" layout applied,
+			// imports rewritten, __init__.py added. Falls back to flat names.
+			const _mf = await (async () => { try { return await CodeSmith.stageC.getPackagedManifest(); } catch { return null; } })();
 			const _localMods = new Set(['_shared']);
 			const _artName = (a) => {
 				const sm = skel ? (skel.modules || []).find(m => m.id === a.moduleName) : null;
 				return String((sm && sm.name) || a.moduleName || a.id).replace(/\.py$/, '');
 			};
 			for (const a of arts) _localMods.add(_artName(a).split('/')[0]);
+			if (_mf) for (const p of Object.keys(_mf.files)) if (p.endsWith('.py')) _localMods.add(CodeSmith.manifest.pyModuleName(p).split('.')[0]);
+			if (_mf) {
+				for (const [p, f] of Object.entries(_mf.files)) if (f.role === 'source' || f.role === 'test') zip.file(p, f.content);
+			} else {
+				for (const a of arts) {
+					const name = _artName(a);
+					zip.file(name + '.py', a.code || '');
+					if (a.tests) testsDir.file('test_' + name.split('/').pop() + '.py', a.tests);
+				}
+			}
 			const allImports = new Set();
 			for (const a of arts) {
-			const name = _artName(a);
-			zip.file(name + '.py', a.code || '');
-			if (a.tests) testsDir.file('test_' + name.split('/').pop() + '.py', a.tests);
 			const matches = (a.code || '').matchAll(/^\s*(?:import|from)\s+(\w+)/gm);
 			for (const m of matches) {
 				const pkg = m[1];
@@ -11501,9 +11665,24 @@ case 'symbols_requested':
 				for (const d of Object.keys(_mf.dependencies || {})) if (!_localMods.has(d)) allImports.add(d);
 				zip.file('manifest.json', JSON.stringify(_mf, null, 2));
 			}
+			// pyproject module/package declaration matching the layout
+			const _pyprojectModules = (() => {
+				if (!_mf) return 'py-modules = [' + arts.map(a => '"' + (a.moduleName || a.id) + '"').join(', ') + ']\n';
+				const srcs = Object.keys(_mf.files).filter(p => _mf.files[p].role === 'source' && p.endsWith('.py'));
+				const rootMods = srcs.filter(p => !p.includes('/')).map(p => '"' + p.slice(0, -3) + '"');
+				let s = rootMods.length ? 'py-modules = [' + rootMods.join(', ') + ']\n' : '';
+				if (srcs.some(p => p.startsWith('src/'))) s += '\n[tool.setuptools.packages.find]\nwhere = ["src"]\n';
+				else if (srcs.some(p => p.includes('/'))) s += '\n[tool.setuptools.packages.find]\nwhere = ["."]\nexclude = ["tests*"]\n';
+				return s;
+			})();
+			const _importNameOf = (flatName) => {
+				if (!_mf) return flatName;
+				const hit = Object.keys(_mf.files).find(p => p.endsWith('/' + flatName + '.py') || p === flatName + '.py');
+				return hit ? CodeSmith.manifest.pyModuleName(hit) : flatName;
+			};
 			try {
 			const integCode = await CodeSmith.sandbox.readFile('/workdir/test_integration.py');
-			if (integCode) testsDir.file('test_integration.py', integCode);
+			if (integCode && !(_mf && _mf.files['tests/test_integration.py'])) testsDir.file('test_integration.py', integCode);
 			} catch {}
 
 			if (spec) zip.file('spec.json', JSON.stringify(spec, null, 2));
@@ -11519,7 +11698,7 @@ case 'symbols_requested':
 			const _deps = Array.from(allImports).sort().map(d => '    "' + d + '",').join('\n');
 			const _cliMod = (skel && (skel.modules || []).find(m => /^cli$/i.test(m.name || m.id)));
 			const _scripts = _cliMod
-				? '\n[project.scripts]\n' + _pkgName.replace(/_/g, '-') + ' = "' + (_cliMod.name || _cliMod.id) + ':main"\n'
+				? '\n[project.scripts]\n' + _pkgName.replace(/_/g, '-') + ' = "' + _importNameOf(_cliMod.name || _cliMod.id) + ':main"\n'
 				: '';
 			zip.file('pyproject.toml',
 				'[build-system]\n' +
@@ -11533,10 +11712,10 @@ case 'symbols_requested':
 				'dependencies = [\n' + _deps + '\n]\n' +
 				_scripts + '\n' +
 				'[tool.setuptools]\n' +
-				'py-modules = [' + arts.map(a => '"' + (a.moduleName || a.id) + '"').join(', ') + ']\n'
+				_pyprojectModules
 			);
 						// tests/ must be able to import the flat modules at the project root
-			testsDir.file('conftest.py', 'import os, sys\nsys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))\n');
+			testsDir.file('conftest.py', 'import os, sys\n_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))\nsys.path[:0] = [_root, os.path.join(_root, "src")]\n');
 			const _specText = JSON.stringify(spec || {});
 			if (/\bMIT\b/.test(_specText)) {
 				zip.file('LICENSE', 'MIT License\n\nCopyright (c) ' + new Date().getFullYear() + ' ' + (spec.project_name || 'Authors') + '\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n');
@@ -11545,7 +11724,9 @@ case 'symbols_requested':
 			zip.file('.gitignore', `__pycache__/\n*.pyc\n*.pyo\n.pytest_cache/\n*.egg-info/\ndist/\nbuild/\n.env\nvenv/\n`);
 
 			// Generate run.py + README via orchestrator
-			const fullCode = arts.map(a => '# === ' + a.moduleName + '.py ===\n' + (a.code || '')).join('\n\n');
+			const fullCode = (_mf
+				? Object.entries(_mf.files).filter(([p, f]) => f.role === 'source' && f.content).map(([p, f]) => '# === ' + p + ' (import as ' + CodeSmith.manifest.pyModuleName(p) + ') ===\n' + f.content)
+				: arts.map(a => '# === ' + a.moduleName + '.py ===\n' + (a.code || ''))).join('\n\n');
 				const runPyPrompt = ['You have access to the full source of a Python package. Write a single ' + _entryName + ' file at the top level that:',
 					'0. If the spec defines stage_api or a run_all pipeline, call those stage functions in order, write every result file, and exit non-zero on failure. Spec requirements: ' + JSON.stringify(Object.fromEntries(Object.entries(spec || {}).filter(([k]) => !(k in EMPTY_SPEC)))).slice(0, 3000),
 					'1. Imports the package\'s entry function (look at the modules below — find the main orchestrator function)',
