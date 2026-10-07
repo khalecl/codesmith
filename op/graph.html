@@ -112,6 +112,8 @@
   .dot.set{background:var(--acc)}
   .chk{display:flex;align-items:center;gap:7px;margin:7px 0;color:var(--mut);font-size:12.5px;cursor:pointer}
   .chk input{width:auto;accent-color:var(--acc)}
+  .refineBlock{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .refineTitle{font-size:11.5px;color:var(--dim);margin-bottom:8px;letter-spacing:.2px}
   .maskControls{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
   .maskTitle{font-size:11.5px;color:var(--dim);margin-bottom:7px;letter-spacing:.2px}
   #minimap{position:absolute;right:12px;bottom:12px;z-index:4;background:var(--panel);
@@ -206,7 +208,33 @@
         <input type="range" class="slider" id="pointSize" min="1" max="10" step="0.2" value="2.6"></label>
       <label class="chk"><input type="checkbox" id="optTrack" checked> Path-tracking (handle crossings / vertical runs)</label>
       <button class="btn pri" id="btnExtract" disabled>Extract data points</button>
-      <div class="hint" id="editHint">After extraction: drag points to adjust, Alt-click to add, right-click to delete.</div>
+
+      <div class="refineBlock" id="refineBlock" style="display:none">
+        <div class="refineTitle">Refine points <span class="dim" id="refineScope" style="font-weight:400">· all series</span></div>
+        <div class="seg" id="editMode">
+          <button data-m="resample" class="on">Resample</button>
+          <button data-m="shape">Hand-edit</button>
+        </div>
+        <div id="resamplePane">
+          <label class="field"><span>Spacing rule</span>
+            <select id="spaceMode">
+              <option value="count">By number of points</option>
+              <option value="dx">By even X step (period)</option>
+              <option value="px">By spacing along the line</option>
+            </select></label>
+          <label class="field" id="spCountWrap"><span>Number of points <b class="k" id="spCountVal">150</b></span>
+            <input type="range" class="slider" id="spCount" min="5" max="800" value="150"></label>
+          <label class="field" id="spDxWrap" style="display:none"><span>X step (data units) <b class="k" id="spDxVal">0.02</b></span>
+            <input type="range" class="slider" id="spDx" min="0.001" max="0.2" step="0.001" value="0.02"></label>
+          <label class="field" id="spPxWrap" style="display:none"><span>Spacing along line (px) <b class="k" id="spPxVal">6</b></span>
+            <input type="range" class="slider" id="spPx" min="1" max="60" value="6"></label>
+          <div class="hint">Points stay locked to the extracted curve — only their density/period changes. Applies to the selected series, or all if none is selected.</div>
+        </div>
+        <div id="shapePane" style="display:none">
+          <div class="hint">Drag any dot to move it, Alt-click on the line to add one, right-click a dot to delete. Your edits reshape the curve and are kept when you resample.</div>
+        </div>
+      </div>
+      <div class="hint" id="editHint">Extract first, then refine spacing or hand-correct points above.</div>
     </div>
 
     <div class="step" id="step5">
@@ -252,6 +280,7 @@
   </main>
 </div>
 <script>
+
 
 
 (() => {
@@ -424,7 +453,8 @@ var S={
   hover:null,                                       // {px,py} image-space cursor, for minimap readout
   mask:{roi:null,excl:[]},                          // roi:{x,y,w,h} include-box; excl:[{x,y,w,h}] skip-boxes
   maskTool:null,                                    // null | 'roi' | 'excl' — active rectangle-draw mode
-  maskDraft:null                                    // {x,y,w,h} while dragging a new rectangle
+  maskDraft:null,                                   // {x,y,w,h} while dragging a new rectangle
+  editMode:"resample"                               // 'resample' (adjust density) | 'shape' (hand-edit the curve)
 };
 var HIST={stack:[],ptr:-1};
 
@@ -433,8 +463,8 @@ function snapshot(){
   return JSON.stringify({
     axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
     series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,
-      points:s.points,data:s.data,tol:s.tol};}),
-    mask:S.mask, activeSeries:S.activeSeries
+      points:s.points,data:s.data,tol:s.tol,raw:s.raw,space:s.space};}),
+    mask:S.mask, editMode:S.editMode, activeSeries:S.activeSeries
   });
 }
 function pushHistory(){
@@ -450,9 +480,11 @@ function applySnapshot(snap){
   S.axisMode=o.axisMode;S.calib=o.calib;S.xScale=o.xScale;S.yScale=o.yScale;
   S.series=o.series;S.activeSeries=o.activeSeries;
   if(o.mask) S.mask={roi:o.mask.roi||null,excl:(o.mask.excl||[])};
+  if(o.editMode) S.editMode=o.editMode;
   $("xScale").value=S.xScale;$("yScale").value=S.yScale;
   $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
-  tryBuildMap(true); renderCalib(); renderSeries(); redraw(); updateExtractBtn(); updateDateHint(); syncTolSlider();
+  tryBuildMap(true); renderCalib(); renderSeries(); redraw(); updateExtractBtn(); updateDateHint(); syncTolSlider(); syncRefineScope();
+  if(S.series.some(function(s){return s.raw;})){ var rb=$("refineBlock"); if(rb) rb.style.display="block"; }
 }
 function undo(){ if(HIST.ptr>0){HIST.ptr--;applySnapshot(HIST.stack[HIST.ptr]);updateUndoButtons();persist();} }
 function redo(){ if(HIST.ptr<HIST.stack.length-1){HIST.ptr++;applySnapshot(HIST.stack[HIST.ptr]);updateUndoButtons();persist();} }
@@ -469,7 +501,7 @@ function persist(){
     try{
       localStorage.setItem(LS_KEY, JSON.stringify({
         axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
-        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol};}),
+        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol,raw:s.raw,space:s.space};}),
         mask:S.mask, imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
       }));
     }catch(e){/* quota or disabled: ignore */}
@@ -483,7 +515,8 @@ function restoreSession(){
     if(!o||!o.series) return;
     S.axisMode=o.axisMode||"2pt"; S.calib=o.calib||[]; S.xScale=o.xScale||"lin"; S.yScale=o.yScale||"lin";
     S.series=(o.series||[]).map(function(s,i){return {color:s.color,disp:s.disp||paletteColor(i),
-      name:s.name,visible:s.visible!==false,points:null,data:s.data||null,tol:(s.tol!=null?s.tol:null)};});
+      name:s.name,visible:s.visible!==false,points:null,data:s.data||null,tol:(s.tol!=null?s.tol:null),
+      raw:s.raw||null,space:s.space||null};});
     if(o.mask && (o.mask.roi||(o.mask.excl&&o.mask.excl.length))) S.mask={roi:o.mask.roi||null,excl:o.mask.excl||[]};
     $("xScale").value=S.xScale;$("yScale").value=S.yScale;
     $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
@@ -912,7 +945,7 @@ function renderSeries(){
       var cur=PALETTE.findIndex(function(c){return c[0]===s.disp[0]&&c[1]===s.disp[1]&&c[2]===s.disp[2];});
       s.disp=paletteColor((cur<0?idx:cur)+1); renderSeries(); redraw(); persist(); };
     el.onclick=function(ev){ if(ev.target.classList.contains("x")||ev.target.classList.contains("vis")||ev.target.classList.contains("nm")||ev.target.classList.contains("sw")) return;
-      S.activeSeries=idx; renderSeries(); redraw(); syncTolSlider(); };
+      S.activeSeries=idx; renderSeries(); redraw(); syncTolSlider(); syncRefineScope(); };
     el.querySelector(".nm").onblur=function(e){ s.name=e.target.textContent.trim()||s.name; persist(); };
     el.querySelector(".vis").onclick=function(e){e.stopPropagation(); s.visible=!s.visible; renderSeries(); redraw(); pushHistory();};
     el.querySelector(".x").onclick=function(e){e.stopPropagation(); S.series.splice(idx,1);
@@ -966,10 +999,11 @@ function extractSync(opts,live){
 function applyExtractResult(resSeries,live){
   for(var si=0;si<S.series.length;si++){
     var pts=resSeries[si]||[];
-    S.series[si].points=pts;
-    S.series[si].data=pts.map(function(p){return pxToData(p.px,p.py);});
+    S.series[si].raw=pts.slice();            // preserve the true extracted curve shape
+    resampleSeries(S.series[si]);            // derive display points via current spacing rule
   }
   redraw();renderSeries();renderTable();enableExport(true);renderMinimap();
+  var rb=$("refineBlock"); if(rb) rb.style.display="block";
   var total=S.series.reduce(function(a,s){return a+(s.points?s.points.length:0);},0);
   if(live){ status("Live: "+total+" points."); }
   else { liveOn=true; pushHistory();
@@ -1010,6 +1044,102 @@ function interpY(d,xt){
     var dx=b.x-a.x; if(dx===0) return b.y;
     var t=(xt-a.x)/dx; return a.y+(b.y-a.y)*t; } }
   return d[d.length-1].y;
+}
+
+/* ===========================================================================
+   PER-SERIES RESAMPLING ENGINE
+   s.raw is the true extracted polyline (image-space {px,py}); s.points is the
+   display/export set derived from it by the current spacing rule. Hand-edits
+   change s.raw; resampling regenerates s.points. Spacing settings live per
+   series (s.space = {mode,count,dx,px}); falling back to the global toolbar.
+   =========================================================================== */
+function spaceFor(s){
+  var g={mode:$("spaceMode")?$("spaceMode").value:"count",
+         count:+($("spCount")?$("spCount").value:150),
+         dx:+($("spDx")?$("spDx").value:0.02),
+         px:+($("spPx")?$("spPx").value:6)};
+  if(!s.space) return g;
+  return {mode:s.space.mode||g.mode, count:s.space.count||g.count,
+          dx:s.space.dx||g.dx, px:s.space.px||g.px};
+}
+/* interpolate a py at an arbitrary px along an ascending-in-px polyline */
+function interpPy(raw,px){
+  if(px<=raw[0].px) return raw[0].py;
+  if(px>=raw[raw.length-1].px) return raw[raw.length-1].py;
+  for(var k=1;k<raw.length;k++){ if(raw[k].px>=px){ var a=raw[k-1],b=raw[k];
+    var dx=b.px-a.px; if(dx===0) return b.py; var t=(px-a.px)/dx; return a.py+(b.py-a.py)*t; } }
+  return raw[raw.length-1].py;
+}
+function resampleSeries(s){
+  if(!s.raw || !s.raw.length){ s.points=[]; s.data=[]; return; }
+  var raw=s.raw.slice().sort(function(a,b){return a.px-b.px;});
+  var sp=spaceFor(s), out=[];
+  var x0=raw[0].px, x1=raw[raw.length-1].px;
+  if(sp.mode==="count"){
+    var n=Math.max(2,sp.count);
+    if(raw.length<=n){ out=raw.slice(); }
+    else for(var i=0;i<n;i++){ var px=(n===1)?x0:x0+(x1-x0)*i/(n-1); out.push({px:px,py:interpPy(raw,px)}); }
+  } else if(sp.mode==="dx"){
+    // even spacing in DATA-x: walk the data-x range in steps of sp.dx, mapping each
+    // target data-x back to a pixel by local inversion of the calibration.
+    if(!S.mapReady || sp.dx<=0){ out=raw.slice(); }
+    else {
+      var dataAt=function(px){ var v=S.map.x(px); return S.xScale==="log"?Math.pow(10,v):v; };
+      var dA=dataAt(x0), dB=dataAt(x1), lo=Math.min(dA,dB), hi=Math.max(dA,dB);
+      var pxForData=function(target){ // bisection on the monotonic x-map
+        if(Math.abs(dataAt(x0)-target)<1e-9) return x0;
+        if(Math.abs(dataAt(x1)-target)<1e-9) return x1;
+        var a=x0,b=x1,fa=dataAt(a)-target;
+        for(var it=0;it<48;it++){ var m=(a+b)/2, fm=dataAt(m)-target;
+          if(fm===0) return m;
+          if((fa<0)===(fm<0)){ a=m; fa=fm; } else { b=m; } }
+        return (a+b)/2;
+      };
+      var guard=0;
+      for(var dv=lo; dv<=hi+sp.dx*1e-6 && guard<5000; dv+=sp.dx, guard++){
+        var pxm=pxForData(dv);
+        out.push({px:pxm,py:interpPy(raw,pxm)});
+      }
+      if(!out.length) out=raw.slice();
+    }
+  } else { // pixel-distance along the curve (arc length)
+    var step=Math.max(1,sp.px);
+    out.push({px:raw[0].px,py:raw[0].py});
+    var acc=0;
+    for(var j=1;j<raw.length;j++){
+      var seg=Math.hypot(raw[j].px-raw[j-1].px, raw[j].py-raw[j-1].py);
+      acc+=seg;
+      if(acc>=step){ out.push({px:raw[j].px,py:raw[j].py}); acc=0; }
+    }
+    var last=raw[raw.length-1];
+    if(out[out.length-1].px!==last.px || out[out.length-1].py!==last.py) out.push({px:last.px,py:last.py});
+  }
+  s.points=out;
+  s.data=out.map(function(p){return pxToData(p.px,p.py);});
+}
+/* How many pixels correspond to a step of dx in DATA-x, at a given pixel location.
+   Done numerically by inverting the x-map locally: find the pixel whose data-x is
+   (dataX(px) + dx), and return the pixel difference. Works for linear, log and date. */
+function dataDxToPx(dx,atPx){
+  if(!S.mapReady || !S.map) return 0;
+  if(atPx==null) atPx=400;
+  var dataAt=function(px){ var v=S.map.x(px); return S.xScale==="log"?Math.pow(10,v):v; };
+  var x0=dataAt(atPx);
+  // data-x per pixel (local slope), via a 1px finite difference
+  var perPx=dataAt(atPx+1)-x0;
+  if(perPx===0 || !isFinite(perPx)) return 0;
+  return Math.abs(dx/perPx);
+}
+/* After a hand-edit, the edited display points become the new raw curve, so the
+   correction is preserved and future resampling derives from the sculpted shape. */
+function commitShapeEdit(s){
+  s.raw = s.points.slice().sort(function(a,b){return a.px-b.px;});
+}
+/* resample all series in the current scope (active if selected, else all) */
+function resampleScope(){
+  var scope = (S.activeSeries>=0 && S.series[S.activeSeries]) ? [S.series[S.activeSeries]] : S.series;
+  scope.forEach(function(s){ if(s.raw) resampleSeries(s); });
+  redraw(); renderSeries(); renderTable(); renderMinimap();
 }
 
 /* ===========================================================================
@@ -1121,20 +1251,26 @@ stage.addEventListener("mousedown",function(ev){
   // calib marker drag
   var ci=hitCalib(cv.x,cv.y);
   if(ci>=0){ S.dragging={type:"calib",idx:ci}; return; }
-  // point edit on active series
+  // point edit on active series — only in Hand-edit (shape) mode
   var pi=hitPoint(cv.x,cv.y);
-  if(ev.button===2 && pi!=null){ // right-click delete
-    S.series[S.activeSeries].points.splice(pi,1);
-    S.series[S.activeSeries].data.splice(pi,1);
-    renderSeries();redraw();pushHistory();ev.preventDefault();return;
-  }
-  if(pi!=null){ S.dragging={type:"point",sidx:S.activeSeries,idx:pi}; return; }
-  if(ev.altKey && S.activeSeries>=0 && S.series[S.activeSeries].points){ // add point
-    var s=S.series[S.activeSeries];
-    s.points.push({px:im.px,py:im.py}); s.data.push(pxToData(im.px,im.py));
-    s.points.sort(function(a,b){return a.px-b.px;});
-    s.data=s.points.map(function(p){return pxToData(p.px,p.py);});
-    renderSeries();redraw();pushHistory();return;
+  if(S.editMode==="shape" && S.activeSeries>=0){
+    if(ev.button===2 && pi!=null){ // right-click delete
+      var sd=S.series[S.activeSeries];
+      sd.points.splice(pi,1); sd.data.splice(pi,1);
+      commitShapeEdit(sd);
+      renderSeries();redraw();pushHistory();ev.preventDefault();return;
+    }
+    if(pi!=null){ S.dragging={type:"point",sidx:S.activeSeries,idx:pi}; return; }
+    if(ev.altKey && S.series[S.activeSeries].points){ // add point
+      var s=S.series[S.activeSeries];
+      s.points.push({px:im.px,py:im.py});
+      s.points.sort(function(a,b){return a.px-b.px;});
+      s.data=s.points.map(function(p){return pxToData(p.px,p.py);});
+      commitShapeEdit(s);
+      renderSeries();redraw();pushHistory();return;
+    }
+  } else if(pi!=null && S.editMode!=="shape"){
+    toast("Switch to Hand-edit mode to move or delete points.");
   }
   // else: place calibration point if still needed
   if(S.calib.length<neededCalib()){
@@ -1168,7 +1304,7 @@ window.addEventListener("mousemove",function(ev){
     renderCalib();tryBuildMap(true);redraw(); return; }
   if(S.dragging.type==="point"){ var s=S.series[S.dragging.sidx]; var p=s.points[S.dragging.idx];
     p.px=clamp(im.px,0,S.imgW); p.py=clamp(im.py,0,S.imgH); s.data[S.dragging.idx]=pxToData(p.px,p.py);
-    redraw(); return; }
+    redraw(); renderMinimap(); return; }
 });
 window.addEventListener("mouseup",function(){
   if(!S.dragging) return;
@@ -1183,7 +1319,8 @@ window.addEventListener("mouseup",function(){
     } else { redraw(); }
     return;
   }
-  if(t==="calib"||t==="point"){ renderTable(); pushHistory(); }
+  if(t==="point"){ var ps=S.series[S.activeSeries]; if(ps) commitShapeEdit(ps); renderTable(); pushHistory(); }
+  else if(t==="calib"){ renderTable(); pushHistory(); }
 });
 stage.addEventListener("contextmenu",function(e){ e.preventDefault(); });
 main.addEventListener("mouseleave",function(){ $("loupe").style.display="none"; });
@@ -1267,6 +1404,45 @@ $("gap").oninput=function(e){$("gapVal").textContent=e.target.value; liveReextra
 $("optTrack").onchange=function(){ liveReextract(); };
 $("gridN").oninput=function(e){$("gridNVal").textContent=e.target.value; if($("optGrid").checked){renderTable();redraw();}};
 $("pointSize").oninput=function(e){$("pointSizeVal").textContent=e.target.value; S.pointSize=+e.target.value; redraw();};
+
+/* ---- refine-points controls ---- */
+function refineLiveApply(){
+  // write the spacing settings onto the scoped series, then resample live
+  var sp={mode:$("spaceMode").value, count:+$("spCount").value, dx:+$("spDx").value, px:+$("spPx").value};
+  var scope=(S.activeSeries>=0 && S.series[S.activeSeries])?[S.series[S.activeSeries]]:S.series;
+  scope.forEach(function(s){ if(s.raw) s.space={mode:sp.mode,count:sp.count,dx:sp.dx,px:sp.px}; });
+  resampleScope(); persist();
+}
+function showSpacingPane(){
+  var m=$("spaceMode").value;
+  $("spCountWrap").style.display=m==="count"?"block":"none";
+  $("spDxWrap").style.display=m==="dx"?"block":"none";
+  $("spPxWrap").style.display=m==="px"?"block":"none";
+}
+$("spaceMode").onchange=function(){ showSpacingPane(); refineLiveApply(); };
+$("spCount").oninput=function(e){ $("spCountVal").textContent=e.target.value; refineLiveApply(); };
+$("spDx").oninput=function(e){ $("spDxVal").textContent=e.target.value; refineLiveApply(); };
+$("spPx").oninput=function(e){ $("spPxVal").textContent=e.target.value; refineLiveApply(); };
+$("editMode").querySelectorAll("button").forEach(function(b){
+  b.onclick=function(){ $("editMode").querySelectorAll("button").forEach(function(x){x.classList.remove("on");});
+    b.classList.add("on"); S.editMode=b.dataset.m;
+    $("resamplePane").style.display=S.editMode==="resample"?"block":"none";
+    $("shapePane").style.display=S.editMode==="shape"?"block":"none";
+    status(S.editMode==="shape"?"Hand-edit: drag/add/delete points to reshape the curve.":"Resample: adjust spacing; points stay on the extracted curve.");
+  };
+});
+/* reflect scope + per-series spacing when the active series changes */
+function syncRefineScope(){
+  var sc=$("refineScope");
+  if(sc) sc.textContent=(S.activeSeries>=0&&S.series[S.activeSeries])?("· "+esc(S.series[S.activeSeries].name)):"· all series";
+  var s=S.series[S.activeSeries];
+  if(s && s.space){
+    $("spaceMode").value=s.space.mode; showSpacingPane();
+    if(s.space.count){$("spCount").value=s.space.count;$("spCountVal").textContent=s.space.count;}
+    if(s.space.dx){$("spDx").value=s.space.dx;$("spDxVal").textContent=s.space.dx;}
+    if(s.space.px){$("spPx").value=s.space.px;$("spPxVal").textContent=s.space.px;}
+  }
+}
 $("btnExtract").onclick=function(){ extract(); };
 
 $("optSort").onchange=function(){renderTable();redraw();persist();};
@@ -1323,6 +1499,7 @@ renderCalib(); updateUndoButtons();
 status("Load a chart image to begin.");
 pushHistory(); // baseline
 })();
+
 
 
 
