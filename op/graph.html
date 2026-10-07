@@ -69,6 +69,12 @@
   .sItem .ct{font:600 11px/1 var(--mono);color:var(--mut)}
   .sItem .vis,.sItem .x{color:var(--dim);cursor:pointer;padding:2px 4px}
   .sItem .vis:hover{color:var(--acc)} .sItem .x:hover{color:var(--danger)}
+  .sItem.off{opacity:.45} .sItem.off .nm{text-decoration:line-through}
+  .sItem.sel{background:rgba(54,194,166,.14);border-color:rgba(54,194,166,.55)}
+  .styleBar{margin-top:8px;padding:8px;border:1px solid rgba(255,255,255,.08);border-radius:8px}
+  .styleBar .row{display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap}
+  .styleBar label,#stepWrap label{display:flex;gap:4px;align-items:center;font-size:12px;color:var(--mut)}
+  .styleBar select,.styleBar input,#stepWrap input{background:var(--panel2);color:inherit;border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:2px 4px}
   .toolbar{position:absolute;top:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:4}
   .toolbar .pill,.rpill{background:rgba(12,18,23,.92);border:1px solid var(--line);
     color:var(--ink);border-radius:20px;padding:5px 11px;font-size:12px;
@@ -184,6 +190,17 @@
       <button class="btn" id="btnPick" style="margin-top:8px">+ Pick colour from image</button>
       <div class="hint">Pick, then click that curve on the image.</div>
       <div class="seriesList" id="seriesList"></div>
+      <div class="styleBar" id="styleBar" style="display:none">
+        <div class="maskTitle" id="styleTitle">Style</div>
+        <div class="row">
+          <label>Line <select id="stLine"><option value="solid">solid</option><option value="dash">dashed</option><option value="dot">dotted</option><option value="none">none</option></select></label>
+          <label>Width <input type="number" id="stWidth" min="0.5" max="6" step="0.5" value="1.6" style="width:52px"></label>
+        </div>
+        <div class="row">
+          <label>Points <select id="stMark"><option value="dot">dots</option><option value="square">squares</option><option value="none">none</option></select></label>
+          <label>Colour <input type="color" id="stColor" style="width:34px;height:22px;padding:0"></label>
+        </div>
+      </div>
       <div class="maskControls">
         <div class="maskTitle">Ignore parts of the image</div>
         <div class="row">
@@ -244,6 +261,15 @@
       <label class="chk"><input type="checkbox" id="optGrid"> Resample onto uniform X grid</label>
       <label class="field" id="gridNWrap" style="display:none"><span>Grid points <b class="k" id="gridNVal">100</b></span>
         <input type="range" class="slider" id="gridN" min="5" max="500" value="100"></label>
+      <label class="chk"><input type="checkbox" id="optStep"> Common X step (same X for every series)</label>
+      <div id="stepWrap" style="display:none">
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <label>Step &Delta;X <input type="number" id="stepDx" value="0.1" step="any" style="width:70px"></label>
+          <label>From <input type="number" id="stepX0" placeholder="auto" step="any" style="width:64px"></label>
+          <label>To <input type="number" id="stepX1" placeholder="auto" step="any" style="width:64px"></label>
+        </div>
+        <div class="hint">Y is interpolated at every X step. Blank where a curve doesn't reach that X.</div>
+      </div>
       <div class="row">
         <button class="btn" id="btnCsv" disabled>CSV</button>
         <button class="btn" id="btnJson" disabled>JSON</button>
@@ -463,7 +489,7 @@ function snapshot(){
   return JSON.stringify({
     axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
     series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,
-      points:s.points,data:s.data,tol:s.tol,raw:s.raw,space:s.space};}),
+      points:s.points,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null};}),
     mask:S.mask, editMode:S.editMode, activeSeries:S.activeSeries
   });
 }
@@ -501,7 +527,7 @@ function persist(){
     try{
       localStorage.setItem(LS_KEY, JSON.stringify({
         axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
-        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol,raw:s.raw,space:s.space};}),
+        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null};}),
         mask:S.mask, imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
       }));
     }catch(e){/* quota or disabled: ignore */}
@@ -516,7 +542,7 @@ function restoreSession(){
     S.axisMode=o.axisMode||"2pt"; S.calib=o.calib||[]; S.xScale=o.xScale||"lin"; S.yScale=o.yScale||"lin";
     S.series=(o.series||[]).map(function(s,i){return {color:s.color,disp:s.disp||paletteColor(i),
       name:s.name,visible:s.visible!==false,points:null,data:s.data||null,tol:(s.tol!=null?s.tol:null),
-      raw:s.raw||null,space:s.space||null};});
+      raw:s.raw||null,space:s.space||null,style:s.style||null};});
     if(o.mask && (o.mask.roi||(o.mask.excl&&o.mask.excl.length))) S.mask={roi:o.mask.roi||null,excl:o.mask.excl||[]};
     $("xScale").value=S.xScale;$("yScale").value=S.yScale;
     $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
@@ -601,11 +627,12 @@ function redraw(){
     var s=S.series[si]; if(!s.visible||!s.points) continue;
     var dc=dispOf(s,si), col="rgb("+dc[0]+","+dc[1]+","+dc[2]+")";
     ctx.fillStyle=col; ctx.strokeStyle="rgba(0,0,0,.65)"; ctx.lineWidth=1;
-    var rad=si===S.activeSeries?base+0.8:base;
+    var rad=si===S.activeSeries?base+0.8:base, mk=styleOf(s).mark;
+    if(mk==="none") continue;
     for(var p=0;p<s.points.length;p++){
       var c=imgToCanvas(s.points[p].px,s.points[p].py);
-      ctx.beginPath();ctx.arc(c.x,c.y,rad,0,7);ctx.fill();
-      if(si===S.activeSeries) ctx.stroke();
+      if(mk==="square"){ ctx.fillRect(c.x-rad,c.y-rad,2*rad,2*rad); if(si===S.activeSeries) ctx.strokeRect(c.x-rad,c.y-rad,2*rad,2*rad); }
+      else { ctx.beginPath();ctx.arc(c.x,c.y,rad,0,7);ctx.fill(); if(si===S.activeSeries) ctx.stroke(); }
     }
   }
   // calibration markers
@@ -714,7 +741,9 @@ function renderSVGOverlay(){
       var c=imgToCanvas(s.points[p].px,s.points[p].py);
       dd+=(p===0?"M":"L")+c.x.toFixed(1)+" "+c.y.toFixed(1)+" ";
     }
-    parts.push('<path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-opacity="0.9"/>');
+    var st=styleOf(s); if(st.line==="none") continue;
+    var dash=st.line==="dash"?' stroke-dasharray="7 4"':(st.line==="dot"?' stroke-dasharray="1 4" stroke-linecap="round"':'');
+    parts.push('<path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="'+(+st.w||1.6)+'" stroke-opacity="0.9"'+dash+'/>');
   }
   svg.innerHTML=parts.join("");
 }
@@ -898,28 +927,55 @@ function isBackgroundish(r,g,b){
 }
 function autoDetect(){
   if(!S.img){toast("Load an image first.",true);return;}
-  var d=S.srcData.data,buckets={};
-  var step=Math.max(1,Math.floor(Math.sqrt(S.imgW*S.imgH)/280));
-  for(var y=0;y<S.imgH;y+=step){ for(var x=0;x<S.imgW;x+=step){
-    var i=(y*S.imgW+x)*4,r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
-    if(a<128||isBackgroundish(r,g,b)) continue;
+  var d=S.srcData.data,W=S.imgW,H=S.imgH,buckets={};
+  var mask=(S.mask&&(S.mask.roi||(S.mask.excl&&S.mask.excl.length)))?S.mask:null;
+  var hasRoi=!!(mask&&mask.roi);
+  var xb=cv_xBounds(W,mask),yb=cv_yBounds(H,mask);
+  var step=Math.max(1,Math.floor(Math.sqrt((xb[1]-xb[0])*(yb[1]-yb[0]))/300));
+  var nCols=Math.ceil((xb[1]-xb[0])/step);
+  for(var y=yb[0];y<yb[1];y+=step){ for(var x=xb[0];x<xb[1];x+=step){
+    if(!cv_inMask(x,y,mask)) continue;
+    var i=(y*W+x)*4,r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+    if(a<128) continue;
+    var mx=Math.max(r,g,b);
+    // black/dark curves are only trusted inside a plot area (otherwise axes & text win)
+    if(mx<28){ if(!hasRoi) continue; } else if(isBackgroundish(r,g,b)) continue;
     var key=(r>>5)+","+(g>>5)+","+(b>>5);
-    var e=buckets[key]; if(!e){e={r:0,g:0,b:0,n:0};buckets[key]=e;}
+    var e=buckets[key]; if(!e){e={r:0,g:0,b:0,n:0,cols:new Uint8Array(nCols),c:0};buckets[key]=e;}
     e.r+=r;e.g+=g;e.b+=b;e.n++;
+    var ci=Math.floor((x-xb[0])/step); if(!e.cols[ci]){e.cols[ci]=1;e.c++;}
   }}
+  // a curve spans many columns; text, markers and anti-alias fringe do not
   var arr=Object.keys(buckets).map(function(k){var e=buckets[k];
-    return {color:[Math.round(e.r/e.n),Math.round(e.g/e.n),Math.round(e.b/e.n)],n:e.n};})
+    return {color:[Math.round(e.r/e.n),Math.round(e.g/e.n),Math.round(e.b/e.n)],n:e.n,cov:e.c/nCols};})
+    .filter(function(p){return p.cov>=0.12;})
     .sort(function(p,q){return q.n-p.n;});
+  // group colours into curve "families": same hue = same curve (anti-alias / JPEG
+  // fringe is just a paler version of it); keep the most saturated (or darkest grey)
+  function hsv(c){ var r=c[0]/255,g=c[1]/255,b=c[2]/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),dd=mx-mn,h=0;
+    if(dd>0){ if(mx===r) h=((g-b)/dd)%6; else if(mx===g) h=(b-r)/dd+2; else h=(r-g)/dd+4; h*=60; if(h<0) h+=360; }
+    return {h:h,s:mx?dd/mx:0,v:mx}; }
+  function chroma(q){ return q.s>0.25&&q.v>0.2; }
+  function sameFamily(a,b){ var A=hsv(a),B=hsv(b),ca=chroma(A),cb=chroma(B);
+    if(ca!==cb) return false; if(!ca) return true;
+    var dh=Math.abs(A.h-B.h); dh=Math.min(dh,360-dh); return dh<22; }
   var merged=[];
   for(var j=0;j<arr.length;j++){
-    var dup=false; for(var m=0;m<merged.length;m++) if(colorDist(merged[m].color,arr[j].color)<48){dup=true;break;}
-    if(!dup) merged.push(arr[j]); if(merged.length>=6) break;
+    var c=arr[j],q=hsv(c.color),hit=false;
+    if(!chroma(q)&&q.v>0.6) continue;               // pale tint / light grey = fringe or grid
+    for(var m=0;m<merged.length;m++){
+      if(sameFamily(merged[m].color,c.color)){ var o=hsv(merged[m].color);
+        if((chroma(q)&&q.s>o.s)||(!chroma(q)&&q.v<o.v)) merged[m]=c;
+        hit=true; break; }
+    }
+    if(!hit) merged.push(c);
+    if(merged.length>=8) break;
   }
   if(!merged.length){toast("No distinct curve colours found. Try picking manually.",true);return;}
   S.series=[]; merged.forEach(function(mm,idx){addSeries(mm.color,"Series "+(idx+1));});
   S.activeSeries=0;
   renderSeries();redraw();pushHistory();
-  toast("Detected "+merged.length+" candidate curve(s). Remove any noise, then Extract.");
+  toast("Detected "+merged.length+" curve(s)"+(hasRoi?"":" — set the plot area first for better results (and to catch black curves)")+".");
 }
 function addSeries(color,name){
   S.series.push({color:color.slice(),disp:paletteColor(S.series.length),
@@ -931,10 +987,23 @@ function dispOf(s,idx){ // backward-compatible: restored/old series may lack .di
   return s.disp;
 }
 function reassignPalette(){ S.series.forEach(function(s,i){ s.disp=paletteColor(i); }); }
+function styleOf(s){ if(!s.style) s.style={line:"solid",w:1.6,mark:"dot"}; return s.style; }
+function selectedSeries(){ var a=S.series.filter(function(s){return s.sel;});
+  if(!a.length&&S.series[S.activeSeries]) a=[S.series[S.activeSeries]]; return a; }
+function rgbHex(c){ return "#"+c.map(function(v){return ("0"+Math.round(v).toString(16)).slice(-2);}).join(""); }
+function syncStyleBar(){ var bar=$("styleBar"); if(!bar) return; var a=selectedSeries();
+  bar.style.display=a.length?"block":"none"; if(!a.length) return;
+  var st=styleOf(a[0]); $("stLine").value=st.line; $("stWidth").value=st.w; $("stMark").value=st.mark;
+  $("stColor").value=rgbHex(dispOf(a[0],S.series.indexOf(a[0])));
+  $("styleTitle").textContent="Style \u00b7 "+a.length+" selected (Ctrl-click / Shift-click rows to multi-select)"; }
+function applyStyle(key,val){ selectedSeries().forEach(function(s){
+    if(key==="color") s.disp=[parseInt(val.substr(1,2),16),parseInt(val.substr(3,2),16),parseInt(val.substr(5,2),16)];
+    else styleOf(s)[key]=val; });
+  renderSeries(); redraw(); pushHistory(); persist(); }
 function renderSeries(){
   var host=$("seriesList"); host.innerHTML="";
   S.series.forEach(function(s,idx){
-    var el=document.createElement("div");el.className="sItem"+(idx===S.activeSeries?" active":"");
+    var el=document.createElement("div");el.className="sItem"+(idx===S.activeSeries?" active":"")+(s.visible===false?" off":"")+(s.sel?" sel":"");
     var dc=dispOf(s,idx);
     el.innerHTML='<span class="sw" title="cycle display colour" style="background:rgb('+dc[0]+','+dc[1]+','+dc[2]+')"></span>'+
       '<span class="nm" contenteditable spellcheck="false">'+esc(s.name)+'</span>'+
@@ -945,14 +1014,20 @@ function renderSeries(){
       var cur=PALETTE.findIndex(function(c){return c[0]===s.disp[0]&&c[1]===s.disp[1]&&c[2]===s.disp[2];});
       s.disp=paletteColor((cur<0?idx:cur)+1); renderSeries(); redraw(); persist(); };
     el.onclick=function(ev){ if(ev.target.classList.contains("x")||ev.target.classList.contains("vis")||ev.target.classList.contains("nm")||ev.target.classList.contains("sw")) return;
+      if(ev.shiftKey){ var lo=Math.min(S.activeSeries,idx),hi=Math.max(S.activeSeries,idx);
+        S.series.forEach(function(o,k){o.sel=(k>=lo&&k<=hi);}); }
+      else if(ev.ctrlKey||ev.metaKey){ if(!S.series.some(function(o){return o.sel;})&&S.series[S.activeSeries]) S.series[S.activeSeries].sel=true;
+        s.sel=!s.sel; }
+      else S.series.forEach(function(o){o.sel=false;});
       S.activeSeries=idx; renderSeries(); redraw(); syncTolSlider(); syncRefineScope(); };
     el.querySelector(".nm").onblur=function(e){ s.name=e.target.textContent.trim()||s.name; persist(); };
-    el.querySelector(".vis").onclick=function(e){e.stopPropagation(); s.visible=!s.visible; renderSeries(); redraw(); pushHistory();};
+    el.querySelector(".vis").onclick=function(e){e.stopPropagation(); s.visible=!s.visible; renderSeries(); redraw(); renderTable(); pushHistory();};
     el.querySelector(".x").onclick=function(e){e.stopPropagation(); S.series.splice(idx,1);
       if(S.activeSeries>=S.series.length) S.activeSeries=S.series.length-1;
       renderSeries();redraw();updateExtractBtn();pushHistory();};
     host.appendChild(el);
   });
+  syncStyleBar();
 }
 
 /* ===========================================================================
@@ -1023,6 +1098,10 @@ function processedData(s){
     for(var k=0;k<d.length;k++){ if(lastx!==null&&d[k].x===lastx){ out[out.length-1]=d[k]; } else out.push(d[k]); lastx=d[k].x; }
     d=out;
   }
+  if($("optStep").checked && d.length>=2){
+    var xs=stepXs(); if(xs){ var ss=d.slice().sort(function(a,b){return a.x-b.x;});
+      return xs.map(function(xt){return {x:xt,y:stepY(ss,xt)};}).filter(function(p){return p.y!=null;}); }
+  }
   if($("optGrid").checked && d.length>=2){
     // interpolation REQUIRES ascending X — sort a private copy so the result is
     // correct even when "Sort by X" is off or the X axis runs right-to-left.
@@ -1035,6 +1114,32 @@ function processedData(s){
     d=g;
   }
   return d;
+}
+/* Common X step: one shared X column (x0, x0+dx, ...) for every series. */
+function _decs(v){ var t=String(v); if(t.indexOf("e-")>0) return +t.split("e-")[1]; var i=t.indexOf("."); return i<0?0:t.length-i-1; }
+function stepXs(){
+  var dx=+$("stepDx").value; if(!(dx>0)) return null;
+  var lo=Infinity,hi=-Infinity;
+  S.series.forEach(function(s){ if(s.visible===false||!s.data) return;
+    s.data.forEach(function(p){ if(p.x<lo) lo=p.x; if(p.x>hi) hi=p.x; }); });
+  if(!isFinite(lo)) return null;
+  var a=$("stepX0").value, b=$("stepX1").value;
+  var x0=a!==""?+a:Math.ceil(lo/dx-1e-9)*dx, x1=b!==""?+b:Math.floor(hi/dx+1e-9)*dx;
+  var dec=Math.min(12,Math.max(_decs(dx),a!==""?_decs(a):0));
+  var n=Math.floor((x1-x0)/dx+1e-9)+1; if(!(n>0)) return null;
+  if(n>20000){ n=20000; toast("Step too small \u2014 capped at 20,000 rows.",true); }
+  var xs=[]; for(var k=0;k<n;k++) xs.push(+(x0+k*dx).toFixed(dec)); return xs;
+}
+function stepY(sorted,xt){ // null outside this curve's own X range (no extrapolation)
+  var e=1e-9*Math.max(1,Math.abs(xt));
+  if(xt<sorted[0].x-e||xt>sorted[sorted.length-1].x+e) return null;
+  return interpY(sorted,xt);
+}
+function stepTable(vis){
+  var xs=stepXs()||[];
+  var cols=vis.map(function(s){ return s.data.slice().sort(function(a,b){return a.x-b.x;}); });
+  return {head:["X"].concat(vis.map(function(s){return s.name+" Y";})),
+    rows:xs.map(function(xt){ return [fmtX(xt)].concat(cols.map(function(c){ var y=stepY(c,xt); return y==null?"":fmt(y); })); })};
 }
 function interpY(d,xt){
   // d MUST be ascending in x (callers sort a private copy before calling).
@@ -1152,8 +1257,13 @@ function fmt(v){ if(v==null||isNaN(v)) return "";
 }
 function fmtX(v){ if(S.xScale==="date" && v!=null && v>1e11){ try{return new Date(v).toISOString().replace("T"," ").replace(".000Z","");}catch(e){} } return fmt(v); }
 function renderTable(){
-  var t=$("dataTable"),vis=S.series.filter(function(s){return s.data&&s.data.length;});
+  var t=$("dataTable"),vis=S.series.filter(function(s){return s.visible!==false&&s.data&&s.data.length;});
   if(!vis.length){ $("dataMeta").textContent=""; t.innerHTML=""; return; }
+  if($("optStep").checked){ var st=stepTable(vis), shown=Math.min(st.rows.length,600);
+    t.innerHTML="<tr><th>#</th>"+st.head.map(function(h){return "<th>"+esc(h)+"</th>";}).join("")+"</tr>"+
+      st.rows.slice(0,shown).map(function(r,i){return "<tr><td>"+(i+1)+"</td>"+r.map(function(v){return "<td>"+esc(v)+"</td>";}).join("")+"</tr>";}).join("");
+    $("dataMeta").textContent="\u00b7 "+vis.length+" series \u00b7 common X step"+(st.rows.length>shown?" \u00b7 first "+shown+" of "+st.rows.length+" rows":"");
+    return; }
   var cols=vis.map(processedData);
   var maxN=Math.max.apply(null,cols.map(function(c){return c.length;}));
   var head="<tr><th>#</th>";
@@ -1172,7 +1282,9 @@ function renderTable(){
    =========================================================================== */
 function csvCell(v){v=String(v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function buildDelim(delim){
-  var vis=S.series.filter(function(s){return s.data&&s.data.length;});
+  var vis=S.series.filter(function(s){return s.visible!==false&&s.data&&s.data.length;});
+  if($("optStep").checked){ var st=stepTable(vis);
+    return [st.head.map(csvCell).join(delim)].concat(st.rows.map(function(r){return r.map(csvCell).join(delim);})).join("\r\n"); }
   var cols=vis.map(processedData);
   var maxN=Math.max.apply(null,cols.map(function(c){return c.length;}));
   var head=[]; vis.forEach(function(s){head.push(s.name+" X",s.name+" Y");});
@@ -1184,13 +1296,13 @@ function buildDelim(delim){
   return lines.join("\r\n");
 }
 function buildJSON(){
-  var vis=S.series.filter(function(s){return s.data;});
+  var vis=S.series.filter(function(s){return s.visible!==false&&s.data;});
   return JSON.stringify({
     source:{width:S.imgW,height:S.imgH},
     axes:{xScale:S.xScale,yScale:S.yScale,mode:S.axisMode,
       calibration:S.calib.map(function(c){return {px:c.px,py:c.py,valueX:c.valueX,valueY:c.valueY};})},
     processing:{sort:$("optSort").checked,dedup:$("optDedup").checked,grid:$("optGrid").checked},
-    series:vis.map(function(s){return {name:s.name,color:"rgb("+s.color.join(",")+")",points:processedData(s)};})
+    series:vis.map(function(s){return {name:s.name,color:"rgb("+s.color.join(",")+")",style:s.style||null,points:processedData(s)};})
   },null,2);
 }
 function download(name,text,type){
@@ -1447,7 +1559,15 @@ $("btnExtract").onclick=function(){ extract(); };
 
 $("optSort").onchange=function(){renderTable();redraw();persist();};
 $("optDedup").onchange=function(){renderTable();redraw();persist();};
-$("optGrid").onchange=function(e){$("gridNWrap").style.display=e.target.checked?"block":"none";renderTable();redraw();};
+$("optGrid").onchange=function(e){$("gridNWrap").style.display=e.target.checked?"block":"none";
+  if(e.target.checked){$("optStep").checked=false;$("stepWrap").style.display="none";} renderTable();redraw();};
+$("optStep").onchange=function(e){$("stepWrap").style.display=e.target.checked?"block":"none";
+  if(e.target.checked){$("optGrid").checked=false;$("gridNWrap").style.display="none";} renderTable();redraw();};
+["stepDx","stepX0","stepX1"].forEach(function(id){ $(id).oninput=function(){ if($("optStep").checked) renderTable(); }; });
+$("stLine").onchange=function(e){applyStyle("line",e.target.value);};
+$("stWidth").onchange=function(e){applyStyle("w",+e.target.value||1.6);};
+$("stMark").onchange=function(e){applyStyle("mark",e.target.value);};
+$("stColor").onchange=function(e){applyStyle("color",e.target.value);};
 $("btnCsv").onclick=function(){download("graph-data.csv",buildDelim(","),"text/csv");};
 $("btnJson").onclick=function(){download("graph-data.json",buildJSON(),"application/json");};
 $("btnTsv").onclick=copyTSV;
