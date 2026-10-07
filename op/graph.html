@@ -253,6 +253,7 @@
 </div>
 <script>
 
+
 (() => {
 "use strict";
 
@@ -268,13 +269,29 @@ function cv_matchW(r,g,b,c,tol){
   if(d>tol) return 0;
   var w=1-d/tol; return w*w;           // weighted, favours exact-colour core of anti-aliased line
 }
-function cv_trackPath(img,color,tol){
+/* mask test: returns true if pixel (x,y) is ALLOWED. Outside the ROI (when one
+   is set) is disallowed; inside any exclusion rectangle is disallowed. */
+function cv_inMask(x,y,mask){
+  if(!mask) return true;
+  var roi=mask.roi;
+  if(roi){ if(x<roi.x||y<roi.y||x>=roi.x+roi.w||y>=roi.y+roi.h) return false; }
+  var ex=mask.excl;
+  if(ex){ for(var e=0;e<ex.length;e++){ var r=ex[e];
+    if(x>=r.x&&y>=r.y&&x<r.x+r.w&&y<r.y+r.h) return false; } }
+  return true;
+}
+/* column scan bounds from ROI so we don't iterate the whole image needlessly */
+function cv_xBounds(W,mask){ if(mask&&mask.roi) return [Math.max(0,Math.floor(mask.roi.x)),Math.min(W,Math.ceil(mask.roi.x+mask.roi.w))]; return [0,W]; }
+function cv_yBounds(H,mask){ if(mask&&mask.roi) return [Math.max(0,Math.floor(mask.roi.y)),Math.min(H,Math.ceil(mask.roi.y+mask.roi.h))]; return [0,H]; }
+function cv_trackPath(img,color,tol,mask){
   var W=img.width,H=img.height,data=img.data,prev=null,pts=[];
-  for(var x=0;x<W;x++){
+  var xb=cv_xBounds(W,mask),yb=cv_yBounds(H,mask);
+  for(var x=xb[0];x<xb[1];x++){
     var runs=[],start=-1,wacc=0,yacc=0;
-    for(var y=0;y<H;y++){
-      var i=(y*W+x)*4;
-      var w=data[i+3]<128?0:cv_matchW(data[i],data[i+1],data[i+2],color,tol);
+    for(var y=yb[0];y<yb[1];y++){
+      var w=0;
+      if(cv_inMask(x,y,mask)){ var i=(y*W+x)*4;
+        w=data[i+3]<128?0:cv_matchW(data[i],data[i+1],data[i+2],color,tol); }
       if(w>0){ if(start<0){start=y;wacc=0;yacc=0;} wacc+=w; yacc+=y*w; }
       else if(start>=0){ runs.push({y:yacc/wacc,w:wacc}); start=-1; }
     }
@@ -292,11 +309,13 @@ function cv_trackPath(img,color,tol){
   }
   return pts;
 }
-function cv_columnCentroid(img,color,tol){
+function cv_columnCentroid(img,color,tol,mask){
   var W=img.width,H=img.height,data=img.data,pts=[];
-  for(var x=0;x<W;x++){
+  var xb=cv_xBounds(W,mask),yb=cv_yBounds(H,mask);
+  for(var x=xb[0];x<xb[1];x++){
     var sum=0,wsum=0;
-    for(var y=0;y<H;y++){
+    for(var y=yb[0];y<yb[1];y++){
+      if(!cv_inMask(x,y,mask)) continue;
       var i=(y*W+x)*4; if(data[i+3]<128) continue;
       var w=cv_matchW(data[i],data[i+1],data[i+2],color,tol);
       if(w>0){ sum+=y*w; wsum+=w; }
@@ -325,14 +344,19 @@ function cv_resample(pts,want){
   }
   return out;
 }
-function cv_extractOne(img,color,opts){
-  var pts = opts.track ? cv_trackPath(img,color,opts.tol) : cv_columnCentroid(img,color,opts.tol);
+function cv_extractOne(img,color,opts,mask,tolOverride){
+  var tol=(tolOverride!=null?tolOverride:opts.tol);
+  var pts = opts.track ? cv_trackPath(img,color,tol,mask) : cv_columnCentroid(img,color,tol,mask);
   pts = cv_bridge(pts,opts.maxGap);
   pts = cv_resample(pts,opts.density);
   return pts;
 }
 function cv_extractAll(img,seriesList,opts){
-  var out=[]; for(var s=0;s<seriesList.length;s++) out.push(cv_extractOne(img,seriesList[s].color,opts)); return out;
+  var out=[]; for(var s=0;s<seriesList.length;s++){
+    var sObj=seriesList[s];
+    out.push(cv_extractOne(img,sObj.color,opts,opts.mask,sObj.tol));
+  }
+  return out;
 }
 
 /* Build the worker body from the stringified pure functions + a message shim. */
@@ -397,7 +421,10 @@ var S={
   dragging:null,                                    // {type:'calib'|'point'|'pan', idx, sidx, start...}
   showOverlay:true,
   pointSize:2.6,
-  hover:null                                        // {px,py} image-space cursor, for minimap readout
+  hover:null,                                       // {px,py} image-space cursor, for minimap readout
+  mask:{roi:null,excl:[]},                          // roi:{x,y,w,h} include-box; excl:[{x,y,w,h}] skip-boxes
+  maskTool:null,                                    // null | 'roi' | 'excl' — active rectangle-draw mode
+  maskDraft:null                                    // {x,y,w,h} while dragging a new rectangle
 };
 var HIST={stack:[],ptr:-1};
 
@@ -405,9 +432,9 @@ var HIST={stack:[],ptr:-1};
 function snapshot(){
   return JSON.stringify({
     axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
-    series:S.series.map(function(s){return {color:s.color,name:s.name,visible:s.visible,
-      points:s.points,data:s.data};}),
-    activeSeries:S.activeSeries
+    series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,
+      points:s.points,data:s.data,tol:s.tol};}),
+    mask:S.mask, activeSeries:S.activeSeries
   });
 }
 function pushHistory(){
@@ -422,9 +449,10 @@ function applySnapshot(snap){
   var o=JSON.parse(snap);
   S.axisMode=o.axisMode;S.calib=o.calib;S.xScale=o.xScale;S.yScale=o.yScale;
   S.series=o.series;S.activeSeries=o.activeSeries;
+  if(o.mask) S.mask={roi:o.mask.roi||null,excl:(o.mask.excl||[])};
   $("xScale").value=S.xScale;$("yScale").value=S.yScale;
   $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
-  tryBuildMap(true); renderCalib(); renderSeries(); redraw(); updateExtractBtn(); updateDateHint();
+  tryBuildMap(true); renderCalib(); renderSeries(); redraw(); updateExtractBtn(); updateDateHint(); syncTolSlider();
 }
 function undo(){ if(HIST.ptr>0){HIST.ptr--;applySnapshot(HIST.stack[HIST.ptr]);updateUndoButtons();persist();} }
 function redo(){ if(HIST.ptr<HIST.stack.length-1){HIST.ptr++;applySnapshot(HIST.stack[HIST.ptr]);updateUndoButtons();persist();} }
@@ -441,8 +469,8 @@ function persist(){
     try{
       localStorage.setItem(LS_KEY, JSON.stringify({
         axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
-        series:S.series.map(function(s){return {color:s.color,name:s.name,visible:s.visible,data:s.data};}),
-        imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
+        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol};}),
+        mask:S.mask, imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
       }));
     }catch(e){/* quota or disabled: ignore */}
   },500);
@@ -455,7 +483,8 @@ function restoreSession(){
     if(!o||!o.series) return;
     S.axisMode=o.axisMode||"2pt"; S.calib=o.calib||[]; S.xScale=o.xScale||"lin"; S.yScale=o.yScale||"lin";
     S.series=(o.series||[]).map(function(s,i){return {color:s.color,disp:s.disp||paletteColor(i),
-      name:s.name,visible:s.visible!==false,points:null,data:s.data||null};});
+      name:s.name,visible:s.visible!==false,points:null,data:s.data||null,tol:(s.tol!=null?s.tol:null)};});
+    if(o.mask && (o.mask.roi||(o.mask.excl&&o.mask.excl.length))) S.mask={roi:o.mask.roi||null,excl:o.mask.excl||[]};
     $("xScale").value=S.xScale;$("yScale").value=S.yScale;
     $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
     renderCalib();renderSeries();updateDateHint();
@@ -556,6 +585,7 @@ function redraw(){
     ctx.fillStyle="#36c2a6";ctx.font="600 11px monospace";
     ctx.fillText(calibLabel(i),cc.x+10,cc.y-7);
   }
+  drawMasks();
   renderToolbar();
   renderSVGOverlay();
   renderMinimap();
@@ -570,8 +600,68 @@ function renderToolbar(){
   html+='<span class="pill">zoom <b>'+(S.view.scale*100).toFixed(0)+'%</b></span>';
   html+='<span class="pill">calib <b>'+S.calib.length+'/'+need+'</b></span>';
   if(S.series.length) html+='<span class="pill">curves <b>'+S.series.length+'</b></span>';
+  if(S.mask&&S.mask.roi) html+='<span class="pill">plot area set</span>';
+  if(S.mask&&S.mask.excl&&S.mask.excl.length) html+='<span class="pill">excl <b>'+S.mask.excl.length+'</b></span>';
   if(S.pendingPick) html+='<button class="pill on">clicking picks a colour — Esc to cancel</button>';
+  if(S.maskTool==="roi") html+='<span class="pill on">drag to box the PLOT AREA — Esc to cancel</span>';
+  if(S.maskTool==="excl") html+='<span class="pill on">drag over area to EXCLUDE — Esc to cancel</span>';
   o.innerHTML=html;
+}
+
+/* ---- mask rendering + geometry (image-space rectangles survive pan/zoom) ---- */
+function rectCanvas(r){ var a=imgToCanvas(r.x,r.y),b=imgToCanvas(r.x+r.w,r.y+r.h);
+  return {x:a.x,y:a.y,w:b.x-a.x,h:b.y-a.y}; }
+function drawMasks(){
+  // dim everything outside the ROI so the user sees the active region clearly
+  if(S.mask&&S.mask.roi){
+    var c=rectCanvas(S.mask.roi), cw=main.clientWidth,ch=main.clientHeight;
+    ctx.save(); ctx.fillStyle="rgba(8,12,16,.45)";
+    ctx.beginPath(); ctx.rect(0,0,cw,ch);
+    ctx.rect(c.x,c.y,c.w,c.h); ctx.fill("evenodd");   // dim outside the ROI
+    ctx.strokeStyle="#36c2a6"; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+    ctx.strokeRect(c.x,c.y,c.w,c.h); ctx.setLineDash([]);
+    drawMaskHandle(c,"#36c2a6","roi");
+    ctx.restore();
+  }
+  // exclusion rectangles: red hatched
+  if(S.mask&&S.mask.excl) for(var i=0;i<S.mask.excl.length;i++){
+    var r=rectCanvas(S.mask.excl[i]);
+    ctx.save(); ctx.fillStyle="rgba(229,83,75,.28)"; ctx.fillRect(r.x,r.y,r.w,r.h);
+    ctx.strokeStyle="#e5534b"; ctx.lineWidth=1.3; ctx.strokeRect(r.x,r.y,r.w,r.h);
+    drawMaskHandle(r,"#e5534b","excl"+i);
+    ctx.restore();
+  }
+  // live draft while dragging a new rectangle
+  if(S.maskDraft){
+    var d=rectCanvas(S.maskDraft), col=S.maskTool==="roi"?"#36c2a6":"#e5534b";
+    ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
+    ctx.strokeRect(d.x,d.y,d.w,d.h); ctx.setLineDash([]); ctx.restore();
+  }
+}
+function drawMaskHandle(c,col,id){ // small ✕ delete handle top-right
+  var hx=c.x+c.w-9, hy=c.y+9;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.arc(hx,hy,8,0,7); ctx.fill();
+  ctx.strokeStyle="#0b1116"; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(hx-3.5,hy-3.5); ctx.lineTo(hx+3.5,hy+3.5);
+  ctx.moveTo(hx+3.5,hy-3.5); ctx.lineTo(hx-3.5,hy+3.5); ctx.stroke();
+}
+/* hit-test a mask delete handle; returns {kind:'roi'} or {kind:'excl',idx} or null */
+function hitMaskHandle(cx,cy){
+  if(S.mask&&S.mask.roi){ var c=rectCanvas(S.mask.roi);
+    if(Math.hypot((c.x+c.w-9)-cx,(c.y+9)-cy)<=9) return {kind:"roi"}; }
+  if(S.mask&&S.mask.excl) for(var i=0;i<S.mask.excl.length;i++){ var r=rectCanvas(S.mask.excl[i]);
+    if(Math.hypot((r.x+r.w-9)-cx,(r.y+9)-cy)<=9) return {kind:"excl",idx:i}; }
+  return null;
+}
+function normRect(x0,y0,x1,y1){ return {x:Math.min(x0,x1),y:Math.min(y0,y1),w:Math.abs(x1-x0),h:Math.abs(y1-y0)}; }
+function setMaskTool(t){
+  S.maskTool=(S.maskTool===t?null:t);
+  $("btnRoi").classList.toggle("on",S.maskTool==="roi");
+  $("btnExcl").classList.toggle("on",S.maskTool==="excl");
+  stage.style.cursor=S.maskTool?"crosshair":"grab";
+  renderToolbar();
+  if(S.maskTool==="roi") status("Drag a box around the plot area (inside the axes). Esc to cancel.");
+  else if(S.maskTool==="excl") status("Drag a box over anything to ignore — legend, labels, title. Esc to cancel.");
 }
 
 /* ===========================================================================
@@ -822,7 +912,7 @@ function renderSeries(){
       var cur=PALETTE.findIndex(function(c){return c[0]===s.disp[0]&&c[1]===s.disp[1]&&c[2]===s.disp[2];});
       s.disp=paletteColor((cur<0?idx:cur)+1); renderSeries(); redraw(); persist(); };
     el.onclick=function(ev){ if(ev.target.classList.contains("x")||ev.target.classList.contains("vis")||ev.target.classList.contains("nm")||ev.target.classList.contains("sw")) return;
-      S.activeSeries=idx; renderSeries(); redraw(); };
+      S.activeSeries=idx; renderSeries(); redraw(); syncTolSlider(); };
     el.querySelector(".nm").onblur=function(e){ s.name=e.target.textContent.trim()||s.name; persist(); };
     el.querySelector(".vis").onclick=function(e){e.stopPropagation(); s.visible=!s.visible; renderSeries(); redraw(); pushHistory();};
     el.querySelector(".x").onclick=function(e){e.stopPropagation(); S.series.splice(idx,1);
@@ -837,13 +927,20 @@ function renderSeries(){
    =========================================================================== */
 function busy(on,txt){ $("busy").style.display=on?"grid":"none"; if(txt)$("busyText").textContent=txt; }
 function currentOpts(){
-  return {tol:+$("tol").value, density:+$("dens").value, maxGap:+$("gap").value, track:$("optTrack").checked};
+  // deep-copy the mask so the worker gets a plain transferable-safe object
+  var m=null;
+  if(S.mask && (S.mask.roi || (S.mask.excl&&S.mask.excl.length))){
+    m={roi:S.mask.roi?{x:S.mask.roi.x,y:S.mask.roi.y,w:S.mask.roi.w,h:S.mask.roi.h}:null,
+       excl:(S.mask.excl||[]).map(function(r){return {x:r.x,y:r.y,w:r.w,h:r.h};})};
+  }
+  return {tol:+$("tol").value, density:+$("dens").value, maxGap:+$("gap").value,
+    track:$("optTrack").checked, mask:m};
 }
 function extract(live){
   if(!S.mapReady){ if(!live) toast("Finish axis calibration first.",true); return; }
   if(!S.series.length){ if(!live) toast("Detect or pick at least one curve.",true); return; }
   var opts=currentOpts();
-  var payloadSeries=S.series.map(function(s){return {color:s.color};});
+  var payloadSeries=S.series.map(function(s){return {color:s.color, tol:(s.tol!=null?s.tol:null)};});
   if(!live) busy(true,"Extracting…");
   var w=getWorker();
   if(w){
@@ -863,7 +960,7 @@ function extract(live){
 function extractSync(opts,live){
   if(!live) busy(true,"Extracting…");
   var img={width:S.imgW,height:S.imgH,data:S.srcData.data};
-  var res=cv_extractAll(img,S.series.map(function(s){return {color:s.color};}),opts);
+  var res=cv_extractAll(img,S.series.map(function(s){return {color:s.color, tol:(s.tol!=null?s.tol:null)};}),opts);
   if(!live) busy(false); applyExtractResult(res,live);
 }
 function applyExtractResult(resSeries,live){
@@ -1007,6 +1104,12 @@ function samplePixel(px,py){
 stage.addEventListener("mousedown",function(ev){
   if(!S.img) return;
   var cv=evtCanvas(ev),im=canvasToImg(cv.x,cv.y);
+  // mask delete handle (works regardless of mode)
+  var mh=hitMaskHandle(cv.x,cv.y);
+  if(mh){ if(mh.kind==="roi") S.mask.roi=null; else S.mask.excl.splice(mh.idx,1);
+    redraw(); persist(); liveReextract(); toast("Mask region removed."); return; }
+  // mask-draw mode: start a new rectangle
+  if(S.maskTool){ S.dragging={type:"mask",sx:im.px,sy:im.py}; S.maskDraft={x:im.px,y:im.py,w:0,h:0}; return; }
   // colour pick mode
   if(S.pendingPick){
     var rgb=samplePixel(im.px,im.py); addSeries(rgb,"Picked "+(S.series.length+1));
@@ -1052,10 +1155,14 @@ window.addEventListener("mousemove",function(ev){
   updateLoupe(ev,im);
   if(S.img) renderMinimap();
   if(!S.dragging){ // cursor feedback
+    if(S.maskTool){ stage.style.cursor="crosshair"; return; }
+    if(hitMaskHandle(cv.x,cv.y)){ stage.style.cursor="pointer"; return; }
     var over = hitCalib(cv.x,cv.y)>=0 || hitPoint(cv.x,cv.y)!=null;
     stage.style.cursor = S.pendingPick?"crosshair":(over?"move":(S.calib.length<neededCalib()?"crosshair":"grab"));
     return;
   }
+  if(S.dragging.type==="mask"){ S.maskDraft=normRect(S.dragging.sx,S.dragging.sy,
+      clamp(im.px,0,S.imgW),clamp(im.py,0,S.imgH)); redraw(); return; }
   if(S.dragging.type==="pan"){ S.view.ox=S.dragging.ox+(cv.x-S.dragging.sx); S.view.oy=S.dragging.oy+(cv.y-S.dragging.sy); redraw(); return; }
   if(S.dragging.type==="calib"){ var c=S.calib[S.dragging.idx]; c.px=clamp(im.px,0,S.imgW); c.py=clamp(im.py,0,S.imgH);
     renderCalib();tryBuildMap(true);redraw(); return; }
@@ -1064,8 +1171,19 @@ window.addEventListener("mousemove",function(ev){
     redraw(); return; }
 });
 window.addEventListener("mouseup",function(){
-  if(S.dragging){ var t=S.dragging.type; S.dragging=null; stage.style.cursor="grab";
-    if(t==="calib"||t==="point"){ renderTable(); pushHistory(); } }
+  if(!S.dragging) return;
+  var t=S.dragging.type; S.dragging=null; stage.style.cursor=S.maskTool?"crosshair":"grab";
+  if(t==="mask"){
+    var d=S.maskDraft; S.maskDraft=null;
+    if(d && d.w>4 && d.h>4){
+      if(S.maskTool==="roi"){ S.mask.roi={x:d.x,y:d.y,w:d.w,h:d.h}; toast("Plot area set. Extraction is now limited to this box."); }
+      else { S.mask.excl.push({x:d.x,y:d.y,w:d.w,h:d.h}); toast("Exclusion added. Those pixels will be ignored."); }
+      setMaskTool(null); // one rectangle per activation; click the button again for another
+      redraw(); persist(); liveReextract();
+    } else { redraw(); }
+    return;
+  }
+  if(t==="calib"||t==="point"){ renderTable(); pushHistory(); }
 });
 stage.addEventListener("contextmenu",function(e){ e.preventDefault(); });
 main.addEventListener("mouseleave",function(){ $("loupe").style.display="none"; });
@@ -1133,7 +1251,17 @@ function liveReextract(){
   clearTimeout(liveT);
   liveT=setTimeout(function(){ extract(true); }, 160);
 }
-$("tol").oninput=function(e){$("tolVal").textContent=e.target.value; liveReextract();};
+$("tol").oninput=function(e){
+  $("tolVal").textContent=e.target.value;
+  if(S.activeSeries>=0 && S.series[S.activeSeries]) S.series[S.activeSeries].tol=+e.target.value;
+  liveReextract();
+};
+/* when the active series changes, show that series' tolerance (or the global default) */
+function syncTolSlider(){
+  var s=S.series[S.activeSeries];
+  if(s && s.tol!=null){ $("tol").value=s.tol; $("tolVal").textContent=s.tol; }
+  var lab=$("tolScope"); if(lab) lab.textContent = (S.activeSeries>=0&&s)?("· "+esc(s.name)):"· all series";
+}
 $("dens").oninput=function(e){$("densVal").textContent=e.target.value; liveReextract();};
 $("gap").oninput=function(e){$("gapVal").textContent=e.target.value; liveReextract();};
 $("optTrack").onchange=function(){ liveReextract(); };
@@ -1168,7 +1296,11 @@ window.addEventListener("keydown",function(e){
   var mod=e.ctrlKey||e.metaKey;
   if(mod && e.key.toLowerCase()==="z"){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
   if(mod && e.key.toLowerCase()==="y"){ e.preventDefault(); redo(); return; }
-  if(e.key==="Escape"){ if(S.pendingPick){S.pendingPick=false;renderToolbar();status("Pick cancelled.");} return; }
+  if(e.key==="Escape"){
+    if(S.maskTool){ S.maskDraft=null; setMaskTool(null); redraw(); status("Mask tool cancelled."); return; }
+    if(S.pendingPick){S.pendingPick=false;renderToolbar();status("Pick cancelled.");}
+    return;
+  }
   if(e.key==="Delete"||e.key==="Backspace"){
     if(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
     if(S.activeSeries>=0 && S.series[S.activeSeries]){ S.series.splice(S.activeSeries,1);
@@ -1182,12 +1314,16 @@ window.addEventListener("keydown",function(e){
    =========================================================================== */
 $("btnOverlay").classList.add("on");
 $("minimapC").addEventListener("click",minimapClick);
+$("btnRoi").onclick=function(){ if(!S.img){toast("Load an image first.",true);return;} setMaskTool("roi"); };
+$("btnExcl").onclick=function(){ if(!S.img){toast("Load an image first.",true);return;} setMaskTool("excl"); };
+$("btnClearMasks").onclick=function(){ S.mask={roi:null,excl:[]}; redraw(); persist(); liveReextract(); toast("All mask regions cleared."); };
 $("pointSize").value=S.pointSize; $("pointSizeVal").textContent=S.pointSize;
 restoreSession();
 renderCalib(); updateUndoButtons();
 status("Load a chart image to begin.");
 pushHistory(); // baseline
 })();
+
 
 
 </script>
