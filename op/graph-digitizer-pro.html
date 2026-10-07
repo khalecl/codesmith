@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Graph Digitizer Pro</title>
+<style>
+  :root{
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    --bg:#10161c; --panel:#161e27; --panel2:#1c262f; --line:#2a3744;
+    --ink:#e6edf3; --mut:#8aa0b2; --dim:#5f7486;
+    --acc:#36c2a6; --acc2:#f5a623; --danger:#e5534b; --blue:#4f9dde;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:"Inter",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:inherit}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+  h1,h2,h3{margin:0;font-weight:600}
+  button{font-family:inherit;font-size:13px;cursor:pointer}
+  .app{display:grid;grid-template-columns:330px 1fr;grid-template-rows:auto 1fr;
+    grid-template-areas:"head head" "side main";height:100%}
+  header{grid-area:head;display:flex;align-items:center;gap:14px;
+    padding:11px 18px;border-bottom:1px solid var(--line);background:var(--panel);z-index:5}
+  header h1{font-size:16px;letter-spacing:.2px}
+  header .tag{font:500 11px/1 var(--mono);color:var(--acc);
+    border:1px solid var(--line);padding:4px 8px;border-radius:5px}
+  header .tools{margin-left:auto;display:flex;gap:7px;align-items:center}
+  header .status{color:var(--mut);font-size:12.5px;max-width:360px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  aside{grid-area:side;background:var(--panel);border-right:1px solid var(--line);
+    overflow-y:auto;padding:4px 0 32px}
+  main{grid-area:main;position:relative;overflow:hidden;background:
+    repeating-conic-gradient(#0d1318 0% 25%, #121a21 0% 50%) 50%/22px 22px}
+  .step{border-bottom:1px solid var(--line);padding:13px 18px}
+  .step h2{font-size:12px;color:var(--dim);letter-spacing:.2px;margin-bottom:10px;
+    display:flex;align-items:center;gap:8px}
+  .step h2 .n{display:inline-grid;place-items:center;width:18px;height:18px;
+    border-radius:50%;background:var(--panel2);color:var(--mut);font:600 11px/1 var(--mono)}
+  .step.on h2 .n{background:var(--acc);color:#062b24}
+  label.field{display:block;margin:9px 0;color:var(--mut);font-size:12.5px}
+  label.field>span{display:block;margin-bottom:4px}
+  input[type=text],input[type=number],select{width:100%;background:var(--panel2);
+    border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 9px;
+    font:inherit;font-size:13px}
+  input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
+  .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;
+    background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;
+    padding:9px 12px;font-weight:500;transition:border-color .12s,background .12s}
+  .btn:hover:not(:disabled){border-color:var(--acc)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.pri{background:var(--acc);color:#062b24;border-color:transparent;font-weight:600}
+  .btn.pri:hover:not(:disabled){filter:brightness(1.06)}
+  .btn.sm{width:auto;padding:5px 9px;font-size:12px}
+  .btn.ghost{background:transparent}
+  .btn.on{border-color:var(--acc);color:var(--acc)}
+  .mut{color:var(--mut)}.dim{color:var(--dim)}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:6px}
+  .seriesList{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .sItem{display:flex;align-items:center;gap:8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px}
+  .sItem.active{border-color:var(--acc)}
+  .sw{width:14px;height:14px;border-radius:3px;flex:none;border:1px solid rgba(255,255,255,.2);cursor:pointer}
+  .sItem .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
+  .sItem .ct{font:600 11px/1 var(--mono);color:var(--mut)}
+  .sItem .vis,.sItem .x{color:var(--dim);cursor:pointer;padding:2px 4px}
+  .sItem .vis:hover{color:var(--acc)} .sItem .x:hover{color:var(--danger)}
+  .toolbar{position:absolute;top:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:4}
+  .toolbar .pill,.rpill{background:rgba(12,18,23,.92);border:1px solid var(--line);
+    color:var(--ink);border-radius:20px;padding:5px 11px;font-size:12px;
+    display:inline-flex;align-items:center;gap:7px;backdrop-filter:blur(6px)}
+  .toolbar .pill b{color:var(--acc)}
+  .toolbar button.pill{cursor:pointer}
+  .toolbar button.pill.on{border-color:var(--acc);color:var(--acc)}
+  .rt{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:4}
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .stageEmpty{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);
+    text-align:center;pointer-events:none;padding:20px}
+  .svgOverlay{position:absolute;inset:0;pointer-events:none;z-index:2}
+  #loupe{position:absolute;width:132px;height:132px;border-radius:50%;border:2px solid var(--acc);
+    box-shadow:0 6px 24px rgba(0,0,0,.5);pointer-events:none;z-index:6;display:none;
+    image-rendering:pixelated;background:#000;overflow:hidden}
+  #loupe canvas{width:100%;height:100%;image-rendering:pixelated}
+  #loupe .cross{position:absolute;inset:0}
+  .panelCard{position:absolute;left:12px;bottom:12px;width:min(560px,calc(100% - 24px));
+    max-height:46%;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    display:flex;flex-direction:column;z-index:4;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  .panelCard header{all:unset;display:flex;align-items:center;gap:10px;padding:10px 14px;
+    border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+  .panelCard .body{overflow:auto;padding:0}
+  table{width:100%;border-collapse:collapse;font:400 12px/1.4 var(--mono)}
+  th,td{text-align:right;padding:4px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--dim);font-weight:500;position:sticky;top:0;background:var(--panel)}
+  td:first-child,th:first-child{text-align:left;color:var(--dim)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);
+    border:1px solid var(--line);border-left:3px solid var(--acc);padding:10px 16px;border-radius:8px;
+    font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.4);z-index:60;max-width:90vw;
+    transition:opacity .2s,transform .2s}
+  .toast.err{border-left-color:var(--danger)} .toast.hide{opacity:0;transform:translateX(-50%) translateY(8px)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{flex:1;background:var(--panel2);border:0;color:var(--mut);padding:7px;font-size:12.5px}
+  .seg button.on{background:var(--acc);color:#062b24;font-weight:600}
+  .slider{width:100%;accent-color:var(--acc)}
+  .k{font:600 12px/1 var(--mono);color:var(--acc)}
+  .calibRow{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center;margin:7px 0}
+  .calibRow .lab{font:600 11px/1 var(--mono);color:var(--mut);display:flex;align-items:center;gap:5px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none}
+  .dot.set{background:var(--acc)}
+  .chk{display:flex;align-items:center;gap:7px;margin:7px 0;color:var(--mut);font-size:12.5px;cursor:pointer}
+  .chk input{width:auto;accent-color:var(--acc)}
+  .maskControls{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .maskTitle{font-size:11.5px;color:var(--dim);margin-bottom:7px;letter-spacing:.2px}
+  #minimap{position:absolute;right:12px;bottom:12px;z-index:4;background:var(--panel);
+    border:1px solid var(--line);border-radius:9px;padding:6px;display:none;
+    box-shadow:0 8px 28px rgba(0,0,0,.4)}
+  #minimap canvas{display:block;border-radius:5px;cursor:pointer;background:#000;
+    image-rendering:auto}
+  #mmReadout{margin-top:5px;font:600 11px/1.3 var(--mono);color:var(--mut);
+    text-align:center;min-height:14px}
+  .mono{font-family:var(--mono)}
+  .busy{position:absolute;inset:0;display:none;place-items:center;background:rgba(10,14,18,.55);
+    z-index:8;color:var(--ink);font-size:13px;backdrop-filter:blur(2px)}
+  .busy .spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--acc);
+    border-radius:50%;animation:sp 0.8s linear infinite;margin-right:10px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media(max-width:860px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;
+      grid-template-areas:"head" "side" "main"}
+    aside{max-height:44vh;border-right:0;border-bottom:1px solid var(--line)}
+    header .status{display:none}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Graph Digitizer Pro</h1>
+    <span class="tag">pixels&nbsp;&rarr;&nbsp;data</span>
+    <div class="tools">
+      <div class="status" id="status">Load a chart image to begin.</div>
+      <button class="btn sm ghost" id="btnUndo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button class="btn sm ghost" id="btnRedo" title="Redo (Ctrl+Y)" disabled>↷</button>
+    </div>
+  </header>
+
+  <aside>
+    <div class="step on" id="step1">
+      <h2><span class="n">1</span> Load image</h2>
+      <button class="btn pri" id="btnLoad">Choose image…</button>
+      <input type="file" id="file" accept="image/*" hidden>
+      <div class="hint">PNG, JPG, GIF, WebP. Or paste (Ctrl+V) / drop onto the canvas.</div>
+    </div>
+
+    <div class="step" id="step2">
+      <h2><span class="n">2</span> Calibrate axes</h2>
+      <div class="seg" id="axisMode">
+        <button data-m="2pt" class="on">2-point</button>
+        <button data-m="4pt">4-point</button>
+      </div>
+      <div class="hint" id="calibHint">Click two reference points, each with a known X and Y.</div>
+      <button class="btn sm" id="btnAutoAxis" style="margin:8px 0">Auto-detect axes</button>
+      <div id="calibPoints"></div>
+      <div class="row">
+        <label class="field"><span>X scale</span>
+          <select id="xScale"><option value="lin">Linear</option><option value="log">Log₁₀</option>
+          <option value="date">Date/time</option></select></label>
+        <label class="field"><span>Y scale</span>
+          <select id="yScale"><option value="lin">Linear</option><option value="log">Log₁₀</option></select></label>
+      </div>
+      <div class="hint" id="dateHint" style="display:none">Date mode: type values like 2026-01-15 or 2026-01-15 14:30.</div>
+      <button class="btn sm" id="btnResetCalib">Reset calibration</button>
+    </div>
+
+    <div class="step" id="step3">
+      <h2><span class="n">3</span> Curves</h2>
+      <button class="btn" id="btnAuto">Auto-detect by colour</button>
+      <button class="btn" id="btnPick" style="margin-top:8px">+ Pick colour from image</button>
+      <div class="hint">Pick, then click that curve on the image.</div>
+      <div class="seriesList" id="seriesList"></div>
+      <div class="maskControls">
+        <div class="maskTitle">Ignore parts of the image</div>
+        <div class="row">
+          <button class="btn sm" id="btnRoi" title="Limit extraction to the plot area">⬚ Set plot area</button>
+          <button class="btn sm" id="btnExcl" title="Shade over legend, labels, title…">⊘ Add exclusion</button>
+        </div>
+        <button class="btn sm ghost" id="btnClearMasks" style="margin-top:6px">Clear mask regions</button>
+        <div class="hint">Draw a box around just the plot to keep axis frame &amp; labels out, and shade over the legend or anything that confuses detection. Click a region's ✕ to remove it.</div>
+      </div>
+    </div>
+
+    <div class="step" id="step4">
+      <h2><span class="n">4</span> Extract</h2>
+      <label class="field"><span>Colour tolerance <b class="k" id="tolVal">40</b> <span class="dim" id="tolScope" style="font-weight:400">· all series</span></span>
+        <input type="range" class="slider" id="tol" min="8" max="140" value="40"></label>
+      <div class="hint">Select a curve above to tune its tolerance on its own — e.g. tight for a saturated colour, looser for a thin grey/black line.</div>
+      <label class="field"><span>Points per series <b class="k" id="densVal">150</b></span>
+        <input type="range" class="slider" id="dens" min="10" max="800" value="150"></label>
+      <label class="field"><span>Max gap to bridge (px) <b class="k" id="gapVal">12</b></span>
+        <input type="range" class="slider" id="gap" min="0" max="80" value="12"></label>
+      <label class="field"><span>Point size <b class="k" id="pointSizeVal">2.6</b></span>
+        <input type="range" class="slider" id="pointSize" min="1" max="10" step="0.2" value="2.6"></label>
+      <label class="chk"><input type="checkbox" id="optTrack" checked> Path-tracking (handle crossings / vertical runs)</label>
+      <button class="btn pri" id="btnExtract" disabled>Extract data points</button>
+      <div class="hint" id="editHint">After extraction: drag points to adjust, Alt-click to add, right-click to delete.</div>
+    </div>
+
+    <div class="step" id="step5">
+      <h2><span class="n">5</span> Process &amp; export</h2>
+      <label class="chk"><input type="checkbox" id="optSort" checked> Sort by X</label>
+      <label class="chk"><input type="checkbox" id="optDedup" checked> Deduplicate equal X</label>
+      <label class="chk"><input type="checkbox" id="optGrid"> Resample onto uniform X grid</label>
+      <label class="field" id="gridNWrap" style="display:none"><span>Grid points <b class="k" id="gridNVal">100</b></span>
+        <input type="range" class="slider" id="gridN" min="5" max="500" value="100"></label>
+      <div class="row">
+        <button class="btn" id="btnCsv" disabled>CSV</button>
+        <button class="btn" id="btnJson" disabled>JSON</button>
+        <button class="btn" id="btnTsv" disabled>Copy TSV</button>
+      </div>
+      <button class="btn sm" id="btnTable" style="margin-top:8px" disabled>Toggle data table</button>
+      <button class="btn sm" id="btnClear" style="margin-top:8px">Clear saved session</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <canvas id="stage"></canvas>
+    <svg class="svgOverlay" id="svg" preserveAspectRatio="none"></svg>
+    <div class="stageEmpty" id="empty">No image yet.<br>
+      <span class="dim">Choose, paste, or drop a chart image here.</span></div>
+    <div class="toolbar" id="toolbar"></div>
+    <div class="rt">
+      <button class="btn sm rpill" id="btnFit" title="Fit to view">Fit</button>
+      <button class="btn sm rpill" id="btnOverlay" title="Toggle SVG overlay">Overlay</button>
+    </div>
+    <div id="loupe"><canvas id="loupeC" width="132" height="132"></canvas>
+      <svg class="cross" viewBox="0 0 132 132"><line x1="66" y1="0" x2="66" y2="132" stroke="#36c2a6" stroke-width="1"/>
+      <line x1="0" y1="66" x2="132" y2="66" stroke="#36c2a6" stroke-width="1"/></svg></div>
+    <div class="panelCard" id="tableCard" style="display:none">
+      <header>Extracted data <span class="mut" id="dataMeta" style="font-weight:400"></span>
+        <button class="btn sm ghost" style="margin-left:auto" id="btnTableClose">✕</button></header>
+      <div class="body"><table id="dataTable"></table></div>
+    </div>
+    <div id="minimap">
+      <canvas id="minimapC" width="190" height="140" title="Click to recenter"></canvas>
+      <div id="mmReadout" class="mono">move over the image</div>
+    </div>
+    <div class="busy" id="busy"><span class="spin"></span><span id="busyText">Working…</span></div>
+  </main>
+</div>
+<script>
+
+(() => {
+"use strict";
+
+/* ===========================================================================
+   PURE COMPUTER-VISION CORE — single source of truth.
+   These functions are (a) used directly on the main thread as the sync
+   fallback and (b) stringified into a Blob Worker. They must be self-contained
+   (no closure refs) so stringification works. No backticks / no ${}.
+   =========================================================================== */
+function cv_matchW(r,g,b,c,tol){
+  var dr=r-c[0],dg=g-c[1],db=b-c[2];
+  var d=Math.sqrt(dr*dr+dg*dg+db*db);
+  if(d>tol) return 0;
+  var w=1-d/tol; return w*w;           // weighted, favours exact-colour core of anti-aliased line
+}
+function cv_trackPath(img,color,tol){
+  var W=img.width,H=img.height,data=img.data,prev=null,pts=[];
+  for(var x=0;x<W;x++){
+    var runs=[],start=-1,wacc=0,yacc=0;
+    for(var y=0;y<H;y++){
+      var i=(y*W+x)*4;
+      var w=data[i+3]<128?0:cv_matchW(data[i],data[i+1],data[i+2],color,tol);
+      if(w>0){ if(start<0){start=y;wacc=0;yacc=0;} wacc+=w; yacc+=y*w; }
+      else if(start>=0){ runs.push({y:yacc/wacc,w:wacc}); start=-1; }
+    }
+    if(start>=0) runs.push({y:yacc/wacc,w:wacc});
+    if(!runs.length) continue;
+    var pick;
+    if(prev===null){ pick=runs[0]; for(var r=1;r<runs.length;r++) if(runs[r].w>pick.w) pick=runs[r]; }
+    else { pick=runs[0]; var best=1e18;
+      for(var r2=0;r2<runs.length;r2++){
+        var dy=Math.abs(runs[r2].y-prev);
+        var score=dy-0.15*Math.log(1+runs[r2].w);
+        if(score<best){best=score;pick=runs[r2];}
+      } }
+    prev=pick.y; pts.push({px:x,py:pick.y});
+  }
+  return pts;
+}
+function cv_columnCentroid(img,color,tol){
+  var W=img.width,H=img.height,data=img.data,pts=[];
+  for(var x=0;x<W;x++){
+    var sum=0,wsum=0;
+    for(var y=0;y<H;y++){
+      var i=(y*W+x)*4; if(data[i+3]<128) continue;
+      var w=cv_matchW(data[i],data[i+1],data[i+2],color,tol);
+      if(w>0){ sum+=y*w; wsum+=w; }
+    }
+    if(wsum>0) pts.push({px:x,py:sum/wsum});
+  }
+  return pts;
+}
+function cv_bridge(pts,maxGap){
+  if(pts.length<2||maxGap<=0) return pts;
+  var out=[pts[0]];
+  for(var k=1;k<pts.length;k++){
+    var a=pts[k-1],b=pts[k],gap=b.px-a.px;
+    if(gap>1&&gap<=maxGap){ for(var g=1;g<gap;g++){ var t=g/gap; out.push({px:a.px+g,py:a.py+(b.py-a.py)*t}); } }
+    out.push(b);
+  }
+  return out;
+}
+function cv_resample(pts,want){
+  if(pts.length<=want||want<=0) return pts;
+  var out=[],stepF=pts.length/want;
+  for(var k=0;k<want;k++){
+    var a=Math.floor(k*stepF),b=Math.min(pts.length,Math.floor((k+1)*stepF));
+    var sx=0,sy=0,n=0; for(var j=a;j<b;j++){sx+=pts[j].px;sy+=pts[j].py;n++;}
+    if(n) out.push({px:sx/n,py:sy/n});
+  }
+  return out;
+}
+function cv_extractOne(img,color,opts){
+  var pts = opts.track ? cv_trackPath(img,color,opts.tol) : cv_columnCentroid(img,color,opts.tol);
+  pts = cv_bridge(pts,opts.maxGap);
+  pts = cv_resample(pts,opts.density);
+  return pts;
+}
+function cv_extractAll(img,seriesList,opts){
+  var out=[]; for(var s=0;s<seriesList.length;s++) out.push(cv_extractOne(img,seriesList[s].color,opts)); return out;
+}
+
+/* Build the worker body from the stringified pure functions + a message shim. */
+function buildWorkerSource(){
+  var fns=[cv_matchW,cv_trackPath,cv_columnCentroid,cv_bridge,cv_resample,cv_extractOne,cv_extractAll]
+    .map(function(f){return f.toString();}).join("\n");
+  var shim=[
+    "self.onmessage=function(e){",
+    "  var d=e.data;",
+    "  try{ var r=cv_extractAll(d.img,d.series,d.opts); self.postMessage({ok:true,series:r}); }",
+    "  catch(err){ self.postMessage({ok:false,error:String(err&&err.message||err)}); }",
+    "};"
+  ].join("\n");
+  return fns+"\n"+shim;
+}
+var _worker=null,_workerURL=null;
+function getWorker(){
+  if(_worker) return _worker;
+  try{
+    var blob=new Blob([buildWorkerSource()],{type:"application/javascript"});
+    _workerURL=URL.createObjectURL(blob);
+    _worker=new Worker(_workerURL);
+    return _worker;
+  }catch(e){ return null; }
+}
+
+/* ===========================================================================
+   SMALL HELPERS
+   =========================================================================== */
+var $=function(id){return document.getElementById(id);};
+var clamp=function(v,a,b){return Math.max(a,Math.min(b,v));};
+/* High-contrast display palette — used for RENDERING series (dots/lines/swatch),
+   kept separate from each series' sampled match-colour used for EXTRACTION.
+   This guarantees visually distinct series even when their real colours are close. */
+var PALETTE=[[54,194,166],[245,166,35],[79,157,222],[229,83,75],[178,118,250],
+  [120,200,80],[240,120,180],[255,255,255],[230,230,120],[0,120,200]];
+function paletteColor(i){ return PALETTE[i%PALETTE.length].slice(); }
+var toastT;
+function toast(msg,err){
+  var t=$("_t");
+  if(!t){t=document.createElement("div");t.id="_t";document.body.appendChild(t);}
+  t.className="toast"+(err?" err":""); t.textContent=msg;
+  clearTimeout(toastT); toastT=setTimeout(function(){t.classList.add("hide");},2600);
+  t.classList.remove("hide");
+}
+function status(s){ $("status").textContent=s; }
+function esc(s){ return String(s).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
+
+/* ===========================================================================
+   STATE
+   =========================================================================== */
+var S={
+  img:null,imgW:0,imgH:0,srcData:null,            // natural-res pixels
+  view:{scale:1,ox:0,oy:0},                        // pan/zoom: canvas = img*scale + offset
+  axisMode:"2pt",
+  calib:[],                                        // {px,py,valueX,valueY}
+  xScale:"lin",yScale:"lin",
+  map:null,mapReady:false,
+  series:[],                                       // {color,name,visible,points:[{px,py}],data:[{x,y}]}
+  activeSeries:-1,
+  pendingPick:false,
+  dragging:null,                                    // {type:'calib'|'point'|'pan', idx, sidx, start...}
+  showOverlay:true,
+  pointSize:2.6,
+  hover:null                                        // {px,py} image-space cursor, for minimap readout
+};
+var HIST={stack:[],ptr:-1};
+
+/* ---- history (undo/redo) : snapshot the logical state (not the image) ---- */
+function snapshot(){
+  return JSON.stringify({
+    axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
+    series:S.series.map(function(s){return {color:s.color,name:s.name,visible:s.visible,
+      points:s.points,data:s.data};}),
+    activeSeries:S.activeSeries
+  });
+}
+function pushHistory(){
+  var snap=snapshot();
+  if(HIST.ptr>=0 && HIST.stack[HIST.ptr]===snap) return;
+  HIST.stack=HIST.stack.slice(0,HIST.ptr+1);
+  HIST.stack.push(snap); HIST.ptr=HIST.stack.length-1;
+  if(HIST.stack.length>60){HIST.stack.shift();HIST.ptr--;}
+  updateUndoButtons(); persist();
+}
+function applySnapshot(snap){
+  var o=JSON.parse(snap);
+  S.axisMode=o.axisMode;S.calib=o.calib;S.xScale=o.xScale;S.yScale=o.yScale;
+  S.series=o.series;S.activeSeries=o.activeSeries;
+  $("xScale").value=S.xScale;$("yScale").value=S.yScale;
+  $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
+  tryBuildMap(true); renderCalib(); renderSeries(); redraw(); updateExtractBtn(); updateDateHint();
+}
+function undo(){ if(HIST.ptr>0){HIST.ptr--;applySnapshot(HIST.stack[HIST.ptr]);updateUndoButtons();persist();} }
+function redo(){ if(HIST.ptr<HIST.stack.length-1){HIST.ptr++;applySnapshot(HIST.stack[HIST.ptr]);updateUndoButtons();persist();} }
+function updateUndoButtons(){ $("btnUndo").disabled=HIST.ptr<=0; $("btnRedo").disabled=HIST.ptr>=HIST.stack.length-1; }
+
+/* ===========================================================================
+   LOCALSTORAGE PERSISTENCE (metadata only — never the image)
+   =========================================================================== */
+var LS_KEY="graphDigitizerPro.v2";
+var persistT;
+function persist(){
+  clearTimeout(persistT);
+  persistT=setTimeout(function(){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
+        series:S.series.map(function(s){return {color:s.color,name:s.name,visible:s.visible,data:s.data};}),
+        imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
+      }));
+    }catch(e){/* quota or disabled: ignore */}
+  },500);
+}
+function restoreSession(){
+  var raw; try{ raw=localStorage.getItem(LS_KEY);}catch(e){return;}
+  if(!raw) return;
+  try{
+    var o=JSON.parse(raw);
+    if(!o||!o.series) return;
+    S.axisMode=o.axisMode||"2pt"; S.calib=o.calib||[]; S.xScale=o.xScale||"lin"; S.yScale=o.yScale||"lin";
+    S.series=(o.series||[]).map(function(s,i){return {color:s.color,disp:s.disp||paletteColor(i),
+      name:s.name,visible:s.visible!==false,points:null,data:s.data||null};});
+    $("xScale").value=S.xScale;$("yScale").value=S.yScale;
+    $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
+    renderCalib();renderSeries();updateDateHint();
+    if(S.series.length) toast("Restored your previous session (load the image to continue).");
+  }catch(e){}
+}
+
+/* ===========================================================================
+   IMAGE LOAD
+   =========================================================================== */
+var stage=$("stage"),main=$("main"),ctx=stage.getContext("2d",{willReadFrequently:true});
+function loadImageFromSrc(src){
+  var im=new Image();
+  im.onload=function(){
+    S.img=im;S.imgW=im.naturalWidth;S.imgH=im.naturalHeight;
+    var off=document.createElement("canvas");off.width=S.imgW;off.height=S.imgH;
+    var octx=off.getContext("2d",{willReadFrequently:true});octx.drawImage(im,0,0);
+    try{ S.srcData=octx.getImageData(0,0,S.imgW,S.imgH); }
+    catch(e){ toast("Could not read image pixels (CORS).",true); return; }
+    $("empty").hidden=true; $("empty").style.display="none";
+    fitView(); redraw(); setActive(2);
+    status("Image "+S.imgW+"x"+S.imgH+". Calibrate the axes next.");
+    toast("Image loaded.");
+  };
+  im.onerror=function(){toast("That file could not be loaded as an image.",true);};
+  im.src=src;
+}
+function handleFile(f){
+  if(!f) return;
+  if(!/^image\//.test(f.type)){toast("Not an image file.",true);return;}
+  if(f.size>20*1024*1024){toast("Image larger than 20 MB.",true);return;}
+  var r=new FileReader();
+  r.onload=function(e){loadImageFromSrc(e.target.result);};
+  r.onerror=function(){toast("Error reading file.",true);};
+  r.readAsDataURL(f);
+}
+
+/* ===========================================================================
+   VIEW: coordinate transforms, pan/zoom
+   =========================================================================== */
+function resizeCanvas(){
+  var dpr=window.devicePixelRatio||1;
+  stage.width=Math.round(main.clientWidth*dpr);
+  stage.height=Math.round(main.clientHeight*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function fitView(){
+  resizeCanvas();
+  var cw=main.clientWidth,ch=main.clientHeight;
+  var sc=Math.min(cw/S.imgW,ch/S.imgH)*0.96;
+  S.view.scale=sc;
+  S.view.ox=(cw-S.imgW*sc)/2;
+  S.view.oy=(ch-S.imgH*sc)/2;
+}
+function imgToCanvas(px,py){ return {x:px*S.view.scale+S.view.ox, y:py*S.view.scale+S.view.oy}; }
+function canvasToImg(cx,cy){ return {px:(cx-S.view.ox)/S.view.scale, py:(cy-S.view.oy)/S.view.scale}; }
+function evtCanvas(ev){
+  var rect=stage.getBoundingClientRect();
+  return {x:ev.clientX-rect.left, y:ev.clientY-rect.top};
+}
+function zoomAt(cx,cy,factor){
+  var before=canvasToImg(cx,cy);
+  S.view.scale=clamp(S.view.scale*factor,0.02,60);
+  S.view.ox=cx-before.px*S.view.scale;
+  S.view.oy=cy-before.py*S.view.scale;
+  redraw();
+}
+
+/* ===========================================================================
+   DRAW
+   =========================================================================== */
+function redraw(){
+  var cw=main.clientWidth,ch=main.clientHeight;
+  ctx.clearRect(0,0,cw,ch);
+  if(!S.img) return;
+  ctx.imageSmoothingEnabled=S.view.scale<3;
+  ctx.drawImage(S.img,S.view.ox,S.view.oy,S.imgW*S.view.scale,S.imgH*S.view.scale);
+  // extracted points
+  var base=S.pointSize;
+  for(var si=0;si<S.series.length;si++){
+    var s=S.series[si]; if(!s.visible||!s.points) continue;
+    var dc=dispOf(s,si), col="rgb("+dc[0]+","+dc[1]+","+dc[2]+")";
+    ctx.fillStyle=col; ctx.strokeStyle="rgba(0,0,0,.65)"; ctx.lineWidth=1;
+    var rad=si===S.activeSeries?base+0.8:base;
+    for(var p=0;p<s.points.length;p++){
+      var c=imgToCanvas(s.points[p].px,s.points[p].py);
+      ctx.beginPath();ctx.arc(c.x,c.y,rad,0,7);ctx.fill();
+      if(si===S.activeSeries) ctx.stroke();
+    }
+  }
+  // calibration markers
+  for(var i=0;i<S.calib.length;i++){
+    var cc=imgToCanvas(S.calib[i].px,S.calib[i].py);
+    ctx.strokeStyle="#36c2a6";ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(cc.x-9,cc.y);ctx.lineTo(cc.x+9,cc.y);
+    ctx.moveTo(cc.x,cc.y-9);ctx.lineTo(cc.x,cc.y+9);ctx.stroke();
+    ctx.beginPath();ctx.arc(cc.x,cc.y,7,0,7);ctx.strokeStyle="rgba(54,194,166,.5)";ctx.stroke();
+    ctx.fillStyle="#36c2a6";ctx.font="600 11px monospace";
+    ctx.fillText(calibLabel(i),cc.x+10,cc.y-7);
+  }
+  renderToolbar();
+  renderSVGOverlay();
+  renderMinimap();
+}
+window.addEventListener("resize",function(){ if(S.img){ fitView(); redraw(); } });
+
+function renderToolbar(){
+  var o=$("toolbar"); if(!S.img){o.innerHTML="";return;}
+  var need=neededCalib();
+  var html="";
+  html+='<span class="pill">'+S.imgW+'x'+S.imgH+'px</span>';
+  html+='<span class="pill">zoom <b>'+(S.view.scale*100).toFixed(0)+'%</b></span>';
+  html+='<span class="pill">calib <b>'+S.calib.length+'/'+need+'</b></span>';
+  if(S.series.length) html+='<span class="pill">curves <b>'+S.series.length+'</b></span>';
+  if(S.pendingPick) html+='<button class="pill on">clicking picks a colour — Esc to cancel</button>';
+  o.innerHTML=html;
+}
+
+/* ===========================================================================
+   SVG OVERLAY (verification)
+   =========================================================================== */
+function renderSVGOverlay(){
+  var svg=$("svg");
+  if(!S.img||!S.showOverlay){ svg.innerHTML=""; return; }
+  var cw=main.clientWidth,ch=main.clientHeight;
+  svg.setAttribute("viewBox","0 0 "+cw+" "+ch);
+  var parts=[];
+  for(var si=0;si<S.series.length;si++){
+    var s=S.series[si]; if(!s.visible||!s.points||s.points.length<2) continue;
+    var dc=dispOf(s,si), col="rgb("+dc[0]+","+dc[1]+","+dc[2]+")";
+    var dd="";
+    for(var p=0;p<s.points.length;p++){
+      var c=imgToCanvas(s.points[p].px,s.points[p].py);
+      dd+=(p===0?"M":"L")+c.x.toFixed(1)+" "+c.y.toFixed(1)+" ";
+    }
+    parts.push('<path d="'+dd+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-opacity="0.9"/>');
+  }
+  svg.innerHTML=parts.join("");
+}
+
+/* ---- minimap / overview: whole image scaled into a corner, with the current
+   viewport rectangle and all extracted points, plus a live X/Y + nearest-point
+   readout so the user never gets lost while zoomed in. ---- */
+var mmC=null,mmCtx=null;
+function minimapRect(){
+  var maxW=190,maxH=140;
+  var s=Math.min(maxW/S.imgW,maxH/S.imgH);
+  return {s:s,w:Math.max(1,Math.round(S.imgW*s)),h:Math.max(1,Math.round(S.imgH*s))};
+}
+function renderMinimap(){
+  if(!S.img){ $("minimap").style.display="none"; return; }
+  $("minimap").style.display="block";
+  if(!mmC){ mmC=$("minimapC"); mmCtx=mmC.getContext("2d"); }
+  var R=minimapRect();
+  if(mmC.width!==R.w||mmC.height!==R.h){ mmC.width=R.w; mmC.height=R.h; }
+  mmCtx.clearRect(0,0,R.w,R.h);
+  mmCtx.drawImage(S.img,0,0,R.w,R.h);
+  // extracted points in display colour
+  for(var si=0;si<S.series.length;si++){ var s=S.series[si]; if(!s.visible||!s.points) continue;
+    var dc=dispOf(s,si); mmCtx.fillStyle="rgb("+dc[0]+","+dc[1]+","+dc[2]+")";
+    for(var p=0;p<s.points.length;p+=Math.max(1,Math.floor(s.points.length/300))){
+      mmCtx.fillRect(s.points[p].px*R.s-0.5, s.points[p].py*R.s-0.5, 1.5,1.5);
+    } }
+  // viewport rectangle (what the main canvas currently shows, in image space)
+  var tl=canvasToImg(0,0), br=canvasToImg(main.clientWidth,main.clientHeight);
+  var rx=clamp(tl.px,0,S.imgW)*R.s, ry=clamp(tl.py,0,S.imgH)*R.s;
+  var rw=(clamp(br.px,0,S.imgW)-clamp(tl.px,0,S.imgW))*R.s;
+  var rh=(clamp(br.py,0,S.imgH)-clamp(tl.py,0,S.imgH))*R.s;
+  mmCtx.strokeStyle="#f5a623"; mmCtx.lineWidth=1.5; mmCtx.strokeRect(rx,ry,rw,rh);
+  // readout
+  var rd=$("mmReadout");
+  if(S.hover && S.mapReady){ var dv=pxToData(S.hover.px,S.hover.py);
+    rd.textContent="x "+fmtX(dv.x)+"   y "+fmt(dv.y);
+  } else if(S.hover){ rd.textContent="px "+Math.round(S.hover.px)+", "+Math.round(S.hover.py);
+  } else rd.textContent="move over the image";
+}
+/* click the minimap to recenter the main view there */
+function minimapClick(ev){
+  if(!S.img) return;
+  var R=minimapRect(), rect=mmC.getBoundingClientRect();
+  var imx=(ev.clientX-rect.left)/R.s, imy=(ev.clientY-rect.top)/R.s;
+  S.view.ox=main.clientWidth/2-imx*S.view.scale;
+  S.view.oy=main.clientHeight/2-imy*S.view.scale;
+  redraw();
+}
+
+/* ===========================================================================
+   CALIBRATION
+   =========================================================================== */
+function calibLabel(i){ return S.axisMode==="2pt" ? ["P1","P2"][i] : ["X1","X2","Y1","Y2"][i]||"?"; }
+function neededCalib(){ return S.axisMode==="2pt"?2:4; }
+function updateDateHint(){
+  var isDate=S.xScale==="date";
+  $("dateHint").style.display=isDate?"block":"none";
+  // Standardized time axis: on a unit-time X axis, keep point placement even and
+  // consistent across the whole length by resampling onto a uniform X (time) grid.
+  if(isDate){
+    $("optGrid").checked=true;
+    $("gridNWrap").style.display="block";
+    $("optSort").checked=true;
+  }
+  if(S.series.some(function(s){return s.data;})) renderTable();
+}
+function renderCalib(){
+  var host=$("calibPoints"); host.innerHTML="";
+  var need=neededCalib();
+  var mk=function(c,field,ph){
+    var inp=document.createElement("input");
+    inp.type=(field==="valueX"&&S.xScale==="date")?"text":"number";
+    if(inp.type==="number") inp.step="any";
+    inp.placeholder=ph; inp.value=c&&c[field]!=null?c[field]:"";
+    inp.disabled=!c;
+    inp.onchange=function(){ if(c){ c[field]=inp.value===""?null:(inp.type==="text"?inp.value:parseFloat(inp.value)); tryBuildMap(); pushHistory(); } };
+    return inp;
+  };
+  for(var i=0;i<need;i++){
+    var c=S.calib[i];
+    var row=document.createElement("div");row.className="calibRow";
+    row.innerHTML='<span class="lab"><span class="dot '+(c?"set":"")+'"></span>'+calibLabel(i)+'</span>';
+    if(S.axisMode==="2pt"){
+      row.appendChild(mk(c,"valueX",S.xScale==="date"?"X date":"X value"));
+      row.appendChild(mk(c,"valueY","Y value"));
+    } else {
+      var field=i<2?"valueX":"valueY";
+      row.appendChild(mk(c,field,i<2?(S.xScale==="date"?"X date":"X value"):"Y value"));
+      var px=document.createElement("div");px.className="dim";
+      px.style.cssText="font:600 11px/1 var(--mono);text-align:right";
+      px.textContent=c?Math.round(i<2?c.px:c.py)+"px":"—";
+      row.appendChild(px);
+    }
+    host.appendChild(row);
+  }
+}
+/* value parsing supports date/time -> epoch ms */
+function parseAxisVal(v,axis){
+  if(v==null||v==="") return NaN;
+  if(axis==="x"&&S.xScale==="date"){ var t=Date.parse(v); return isNaN(t)?NaN:t; }
+  return typeof v==="number"?v:parseFloat(v);
+}
+function tf(axis){ var sc=axis==="x"?S.xScale:S.yScale; return sc==="log"?function(v){return Math.log10(v);}:function(v){return v;}; }
+function lin(p0,v0,p1,v1){ var m=(v1-v0)/(p1-p0); return function(px){return v0+m*(px-p0);}; }
+
+function tryBuildMap(silent){
+  var need=neededCalib();
+  if(S.calib.length<need){S.mapReady=false;updateExtractBtn();return;}
+  var tx=tf("x"),ty=tf("y");
+  var gx=function(c){return parseAxisVal(c.valueX,"x");};
+  var gy=function(c){return parseAxisVal(c.valueY,"y");};
+  if(S.axisMode==="2pt"){
+    var a=S.calib[0],b=S.calib[1];
+    var ax=gx(a),ay=gy(a),bx=gx(b),by=gy(b);
+    if([ax,ay,bx,by].some(isNaN)){S.mapReady=false;updateExtractBtn();return;}
+    if(a.px===b.px||a.py===b.py){S.mapReady=false;updateExtractBtn();
+      if(!silent) status("2-point: points must differ in both X and Y, or use 4-point.");return;}
+    S.map={x:lin(a.px,tx(ax),b.px,tx(bx)), y:lin(a.py,ty(ay),b.py,ty(by))};
+  } else {
+    var x1=S.calib[0],x2=S.calib[1],y1=S.calib[2],y2=S.calib[3];
+    var x1v=gx(x1),x2v=gx(x2),y1v=gy(y1),y2v=gy(y2);
+    if([x1v,x2v,y1v,y2v].some(isNaN)){S.mapReady=false;updateExtractBtn();return;}
+    if(x1.px===x2.px){S.mapReady=false;updateExtractBtn();if(!silent)status("X1 and X2 need different horizontal positions.");return;}
+    if(y1.py===y2.py){S.mapReady=false;updateExtractBtn();if(!silent)status("Y1 and Y2 need different vertical positions.");return;}
+    S.map={x:lin(x1.px,tx(x1v),x2.px,tx(x2v)), y:lin(y1.py,ty(y1v),y2.py,ty(y2v))};
+  }
+  S.mapReady=true;updateExtractBtn();
+  if(!silent) status("Axes calibrated. Detect or pick curves, then extract.");
+}
+function pxToData(px,py){
+  var x=S.map.x(px),y=S.map.y(py);
+  if(S.xScale==="log") x=Math.pow(10,x);
+  if(S.yScale==="log") y=Math.pow(10,y);
+  return {x:x,y:y};
+}
+
+/* ---- axis auto-detect: dark-pixel density picks the plot box ---- */
+function autoDetectAxes(){
+  if(!S.img){toast("Load an image first.",true);return;}
+  var W=S.imgW,H=S.imgH,d=S.srcData.data;
+  var colDark=new Float64Array(W),rowDark=new Float64Array(H);
+  for(var y=0;y<H;y++){ for(var x=0;x<W;x++){
+    var i=(y*W+x)*4; if(d[i+3]<128) continue;
+    if(d[i]<80&&d[i+1]<80&&d[i+2]<80){ colDark[x]++; rowDark[y]++; }
+  }}
+  // the Y axis = densest vertical line in left 60%; X axis = densest horizontal in bottom 60%
+  var yAxisX=argmaxRange(colDark,0,Math.floor(W*0.6));
+  var xAxisY=argmaxRange(rowDark,Math.floor(H*0.4),H);
+  // plot extent on each axis line (first/last strong dark run)
+  var leftX=yAxisX, rightX=lastStrongCol(colDark,yAxisX+1,W,colDark[yAxisX]*0.25);
+  var botY=xAxisY, topY=firstStrongRow(rowDark,0,xAxisY,rowDark[xAxisY]*0.25);
+  if(rightX<=leftX) rightX=W-1; if(topY>=botY) topY=0;
+  // pre-fill 4-point calibration at the detected corners (user types the values)
+  S.axisMode="4pt";
+  $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m==="4pt");});
+  S.calib=[
+    {px:leftX, py:botY, valueX:null,valueY:null},   // X1 (left on X axis)
+    {px:rightX,py:botY, valueX:null,valueY:null},   // X2 (right on X axis)
+    {px:leftX, py:botY, valueX:null,valueY:null},   // Y1 (bottom on Y axis)
+    {px:leftX, py:topY, valueX:null,valueY:null}    // Y2 (top on Y axis)
+  ];
+  renderCalib();redraw();updateExtractBtn();pushHistory();
+  status("Axis guess placed. Drag the green markers to fine-tune, then type the real X/Y values.");
+  toast("Detected plot box. Enter the axis values at the four markers.");
+}
+function argmaxRange(arr,a,b){ var bi=a,bv=-1; for(var i=a;i<b;i++) if(arr[i]>bv){bv=arr[i];bi=i;} return bi; }
+function lastStrongCol(arr,a,b,thr){ var last=a; for(var i=a;i<b;i++) if(arr[i]>=thr) last=i; return last; }
+function firstStrongRow(arr,a,b,thr){ for(var i=b-1;i>=a;i--) if(arr[i]>=thr) return i; return a; }
+
+/* ===========================================================================
+   COLOUR DETECTION
+   =========================================================================== */
+function colorDist(a,b){var dr=a[0]-b[0],dg=a[1]-b[1],db=a[2]-b[2];return Math.sqrt(dr*dr+dg*dg+db*db);}
+function isBackgroundish(r,g,b){
+  var mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+  if(mx>235&&mn>225) return true;
+  if(mx<28) return true;
+  if(mx-mn<16&&mx>150) return true;
+  return false;
+}
+function autoDetect(){
+  if(!S.img){toast("Load an image first.",true);return;}
+  var d=S.srcData.data,buckets={};
+  var step=Math.max(1,Math.floor(Math.sqrt(S.imgW*S.imgH)/280));
+  for(var y=0;y<S.imgH;y+=step){ for(var x=0;x<S.imgW;x+=step){
+    var i=(y*S.imgW+x)*4,r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+    if(a<128||isBackgroundish(r,g,b)) continue;
+    var key=(r>>5)+","+(g>>5)+","+(b>>5);
+    var e=buckets[key]; if(!e){e={r:0,g:0,b:0,n:0};buckets[key]=e;}
+    e.r+=r;e.g+=g;e.b+=b;e.n++;
+  }}
+  var arr=Object.keys(buckets).map(function(k){var e=buckets[k];
+    return {color:[Math.round(e.r/e.n),Math.round(e.g/e.n),Math.round(e.b/e.n)],n:e.n};})
+    .sort(function(p,q){return q.n-p.n;});
+  var merged=[];
+  for(var j=0;j<arr.length;j++){
+    var dup=false; for(var m=0;m<merged.length;m++) if(colorDist(merged[m].color,arr[j].color)<48){dup=true;break;}
+    if(!dup) merged.push(arr[j]); if(merged.length>=6) break;
+  }
+  if(!merged.length){toast("No distinct curve colours found. Try picking manually.",true);return;}
+  S.series=[]; merged.forEach(function(mm,idx){addSeries(mm.color,"Series "+(idx+1));});
+  S.activeSeries=0;
+  renderSeries();redraw();pushHistory();
+  toast("Detected "+merged.length+" candidate curve(s). Remove any noise, then Extract.");
+}
+function addSeries(color,name){
+  S.series.push({color:color.slice(),disp:paletteColor(S.series.length),
+    name:name,visible:true,points:null,data:null});
+  S.activeSeries=S.series.length-1; updateExtractBtn();
+}
+function dispOf(s,idx){ // backward-compatible: restored/old series may lack .disp
+  if(!s.disp) s.disp=paletteColor(idx);
+  return s.disp;
+}
+function reassignPalette(){ S.series.forEach(function(s,i){ s.disp=paletteColor(i); }); }
+function renderSeries(){
+  var host=$("seriesList"); host.innerHTML="";
+  S.series.forEach(function(s,idx){
+    var el=document.createElement("div");el.className="sItem"+(idx===S.activeSeries?" active":"");
+    var dc=dispOf(s,idx);
+    el.innerHTML='<span class="sw" title="cycle display colour" style="background:rgb('+dc[0]+','+dc[1]+','+dc[2]+')"></span>'+
+      '<span class="nm" contenteditable spellcheck="false">'+esc(s.name)+'</span>'+
+      '<span class="ct">'+(s.points?s.points.length:(s.data?s.data.length:"—"))+'</span>'+
+      '<span class="vis" title="toggle visibility">'+(s.visible?"◉":"○")+'</span>'+
+      '<span class="x" title="remove">✕</span>';
+    el.querySelector(".sw").onclick=function(e){e.stopPropagation();
+      var cur=PALETTE.findIndex(function(c){return c[0]===s.disp[0]&&c[1]===s.disp[1]&&c[2]===s.disp[2];});
+      s.disp=paletteColor((cur<0?idx:cur)+1); renderSeries(); redraw(); persist(); };
+    el.onclick=function(ev){ if(ev.target.classList.contains("x")||ev.target.classList.contains("vis")||ev.target.classList.contains("nm")||ev.target.classList.contains("sw")) return;
+      S.activeSeries=idx; renderSeries(); redraw(); };
+    el.querySelector(".nm").onblur=function(e){ s.name=e.target.textContent.trim()||s.name; persist(); };
+    el.querySelector(".vis").onclick=function(e){e.stopPropagation(); s.visible=!s.visible; renderSeries(); redraw(); pushHistory();};
+    el.querySelector(".x").onclick=function(e){e.stopPropagation(); S.series.splice(idx,1);
+      if(S.activeSeries>=S.series.length) S.activeSeries=S.series.length-1;
+      renderSeries();redraw();updateExtractBtn();pushHistory();};
+    host.appendChild(el);
+  });
+}
+
+/* ===========================================================================
+   EXTRACTION (worker + fallback)
+   =========================================================================== */
+function busy(on,txt){ $("busy").style.display=on?"grid":"none"; if(txt)$("busyText").textContent=txt; }
+function currentOpts(){
+  return {tol:+$("tol").value, density:+$("dens").value, maxGap:+$("gap").value, track:$("optTrack").checked};
+}
+function extract(live){
+  if(!S.mapReady){ if(!live) toast("Finish axis calibration first.",true); return; }
+  if(!S.series.length){ if(!live) toast("Detect or pick at least one curve.",true); return; }
+  var opts=currentOpts();
+  var payloadSeries=S.series.map(function(s){return {color:s.color};});
+  if(!live) busy(true,"Extracting…");
+  var w=getWorker();
+  if(w){
+    w.onmessage=function(e){
+      if(!live) busy(false);
+      if(!e.data.ok){ if(!live) toast("Worker error: "+e.data.error+" — using fallback.",true); extractSync(opts,live); return; }
+      applyExtractResult(e.data.series,live);
+    };
+    w.onerror=function(){ if(!live) busy(false); if(!live) toast("Worker failed — using fallback.",true); extractSync(opts,live); };
+    var buf=S.srcData.data.buffer.slice(0);
+    w.postMessage({img:{width:S.imgW,height:S.imgH,data:new Uint8ClampedArray(buf)},
+      series:payloadSeries, opts:opts},[buf]);
+  } else {
+    setTimeout(function(){ extractSync(opts,live); },20);
+  }
+}
+function extractSync(opts,live){
+  if(!live) busy(true,"Extracting…");
+  var img={width:S.imgW,height:S.imgH,data:S.srcData.data};
+  var res=cv_extractAll(img,S.series.map(function(s){return {color:s.color};}),opts);
+  if(!live) busy(false); applyExtractResult(res,live);
+}
+function applyExtractResult(resSeries,live){
+  for(var si=0;si<S.series.length;si++){
+    var pts=resSeries[si]||[];
+    S.series[si].points=pts;
+    S.series[si].data=pts.map(function(p){return pxToData(p.px,p.py);});
+  }
+  redraw();renderSeries();renderTable();enableExport(true);renderMinimap();
+  var total=S.series.reduce(function(a,s){return a+(s.points?s.points.length:0);},0);
+  if(live){ status("Live: "+total+" points."); }
+  else { liveOn=true; pushHistory();
+    status("Extracted "+total+" points across "+S.series.length+" series.");
+    toast("Extraction complete. Adjust sliders for live updates."); }
+}
+
+/* ===========================================================================
+   DATA PROCESSING (sort / dedup / uniform grid) for display + export
+   =========================================================================== */
+function processedData(s){
+  if(!s.data) return [];
+  var d=s.data.slice();
+  if($("optSort").checked) d.sort(function(a,b){return a.x-b.x;});
+  if($("optDedup").checked){
+    var out=[],lastx=null;
+    for(var k=0;k<d.length;k++){ if(lastx!==null&&d[k].x===lastx){ out[out.length-1]=d[k]; } else out.push(d[k]); lastx=d[k].x; }
+    d=out;
+  }
+  if($("optGrid").checked && d.length>=2){
+    // interpolation REQUIRES ascending X — sort a private copy so the result is
+    // correct even when "Sort by X" is off or the X axis runs right-to-left.
+    var ds=d.slice().sort(function(a,b){return a.x-b.x;});
+    var n=+$("gridN").value, x0=ds[0].x, x1=ds[ds.length-1].x, g=[];
+    for(var j=0;j<n;j++){
+      var xt=(n===1)?x0:x0+(x1-x0)*j/(n-1);
+      g.push({x:xt,y:interpY(ds,xt)});
+    }
+    d=g;
+  }
+  return d;
+}
+function interpY(d,xt){
+  // d MUST be ascending in x (callers sort a private copy before calling).
+  if(!d.length) return NaN;
+  if(xt<=d[0].x) return d[0].y; if(xt>=d[d.length-1].x) return d[d.length-1].y;
+  for(var k=1;k<d.length;k++){ if(d[k].x>=xt){ var a=d[k-1],b=d[k];
+    var dx=b.x-a.x; if(dx===0) return b.y;
+    var t=(xt-a.x)/dx; return a.y+(b.y-a.y)*t; } }
+  return d[d.length-1].y;
+}
+
+/* ===========================================================================
+   TABLE
+   =========================================================================== */
+function fmt(v){ if(v==null||isNaN(v)) return "";
+  if(S.xScale==="date" && v>1e11){ try{return new Date(v).toISOString().replace("T"," ").replace(".000Z","");}catch(e){} }
+  var a=Math.abs(v);
+  return (a!==0&&(a<1e-3||a>=1e5))?v.toExponential(3):(Number(v.toPrecision(6))+"");
+}
+function fmtX(v){ if(S.xScale==="date" && v!=null && v>1e11){ try{return new Date(v).toISOString().replace("T"," ").replace(".000Z","");}catch(e){} } return fmt(v); }
+function renderTable(){
+  var t=$("dataTable"),vis=S.series.filter(function(s){return s.data&&s.data.length;});
+  if(!vis.length){ $("dataMeta").textContent=""; t.innerHTML=""; return; }
+  var cols=vis.map(processedData);
+  var maxN=Math.max.apply(null,cols.map(function(c){return c.length;}));
+  var head="<tr><th>#</th>";
+  vis.forEach(function(s){head+="<th>"+esc(s.name)+" · X</th><th>"+esc(s.name)+" · Y</th>";});
+  head+="</tr>";
+  var body="",show=Math.min(maxN,600);
+  for(var r=0;r<show;r++){ body+="<tr><td>"+(r+1)+"</td>";
+    cols.forEach(function(c){var p=c[r]; body+="<td>"+(p?fmtX(p.x):"")+"</td><td>"+(p?fmt(p.y):"")+"</td>";});
+    body+="</tr>"; }
+  t.innerHTML=head+body;
+  $("dataMeta").textContent="· "+vis.length+" series"+(maxN>show?" · first "+show+" of "+maxN+" rows":"");
+}
+
+/* ===========================================================================
+   EXPORT
+   =========================================================================== */
+function csvCell(v){v=String(v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function buildDelim(delim){
+  var vis=S.series.filter(function(s){return s.data&&s.data.length;});
+  var cols=vis.map(processedData);
+  var maxN=Math.max.apply(null,cols.map(function(c){return c.length;}));
+  var head=[]; vis.forEach(function(s){head.push(s.name+" X",s.name+" Y");});
+  var lines=[head.map(csvCell).join(delim)];
+  for(var r=0;r<maxN;r++){ var row=[];
+    cols.forEach(function(c){var p=c[r]; row.push(p?fmtX(p.x):"",p?fmt(p.y):"");});
+    lines.push(row.map(csvCell).join(delim));
+  }
+  return lines.join("\r\n");
+}
+function buildJSON(){
+  var vis=S.series.filter(function(s){return s.data;});
+  return JSON.stringify({
+    source:{width:S.imgW,height:S.imgH},
+    axes:{xScale:S.xScale,yScale:S.yScale,mode:S.axisMode,
+      calibration:S.calib.map(function(c){return {px:c.px,py:c.py,valueX:c.valueX,valueY:c.valueY};})},
+    processing:{sort:$("optSort").checked,dedup:$("optDedup").checked,grid:$("optGrid").checked},
+    series:vis.map(function(s){return {name:s.name,color:"rgb("+s.color.join(",")+")",points:processedData(s)};})
+  },null,2);
+}
+function download(name,text,type){
+  var blob=new Blob([text],{type:type}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+function copyTSV(){
+  var tsv=buildDelim("\t");
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(tsv).then(function(){toast("TSV copied — paste into a spreadsheet.");},
+      function(){fallbackCopy(tsv);});
+  } else fallbackCopy(tsv);
+}
+function fallbackCopy(text){
+  var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand("copy");toast("TSV copied.");}catch(e){toast("Copy failed.",true);}
+  document.body.removeChild(ta);
+}
+
+/* ===========================================================================
+   CANVAS INTERACTION: calibration placement, colour pick, point edit,
+   marker drag, pan/zoom, loupe
+   =========================================================================== */
+var HIT=10; // px hit radius in canvas space
+function hitCalib(cx,cy){
+  for(var i=0;i<S.calib.length;i++){ var c=imgToCanvas(S.calib[i].px,S.calib[i].py);
+    if(Math.hypot(c.x-cx,c.y-cy)<=HIT) return i; } return -1;
+}
+function hitPoint(cx,cy){
+  if(S.activeSeries<0) return null;
+  var s=S.series[S.activeSeries]; if(!s||!s.points) return null;
+  for(var p=0;p<s.points.length;p++){ var c=imgToCanvas(s.points[p].px,s.points[p].py);
+    if(Math.hypot(c.x-cx,c.y-cy)<=HIT) return p; } return null;
+}
+function samplePixel(px,py){
+  var x=clamp(Math.round(px),0,S.imgW-1),y=clamp(Math.round(py),0,S.imgH-1);
+  var i=(y*S.imgW+x)*4,d=S.srcData.data; return [d[i],d[i+1],d[i+2]];
+}
+
+stage.addEventListener("mousedown",function(ev){
+  if(!S.img) return;
+  var cv=evtCanvas(ev),im=canvasToImg(cv.x,cv.y);
+  // colour pick mode
+  if(S.pendingPick){
+    var rgb=samplePixel(im.px,im.py); addSeries(rgb,"Picked "+(S.series.length+1));
+    S.pendingPick=false; renderSeries(); redraw(); pushHistory();
+    toast("Colour picked. Adjust tolerance, then Extract."); return;
+  }
+  // middle button or space-less: pan when clicking empty area; else interact
+  if(ev.button===1){ startPan(cv); ev.preventDefault(); return; }
+  // calib marker drag
+  var ci=hitCalib(cv.x,cv.y);
+  if(ci>=0){ S.dragging={type:"calib",idx:ci}; return; }
+  // point edit on active series
+  var pi=hitPoint(cv.x,cv.y);
+  if(ev.button===2 && pi!=null){ // right-click delete
+    S.series[S.activeSeries].points.splice(pi,1);
+    S.series[S.activeSeries].data.splice(pi,1);
+    renderSeries();redraw();pushHistory();ev.preventDefault();return;
+  }
+  if(pi!=null){ S.dragging={type:"point",sidx:S.activeSeries,idx:pi}; return; }
+  if(ev.altKey && S.activeSeries>=0 && S.series[S.activeSeries].points){ // add point
+    var s=S.series[S.activeSeries];
+    s.points.push({px:im.px,py:im.py}); s.data.push(pxToData(im.px,im.py));
+    s.points.sort(function(a,b){return a.px-b.px;});
+    s.data=s.points.map(function(p){return pxToData(p.px,p.py);});
+    renderSeries();redraw();pushHistory();return;
+  }
+  // else: place calibration point if still needed
+  if(S.calib.length<neededCalib()){
+    S.calib.push({px:im.px,py:im.py,valueX:null,valueY:null});
+    renderCalib();redraw();pushHistory();
+    if(S.calib.length===neededCalib()) status("Now type the real-world value at each calibration marker.");
+    return;
+  }
+  // otherwise start panning
+  startPan(cv);
+});
+function startPan(cv){ S.dragging={type:"pan",sx:cv.x,sy:cv.y,ox:S.view.ox,oy:S.view.oy}; stage.style.cursor="grabbing"; }
+
+window.addEventListener("mousemove",function(ev){
+  if(!S.img) return;
+  var cv=evtCanvas(ev),im=canvasToImg(cv.x,cv.y);
+  S.hover=(im.px>=0&&im.py>=0&&im.px<=S.imgW&&im.py<=S.imgH)?{px:im.px,py:im.py}:null;
+  updateLoupe(ev,im);
+  if(S.img) renderMinimap();
+  if(!S.dragging){ // cursor feedback
+    var over = hitCalib(cv.x,cv.y)>=0 || hitPoint(cv.x,cv.y)!=null;
+    stage.style.cursor = S.pendingPick?"crosshair":(over?"move":(S.calib.length<neededCalib()?"crosshair":"grab"));
+    return;
+  }
+  if(S.dragging.type==="pan"){ S.view.ox=S.dragging.ox+(cv.x-S.dragging.sx); S.view.oy=S.dragging.oy+(cv.y-S.dragging.sy); redraw(); return; }
+  if(S.dragging.type==="calib"){ var c=S.calib[S.dragging.idx]; c.px=clamp(im.px,0,S.imgW); c.py=clamp(im.py,0,S.imgH);
+    renderCalib();tryBuildMap(true);redraw(); return; }
+  if(S.dragging.type==="point"){ var s=S.series[S.dragging.sidx]; var p=s.points[S.dragging.idx];
+    p.px=clamp(im.px,0,S.imgW); p.py=clamp(im.py,0,S.imgH); s.data[S.dragging.idx]=pxToData(p.px,p.py);
+    redraw(); return; }
+});
+window.addEventListener("mouseup",function(){
+  if(S.dragging){ var t=S.dragging.type; S.dragging=null; stage.style.cursor="grab";
+    if(t==="calib"||t==="point"){ renderTable(); pushHistory(); } }
+});
+stage.addEventListener("contextmenu",function(e){ e.preventDefault(); });
+main.addEventListener("mouseleave",function(){ $("loupe").style.display="none"; });
+
+stage.addEventListener("wheel",function(ev){
+  if(!S.img) return; ev.preventDefault();
+  var cv=evtCanvas(ev);
+  var factor=ev.deltaY<0?1.12:1/1.12;
+  zoomAt(cv.x,cv.y,factor);
+},{passive:false});
+
+/* ---- magnifier loupe ---- */
+var loupe=$("loupe"),loupeC=$("loupeC"),loupeCtx=loupeC.getContext("2d");
+function updateLoupe(ev,im){
+  var wantLoupe = S.pendingPick || S.calib.length<neededCalib() || (S.dragging&&S.dragging.type==="calib");
+  if(!wantLoupe || !S.srcData){ loupe.style.display="none"; return; }
+  var span=16; // source px half-window
+  var sx=clamp(Math.round(im.px)-span,0,S.imgW-1), sy=clamp(Math.round(im.py)-span,0,S.imgH-1);
+  var sw=Math.min(span*2,S.imgW-sx), sh=Math.min(span*2,S.imgH-sy);
+  loupeCtx.imageSmoothingEnabled=false;
+  loupeCtx.clearRect(0,0,132,132);
+  loupeCtx.drawImage(S.img,sx,sy,sw,sh,0,0,132,132);
+  var rect=main.getBoundingClientRect();
+  var lx=ev.clientX-rect.left+18, ly=ev.clientY-rect.top+18;
+  if(lx>main.clientWidth-140) lx=ev.clientX-rect.left-150;
+  if(ly>main.clientHeight-140) ly=ev.clientY-rect.top-150;
+  loupe.style.left=lx+"px"; loupe.style.top=ly+"px"; loupe.style.display="block";
+}
+
+/* ===========================================================================
+   UI STEPPER / BUTTON STATE
+   =========================================================================== */
+function setActive(n){ for(var i=1;i<=5;i++) $("step"+i).classList.toggle("on",i===n); }
+function updateExtractBtn(){ $("btnExtract").disabled=!(S.mapReady&&S.series.length); renderToolbar(); }
+function enableExport(on){ ["btnCsv","btnJson","btnTsv","btnTable"].forEach(function(id){$(id).disabled=!on;}); }
+
+/* ===========================================================================
+   WIRING
+   =========================================================================== */
+$("btnLoad").onclick=function(){$("file").click();};
+$("file").onchange=function(e){handleFile(e.target.files[0]);};
+
+$("axisMode").querySelectorAll("button").forEach(function(b){
+  b.onclick=function(){ $("axisMode").querySelectorAll("button").forEach(function(x){x.classList.remove("on");});
+    b.classList.add("on"); S.axisMode=b.dataset.m; S.calib=[]; S.mapReady=false;
+    $("calibHint").textContent = S.axisMode==="2pt"
+      ? "Click two reference points, each with a known X and Y (they must differ on both axes)."
+      : "Click X1, X2 (two known X-axis points), then Y1, Y2 (two Y-axis points).";
+    renderCalib();redraw();updateExtractBtn();pushHistory(); };
+});
+$("btnResetCalib").onclick=function(){S.calib=[];S.mapReady=false;renderCalib();redraw();updateExtractBtn();pushHistory();status("Calibration cleared.");};
+$("btnAutoAxis").onclick=autoDetectAxes;
+$("xScale").onchange=function(e){S.xScale=e.target.value;updateDateHint();renderCalib();tryBuildMap();persist();};
+$("yScale").onchange=function(e){S.yScale=e.target.value;tryBuildMap();persist();};
+
+$("btnAuto").onclick=autoDetect;
+$("btnPick").onclick=function(){ if(!S.img){toast("Load an image first.",true);return;} S.pendingPick=true; renderToolbar(); status("Click the curve's colour on the image. Esc to cancel.");};
+
+/* Real-time: changing an extraction parameter re-extracts live (debounced so the
+   O(W*H) scan doesn't fire on every pixel of slider travel). Guarded so it only
+   runs once the first manual extraction has happened and calibration is ready. */
+var liveT=null, liveOn=false;
+function liveReextract(){
+  if(!liveOn || !S.mapReady || !S.series.length) return;
+  clearTimeout(liveT);
+  liveT=setTimeout(function(){ extract(true); }, 160);
+}
+$("tol").oninput=function(e){$("tolVal").textContent=e.target.value; liveReextract();};
+$("dens").oninput=function(e){$("densVal").textContent=e.target.value; liveReextract();};
+$("gap").oninput=function(e){$("gapVal").textContent=e.target.value; liveReextract();};
+$("optTrack").onchange=function(){ liveReextract(); };
+$("gridN").oninput=function(e){$("gridNVal").textContent=e.target.value; if($("optGrid").checked){renderTable();redraw();}};
+$("pointSize").oninput=function(e){$("pointSizeVal").textContent=e.target.value; S.pointSize=+e.target.value; redraw();};
+$("btnExtract").onclick=function(){ extract(); };
+
+$("optSort").onchange=function(){renderTable();redraw();persist();};
+$("optDedup").onchange=function(){renderTable();redraw();persist();};
+$("optGrid").onchange=function(e){$("gridNWrap").style.display=e.target.checked?"block":"none";renderTable();redraw();};
+$("btnCsv").onclick=function(){download("graph-data.csv",buildDelim(","),"text/csv");};
+$("btnJson").onclick=function(){download("graph-data.json",buildJSON(),"application/json");};
+$("btnTsv").onclick=copyTSV;
+$("btnTable").onclick=function(){var c=$("tableCard");c.style.display=c.style.display==="none"?"flex":"none";};
+$("btnTableClose").onclick=function(){$("tableCard").style.display="none";};
+$("btnClear").onclick=function(){ try{localStorage.removeItem(LS_KEY);}catch(e){} toast("Saved session cleared.");};
+
+$("btnFit").onclick=function(){ if(S.img){fitView();redraw();} };
+$("btnOverlay").onclick=function(){ S.showOverlay=!S.showOverlay; $("btnOverlay").classList.toggle("on",S.showOverlay); renderSVGOverlay(); };
+$("btnUndo").onclick=undo; $("btnRedo").onclick=redo;
+
+/* paste & drop */
+window.addEventListener("paste",function(e){
+  var items=(e.clipboardData&&e.clipboardData.items)||[];
+  for(var i=0;i<items.length;i++) if(items[i].type.indexOf("image/")===0){handleFile(items[i].getAsFile());break;}
+});
+["dragover","drop"].forEach(function(ev){ main.addEventListener(ev,function(e){e.preventDefault();}); });
+main.addEventListener("drop",function(e){ var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) handleFile(f); });
+
+/* keyboard shortcuts */
+window.addEventListener("keydown",function(e){
+  var mod=e.ctrlKey||e.metaKey;
+  if(mod && e.key.toLowerCase()==="z"){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
+  if(mod && e.key.toLowerCase()==="y"){ e.preventDefault(); redo(); return; }
+  if(e.key==="Escape"){ if(S.pendingPick){S.pendingPick=false;renderToolbar();status("Pick cancelled.");} return; }
+  if(e.key==="Delete"||e.key==="Backspace"){
+    if(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    if(S.activeSeries>=0 && S.series[S.activeSeries]){ S.series.splice(S.activeSeries,1);
+      S.activeSeries=S.series.length-1; renderSeries();redraw();updateExtractBtn();pushHistory();
+      toast("Removed active series."); e.preventDefault(); }
+  }
+});
+
+/* ===========================================================================
+   INIT
+   =========================================================================== */
+$("btnOverlay").classList.add("on");
+$("minimapC").addEventListener("click",minimapClick);
+$("pointSize").value=S.pointSize; $("pointSizeVal").textContent=S.pointSize;
+restoreSession();
+renderCalib(); updateUndoButtons();
+status("Load a chart image to begin.");
+pushHistory(); // baseline
+})();
+
+
+</script>
+</body>
+</html>
