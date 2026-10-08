@@ -881,34 +881,51 @@ function pxToData(px,py){
   return {x:x,y:y};
 }
 
-/* ---- axis auto-detect: dark-pixel density picks the plot box ---- */
+/* ---- axis auto-detect: longest straight grey/black line = axis; ticks give the calibration points ---- */
 function autoDetectAxes(){
   if(!S.img){toast("Load an image first.",true);return;}
   var W=S.imgW,H=S.imgH,d=S.srcData.data;
-  var colDark=new Float64Array(W),rowDark=new Float64Array(H);
-  for(var y=0;y<H;y++){ for(var x=0;x<W;x++){
-    var i=(y*W+x)*4; if(d[i+3]<128) continue;
-    if(d[i]<80&&d[i+1]<80&&d[i+2]<80){ colDark[x]++; rowDark[y]++; }
-  }}
-  // the Y axis = densest vertical line in left 60%; X axis = densest horizontal in bottom 60%
-  var yAxisX=argmaxRange(colDark,0,Math.floor(W*0.6));
-  var xAxisY=argmaxRange(rowDark,Math.floor(H*0.4),H);
-  // plot extent on each axis line (first/last strong dark run)
-  var leftX=yAxisX, rightX=lastStrongCol(colDark,yAxisX+1,W,colDark[yAxisX]*0.25);
-  var botY=xAxisY, topY=firstStrongRow(rowDark,0,xAxisY,rowDark[xAxisY]*0.25);
-  if(rightX<=leftX) rightX=W-1; if(topY>=botY) topY=0;
-  // pre-fill 4-point calibration at the detected corners (user types the values)
+  var ink=new Uint8Array(W*H);
+  for(var k=0;k<W*H;k++){ var i=k*4,r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+    ink[k]=(d[i+3]>=128&&mx<170&&mx-mn<40)?1:0; }
+  function I(x,y){ return ink[y*W+x]; }
+  // trim solid dark borders (screenshots of dark apps)
+  function fullCol(x){var c=0;for(var y=0;y<H;y++)c+=ink[y*W+x];return c>0.85*H;}
+  function fullRow(y){var c=0;for(var x=0;x<W;x++)c+=ink[y*W+x];return c>0.85*W;}
+  var x0=0,x1=W-1,y0=0,y1=H-1;
+  while(x0<x1&&fullCol(x0))x0++; while(x1>x0&&fullCol(x1))x1--;
+  while(y0<y1&&fullRow(y0))y0++; while(y1>y0&&fullRow(y1))y1--;
+  // longest ink run (gaps <=2px bridged)
+  function longest(get,a,b){ var best={len:0,s:0,e:0},s=-1,e=0,gap=0;
+    for(var i=a;i<=b+1;i++){
+      if(i<=b&&get(i)){ if(s<0)s=i; gap=0; e=i; }
+      else if(s>=0){ gap++; if(gap>2||i>b){ if(e-s>best.len) best={len:e-s,s:s,e:e}; s=-1; gap=0; } }
+    } return best; }
+  var bx={len:0},ax=0,by={len:0},ay=0;
+  for(var y=y0+Math.floor((y1-y0)*0.4);y<=y1;y++){ var r=longest(function(x){return I(x,y);},x0,x1); if(r.len>bx.len){bx=r;ax=y;} }
+  for(var x=x0;x<=x0+Math.floor((x1-x0)*0.6);x++){ var c=longest(function(yy){return I(x,yy);},y0,y1); if(c.len>by.len){by=c;ay=x;} }
+  if(bx.len<(x1-x0)*0.3||by.len<(y1-y0)*0.3){toast("Couldn't find clear axis lines. Place the markers by hand.",true);return;}
+  // tick marks: short ink stubs just outside the axis line
+  function ticks(a,b,isTick){ var out=[],run=-1;
+    for(var i=a;i<=b+1;i++){ var t=i<=b&&isTick(i);
+      if(t&&run<0) run=i; else if(!t&&run>=0){ out.push(Math.round((run+i-1)/2)); run=-1; } }
+    return out; }
+  function stub(get){ var n=0; for(var k=2;k<=5;k++) n+=get(k); return n>=3; }
+  var tx=ticks(bx.s,bx.e,function(x){return stub(function(k){return ax+k<H&&I(x,ax+k);});});
+  var ty=ticks(by.s,by.e,function(y){return stub(function(k){return ay-k>=0&&I(ay-k,y);});});
+  var xL=tx.length>=2?tx[0]:bx.s, xR=tx.length>=2?tx[tx.length-1]:bx.e;
+  var yB=ty.length>=2?ty[ty.length-1]:ax, yT=ty.length>=2?ty[0]:by.s;
   S.axisMode="4pt";
   $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m==="4pt");});
   S.calib=[
-    {px:leftX, py:botY, valueX:null,valueY:null},   // X1 (left on X axis)
-    {px:rightX,py:botY, valueX:null,valueY:null},   // X2 (right on X axis)
-    {px:leftX, py:botY, valueX:null,valueY:null},   // Y1 (bottom on Y axis)
-    {px:leftX, py:topY, valueX:null,valueY:null}    // Y2 (top on Y axis)
+    {px:xL,py:ax,valueX:null,valueY:null},   // X1 first X tick
+    {px:xR,py:ax,valueX:null,valueY:null},   // X2 last X tick
+    {px:ay,py:yB,valueX:null,valueY:null},   // Y1 bottom Y tick
+    {px:ay,py:yT,valueX:null,valueY:null}    // Y2 top Y tick
   ];
   renderCalib();redraw();updateExtractBtn();pushHistory();
-  status("Axis guess placed. Drag the green markers to fine-tune, then type the real X/Y values.");
-  toast("Detected plot box. Enter the axis values at the four markers.");
+  status("Markers placed on the first/last tick of each axis. Type the tick values (e.g. X1=1, X2=56, Y1=0, Y2=60000).");
+  toast("Axes found"+(tx.length>=2&&ty.length>=2?" (on tick marks)":" (line ends — no ticks found)")+". Enter the values at the four markers.");
 }
 function argmaxRange(arr,a,b){ var bi=a,bv=-1; for(var i=a;i<b;i++) if(arr[i]>bv){bv=arr[i];bi=i;} return bi; }
 function lastStrongCol(arr,a,b,thr){ var last=a; for(var i=a;i<b;i++) if(arr[i]>=thr) last=i; return last; }
