@@ -200,6 +200,9 @@
           <label>Points <select id="stMark"><option value="dot">dots</option><option value="square">squares</option><option value="none">none</option></select></label>
           <label>Colour <input type="color" id="stColor" style="width:34px;height:22px;padding:0"></label>
         </div>
+        <div class="row">
+          <label title="When this curve is hidden under another one">When hidden, follow <select id="stFollow"></select></label>
+        </div>
       </div>
       <div class="maskControls">
         <div class="maskTitle">Ignore parts of the image</div>
@@ -224,6 +227,7 @@
       <label class="field"><span>Point size <b class="k" id="pointSizeVal">2.6</b></span>
         <input type="range" class="slider" id="pointSize" min="1" max="10" step="0.2" value="2.6"></label>
       <label class="chk"><input type="checkbox" id="optTrack" checked> Path-tracking (handle crossings / vertical runs)</label>
+      <label class="chk"><input type="checkbox" id="optTrace"> Line-trace (curves that loop back \u2014 x goes backwards)</label>
       <button class="btn pri" id="btnExtract" disabled>Extract data points</button>
 
       <div class="refineBlock" id="refineBlock" style="display:none">
@@ -338,7 +342,11 @@ function cv_inMask(x,y,mask){
 /* column scan bounds from ROI so we don't iterate the whole image needlessly */
 function cv_xBounds(W,mask){ if(mask&&mask.roi) return [Math.max(0,Math.floor(mask.roi.x)),Math.min(W,Math.ceil(mask.roi.x+mask.roi.w))]; return [0,W]; }
 function cv_yBounds(H,mask){ if(mask&&mask.roi) return [Math.max(0,Math.floor(mask.roi.y)),Math.min(H,Math.ceil(mask.roi.y+mask.roi.h))]; return [0,H]; }
-function cv_trackPath(img,color,tol,mask){
+function cv_anyMatch(r,g,b,others){
+  for(var o=0;o<others.length;o++) if(cv_matchW(r,g,b,others[o].color,others[o].tol)>0) return true;
+  return false;
+}
+function cv_trackPath(img,color,tol,mask,others){
   var W=img.width,H=img.height,data=img.data,prev=null,pts=[];
   var xb=cv_xBounds(W,mask),yb=cv_yBounds(H,mask);
   for(var x=xb[0];x<xb[1];x++){
@@ -351,7 +359,19 @@ function cv_trackPath(img,color,tol,mask){
       else if(start>=0){ runs.push({y:yacc/wacc,w:wacc}); start=-1; }
     }
     if(start>=0) runs.push({y:yacc/wacc,w:wacc});
-    if(!runs.length) continue;
+    if(!runs.length){
+      // own colour hidden in this column: follow another curve lying on top of it
+      if(prev===null||!others||!others.length) continue;
+      var orun=[],os=-1,on=0,oy=0,ya=Math.max(yb[0],Math.floor(prev-8)),yz=Math.min(yb[1],Math.ceil(prev+9));
+      for(var y3=ya;y3<yz;y3++){ var hit=false;
+        if(cv_inMask(x,y3,mask)){ var i3=(y3*W+x)*4; hit=data[i3+3]>=128&&cv_anyMatch(data[i3],data[i3+1],data[i3+2],others); }
+        if(hit){ if(os<0){os=y3;on=0;oy=0;} on++; oy+=y3; }
+        else if(os>=0){ orun.push(oy/on); os=-1; } }
+      if(os>=0) orun.push(oy/on);
+      if(!orun.length) continue;
+      var oc=orun[0]; for(var q=1;q<orun.length;q++) if(Math.abs(orun[q]-prev)<Math.abs(oc-prev)) oc=orun[q];
+      prev=oc; pts.push({px:x,py:oc,f:1}); continue;
+    }
     var pick;
     if(prev===null){ pick=runs[0]; for(var r=1;r<runs.length;r++) if(runs[r].w>pick.w) pick=runs[r]; }
     else { pick=runs[0]; var best=1e18;
@@ -362,6 +382,92 @@ function cv_trackPath(img,color,tol,mask){
       } }
     prev=pick.y; pts.push({px:x,py:pick.y});
   }
+  while(pts.length&&pts[pts.length-1].f) pts.pop();   // curve really ended: don't ride another one to the edge
+  return pts;
+}
+/* LINE TRACE: follow the line like a pen, in 2-D, so curves that loop back
+   (x going backwards) keep their order. Hidden stretches ride on top of the
+   covering curve (flag f:1); short gaps are jumped along the current heading. */
+function cv_traceLine(img,color,tol,mask,others,maxGap){
+  var W=img.width,H=img.height,data=img.data;
+  var xb=cv_xBounds(W,mask),yb=cv_yBounds(H,mask),D2R=Math.PI/180;
+  var hasO=!!(others&&others.length);
+  function pix(x,y){ x=Math.round(x);y=Math.round(y);
+    if(x<xb[0]||x>=xb[1]||y<yb[0]||y>=yb[1]||!cv_inMask(x,y,mask)) return -1;
+    var i=(y*W+x)*4; return data[i+3]<128?-1:i; }
+  function own(x,y){ var i=pix(x,y); return i<0?0:cv_matchW(data[i],data[i+1],data[i+2],color,tol); }
+  function occ(x,y){ if(!hasO) return 0; var i=pix(x,y); return i<0?0:(cv_anyMatch(data[i],data[i+1],data[i+2],others)?1:0); }
+  function mix(x,y){ return Math.max(own(x,y),0.6*occ(x,y)); }
+  var gw=Math.ceil(W/3),gh=Math.ceil(H/3),STEP=1.5,px=0,py=0,h=0;
+  function cone(src,half,stp){
+    var n=Math.round(2*half/stp)+1,sc=new Float64Array(n),k,a;
+    for(k=0;k<n;k++){ a=h+(-half+k*stp)*D2R; var c=Math.cos(a),sn=Math.sin(a),t=0;
+      for(var r=2;r<=5;r++) t+=src(px+r*c,py+r*sn); sc[k]=t; }
+    var bi=-1,bv=0;
+    for(k=0;k<n;k++){ var v=2*sc[k]+(k>0?sc[k-1]:0)+(k<n-1?sc[k+1]:0);
+      v*=1-0.006*Math.abs(-half+k*stp);              // prefer going straight (crossings)
+      if(v>bv+1e-9){bv=v;bi=k;} }
+    return bv>0.15?h+(-half+bi*stp)*D2R:null;
+  }
+  function recentre(a,src){ var nx=-Math.sin(a),ny=Math.cos(a),ws=0,o2=0;
+    for(var o=-3;o<=3;o++){ var w=src(px+o*nx,py+o*ny); ws+=w; o2+=o*w; }
+    if(ws>0){ px+=nx*o2/ws; py+=ny*o2/ws; } }
+  function traceFrom(sx,sy){
+    px=sx; py=sy; h=0; var pts=[{px:px,py:py}],vis=new Int32Array(gw*gh),rev=0;
+    for(var it=1;it<60000;it++){
+      var a=cone(own,80,6),flag=0;
+      if(a===null&&hasO){ a=cone(mix,30,5); flag=1; }
+      if(a===null){
+        var hit=null;
+        for(var dd=6;dd<=Math.max(6,maxGap)&&!hit;dd+=2) for(var da=-30;da<=30;da+=6){
+          var aa=h+da*D2R,qx=px+dd*Math.cos(aa),qy=py+dd*Math.sin(aa); if(own(qx,qy)>0){hit={x:qx,y:qy};break;} }
+        if(!hit) break;
+        var nj=Math.ceil(Math.hypot(hit.x-px,hit.y-py)/STEP);
+        for(var j=1;j<=nj;j++) pts.push({px:px+(hit.x-px)*j/nj,py:py+(hit.y-py)*j/nj,f:1});
+        pts[pts.length-1].f=0;
+        h=Math.atan2(hit.y-py,hit.x-px); px=hit.x; py=hit.y; continue;
+      }
+      var ox=px,oy=py;
+      px+=STEP*Math.cos(a); py+=STEP*Math.sin(a);
+      recentre(a,flag?mix:own);
+      if(pix(px,py)<0) break;
+      var mv=Math.atan2(py-oy,px-ox),dh=mv-h;
+      while(dh>Math.PI) dh-=2*Math.PI; while(dh<-Math.PI) dh+=2*Math.PI;
+      h+=0.6*dh;
+      var p={px:px,py:py}; if(flag) p.f=1; pts.push(p);
+      var cell=Math.floor(px/3)+Math.floor(py/3)*gw;
+      if(vis[cell]&&it-vis[cell]>12){ if(++rev>8) break; } else rev=0;   // closed loop / doubling back
+      vis[cell]=it;
+    }
+    return pts;
+  }
+  // a row of this colour spanning most of the plot = frame / gridline, not a curve
+  function straightRow(y){ var hitc=0,tot=0;
+    for(var x2=xb[0];x2<xb[1];x2+=3){ tot++; if(own(x2,y)>0||own(x2,y-1)>0||own(x2,y+1)>0) hitc++; }
+    return hitc>0.7*tot; }
+  // seeds: scan left->right; trace from each new run not already covered; keep the longest real trace
+  var cover=new Uint8Array(gw*gh),best=[],bestScore=0,tries=0;
+  for(var x=xb[0];x<xb[1]-3&&tries<12;x+=2){
+    var st=-1,wa=0,ya=0;
+    for(var y=yb[0];y<=yb[1]&&tries<12;y++){ var w=y<yb[1]?own(x,y):0;
+      if(w>0){ if(st<0){st=y;wa=0;ya=0;} wa+=w; ya+=y*w; continue; }
+      if(st<0) continue;
+      var cy=ya/wa, tall=(y-st)>0.25*(yb[1]-yb[0]); st=-1;
+      if(tall||wa<0.5||cy<=yb[0]+4||cy>=yb[1]-5) continue;          // axis line, speck, or plot-area edge
+      if(cover[Math.floor(x/3)+Math.floor(cy/3)*gw]) continue;
+      var ok=0; for(var dx=1;dx<=3;dx++) for(var dy=-3;dy<=3;dy++) if(own(x+dx,cy+dy)>0){ok++;break;}
+      if(ok<2||straightRow(Math.round(cy))) continue;
+      tries++;
+      var tp=traceFrom(x,cy),sc=0;
+      for(var q=0;q<tp.length;q++){ if(!tp[q].f) sc++;
+        var cx=Math.floor(tp[q].px/3),cz=Math.floor(tp[q].py/3);
+        for(var ex=-1;ex<=1;ex++) for(var ez=-1;ez<=1;ez++){ var ci=(cx+ex)+(cz+ez)*gw; if(ci>=0&&ci<cover.length) cover[ci]=1; } }
+      if(sc>bestScore){ bestScore=sc; best=tp; }
+    }
+  }
+  var pts=best;
+  while(pts.length&&pts[pts.length-1].f) pts.pop();
+  for(var z=0;z<pts.length;z++) if(!pts[z].f) delete pts[z].f;
   return pts;
 }
 function cv_columnCentroid(img,color,tol,mask){
@@ -384,7 +490,7 @@ function cv_bridge(pts,maxGap){
   var out=[pts[0]];
   for(var k=1;k<pts.length;k++){
     var a=pts[k-1],b=pts[k],gap=b.px-a.px;
-    if(gap>1&&gap<=maxGap){ for(var g=1;g<gap;g++){ var t=g/gap; out.push({px:a.px+g,py:a.py+(b.py-a.py)*t}); } }
+    if(gap>1&&gap<=maxGap){ for(var g=1;g<gap;g++){ var t=g/gap; out.push({px:a.px+g,py:a.py+(b.py-a.py)*t,f:1}); } }
     out.push(b);
   }
   return out;
@@ -394,29 +500,31 @@ function cv_resample(pts,want){
   var out=[],stepF=pts.length/want;
   for(var k=0;k<want;k++){
     var a=Math.floor(k*stepF),b=Math.min(pts.length,Math.floor((k+1)*stepF));
-    var sx=0,sy=0,n=0; for(var j=a;j<b;j++){sx+=pts[j].px;sy+=pts[j].py;n++;}
-    if(n) out.push({px:sx/n,py:sy/n});
+    var sx=0,sy=0,n=0,fl=0; for(var j=a;j<b;j++){sx+=pts[j].px;sy+=pts[j].py;n++;if(pts[j].f)fl++;}
+    if(n){ var o={px:sx/n,py:sy/n}; if(fl*2>=n) o.f=1; out.push(o); }
   }
   return out;
 }
-function cv_extractOne(img,color,opts,mask,tolOverride){
+function cv_extractOne(img,color,opts,mask,tolOverride,others){
   var tol=(tolOverride!=null?tolOverride:opts.tol);
-  var pts = opts.track ? cv_trackPath(img,color,tol,mask) : cv_columnCentroid(img,color,tol,mask);
-  pts = cv_bridge(pts,opts.maxGap);
+  var pts;
+  if(opts.trace) pts=cv_traceLine(img,color,tol,mask,others,opts.maxGap);
+  else { pts = opts.track ? cv_trackPath(img,color,tol,mask,others) : cv_columnCentroid(img,color,tol,mask);
+    pts = cv_bridge(pts,opts.maxGap); }
   pts = cv_resample(pts,opts.density);
   return pts;
 }
 function cv_extractAll(img,seriesList,opts){
   var out=[]; for(var s=0;s<seriesList.length;s++){
     var sObj=seriesList[s];
-    out.push(cv_extractOne(img,sObj.color,opts,opts.mask,sObj.tol));
+    out.push(cv_extractOne(img,sObj.color,opts,opts.mask,sObj.tol,sObj.others));
   }
   return out;
 }
 
 /* Build the worker body from the stringified pure functions + a message shim. */
 function buildWorkerSource(){
-  var fns=[cv_matchW,cv_trackPath,cv_columnCentroid,cv_bridge,cv_resample,cv_extractOne,cv_extractAll]
+  var fns=[cv_matchW,cv_inMask,cv_xBounds,cv_yBounds,cv_anyMatch,cv_trackPath,cv_traceLine,cv_columnCentroid,cv_bridge,cv_resample,cv_extractOne,cv_extractAll]
     .map(function(f){return f.toString();}).join("\n");
   var shim=[
     "self.onmessage=function(e){",
@@ -489,7 +597,7 @@ function snapshot(){
   return JSON.stringify({
     axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
     series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,
-      points:s.points,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null};}),
+      points:s.points,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null,path:!!s.path,follow:(s.follow==null?null:s.follow)};}),
     mask:S.mask, editMode:S.editMode, activeSeries:S.activeSeries
   });
 }
@@ -527,7 +635,7 @@ function persist(){
     try{
       localStorage.setItem(LS_KEY, JSON.stringify({
         axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
-        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null};}),
+        series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null,path:!!s.path,follow:(s.follow==null?null:s.follow)};}),
         mask:S.mask, imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
       }));
     }catch(e){/* quota or disabled: ignore */}
@@ -542,7 +650,7 @@ function restoreSession(){
     S.axisMode=o.axisMode||"2pt"; S.calib=o.calib||[]; S.xScale=o.xScale||"lin"; S.yScale=o.yScale||"lin";
     S.series=(o.series||[]).map(function(s,i){return {color:s.color,disp:s.disp||paletteColor(i),
       name:s.name,visible:s.visible!==false,points:null,data:s.data||null,tol:(s.tol!=null?s.tol:null),
-      raw:s.raw||null,space:s.space||null,style:s.style||null};});
+      raw:s.raw||null,space:s.space||null,style:s.style||null,path:!!s.path,follow:(s.follow==null?null:s.follow)};});
     if(o.mask && (o.mask.roi||(o.mask.excl&&o.mask.excl.length))) S.mask={roi:o.mask.roi||null,excl:o.mask.excl||[]};
     $("xScale").value=S.xScale;$("yScale").value=S.yScale;
     $("axisMode").querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.dataset.m===S.axisMode);});
@@ -632,6 +740,7 @@ function redraw(){
     for(var p=0;p<s.points.length;p++){
       var c=imgToCanvas(s.points[p].px,s.points[p].py);
       if(mk==="square"){ ctx.fillRect(c.x-rad,c.y-rad,2*rad,2*rad); if(si===S.activeSeries) ctx.strokeRect(c.x-rad,c.y-rad,2*rad,2*rad); }
+      else if(s.points[p].f){ ctx.save(); ctx.beginPath();ctx.arc(c.x,c.y,rad+0.6,0,7);ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.stroke(); ctx.restore(); }
       else { ctx.beginPath();ctx.arc(c.x,c.y,rad,0,7);ctx.fill(); if(si===S.activeSeries) ctx.stroke(); }
     }
   }
@@ -1012,6 +1121,10 @@ function syncStyleBar(){ var bar=$("styleBar"); if(!bar) return; var a=selectedS
   bar.style.display=a.length?"block":"none"; if(!a.length) return;
   var st=styleOf(a[0]); $("stLine").value=st.line; $("stWidth").value=st.w; $("stMark").value=st.mark;
   $("stColor").value=rgbHex(dispOf(a[0],S.series.indexOf(a[0])));
+  var fs=$("stFollow"), cur=a[0].follow==null?"auto":String(a[0].follow);
+  fs.innerHTML='<option value="auto">any curve on top (auto)</option><option value="none">nothing \u2014 leave a gap</option>'+
+    S.series.map(function(o,j){ return a.length===1&&o===a[0]?"":'<option value="'+j+'">'+esc(o.name)+'</option>'; }).join("");
+  fs.value=cur; if(fs.value!==cur) fs.value="auto";
   $("styleTitle").textContent="Style \u00b7 "+a.length+" selected (Ctrl-click / Shift-click rows to multi-select)"; }
 function applyStyle(key,val){ selectedSeries().forEach(function(s){
     if(key==="color") s.disp=[parseInt(val.substr(1,2),16),parseInt(val.substr(3,2),16),parseInt(val.substr(5,2),16)];
@@ -1059,13 +1172,25 @@ function currentOpts(){
        excl:(S.mask.excl||[]).map(function(r){return {x:r.x,y:r.y,w:r.w,h:r.h};})};
   }
   return {tol:+$("tol").value, density:+$("dens").value, maxGap:+$("gap").value,
-    track:$("optTrack").checked, mask:m};
+    track:$("optTrack").checked, trace:$("optTrace").checked, mask:m};
+}
+/* per-series "when hidden, follow": auto = any other curve, none = leave a gap, or one named curve */
+function seriesPayload(){
+  var g=+$("tol").value;
+  return S.series.map(function(s,i){
+    var f=s.follow==null?"auto":String(s.follow), others=[];
+    if(f==="auto") others=S.series.filter(function(o,j){return j!==i;});
+    else if(f!=="none"){ var o=S.series[+f]; if(o&&o!==s) others=[o];
+      else others=S.series.filter(function(o2,j){return j!==i;}); }   // stale choice (series removed) -> auto
+    return {color:s.color, tol:(s.tol!=null?s.tol:null),
+      others:others.map(function(o){return {color:o.color,tol:(o.tol!=null?o.tol:g)};})};
+  });
 }
 function extract(live){
   if(!S.mapReady){ if(!live) toast("Finish axis calibration first.",true); return; }
   if(!S.series.length){ if(!live) toast("Detect or pick at least one curve.",true); return; }
   var opts=currentOpts();
-  var payloadSeries=S.series.map(function(s){return {color:s.color, tol:(s.tol!=null?s.tol:null)};});
+  var payloadSeries=seriesPayload();
   if(!live) busy(true,"Extracting…");
   var w=getWorker();
   if(w){
@@ -1085,13 +1210,14 @@ function extract(live){
 function extractSync(opts,live){
   if(!live) busy(true,"Extracting…");
   var img={width:S.imgW,height:S.imgH,data:S.srcData.data};
-  var res=cv_extractAll(img,S.series.map(function(s){return {color:s.color, tol:(s.tol!=null?s.tol:null)};}),opts);
+  var res=cv_extractAll(img,seriesPayload(),opts);
   if(!live) busy(false); applyExtractResult(res,live);
 }
 function applyExtractResult(resSeries,live){
   for(var si=0;si<S.series.length;si++){
     var pts=resSeries[si]||[];
     S.series[si].raw=pts.slice();            // preserve the true extracted curve shape
+    S.series[si].path=$("optTrace").checked; // ordered along the line (may loop back in x)
     resampleSeries(S.series[si]);            // derive display points via current spacing rule
   }
   redraw();renderSeries();renderTable();enableExport(true);renderMinimap();
@@ -1100,7 +1226,15 @@ function applyExtractResult(resSeries,live){
   if(live){ status("Live: "+total+" points."); }
   else { liveOn=true; pushHistory();
     status("Extracted "+total+" points across "+S.series.length+" series.");
-    toast("Extraction complete. Adjust sliders for live updates."); }
+    toast("Extraction complete. Adjust sliders for live updates.");
+    if(!$("optTrace").checked){
+      var zz=S.series.filter(function(s){ var r=s.raw||[],c=0;
+        for(var k=2;k<r.length;k++){ var d1=r[k-1].py-r[k-2].py,d2=r[k].py-r[k-1].py;
+          if(Math.abs(d1)>12&&Math.abs(d2)>12&&d1*d2<0) c++; } return c>4; });
+      if(zz.length) toast(zz.map(function(s){return s.name;}).join(", ")+" zig-zag between two branches \u2014 the curve loops back. Tick \u2018Line-trace\u2019 and extract again.",true);
+    }
+    var hid=S.series.filter(function(s){return (s.points||[]).some(function(p){return p.f;});});
+    if(hid.length) status("Hollow points = hidden/bridged stretches ("+hid.map(function(s){return s.name;}).join(", ")+"). Check them; change \u2018When hidden, follow\u2019 if wrong."); }
 }
 
 /* ===========================================================================
@@ -1109,6 +1243,7 @@ function applyExtractResult(resSeries,live){
 function processedData(s){
   if(!s.data) return [];
   var d=s.data.slice();
+  if(s.path) return d;                          // looped curve: keep order along the line
   if($("optSort").checked) d.sort(function(a,b){return a.x-b.x;});
   if($("optDedup").checked){
     var out=[],lastx=null;
@@ -1147,6 +1282,11 @@ function stepXs(){
   if(n>20000){ n=20000; toast("Step too small \u2014 capped at 20,000 rows.",true); }
   var xs=[]; for(var k=0;k<n;k++) xs.push(+(x0+k*dx).toFixed(dec)); return xs;
 }
+function stepYPath(path,xt){ // looped curve: Y where the line FIRST reaches this X
+  for(var k=1;k<path.length;k++){ var a=path[k-1],b=path[k];
+    if((a.x-xt)*(b.x-xt)<=0){ if(a.x===b.x) return a.y; return a.y+(b.y-a.y)*(xt-a.x)/(b.x-a.x); } }
+  return null;
+}
 function stepY(sorted,xt){ // null outside this curve's own X range (no extrapolation)
   var e=1e-9*Math.max(1,Math.abs(xt));
   if(xt<sorted[0].x-e||xt>sorted[sorted.length-1].x+e) return null;
@@ -1154,9 +1294,9 @@ function stepY(sorted,xt){ // null outside this curve's own X range (no extrapol
 }
 function stepTable(vis){
   var xs=stepXs()||[];
-  var cols=vis.map(function(s){ return s.data.slice().sort(function(a,b){return a.x-b.x;}); });
+  var cols=vis.map(function(s){ return s.path?{path:s.data}:s.data.slice().sort(function(a,b){return a.x-b.x;}); });
   return {head:["X"].concat(vis.map(function(s){return s.name+" Y";})),
-    rows:xs.map(function(xt){ return [fmtX(xt)].concat(cols.map(function(c){ var y=stepY(c,xt); return y==null?"":fmt(y); })); })};
+    rows:xs.map(function(xt){ return [fmtX(xt)].concat(cols.map(function(c){ var y=c.path?stepYPath(c.path,xt):stepY(c,xt); return y==null?"":fmt(y); })); })};
 }
 function interpY(d,xt){
   // d MUST be ascending in x (callers sort a private copy before calling).
@@ -1192,8 +1332,33 @@ function interpPy(raw,px){
     var dx=b.px-a.px; if(dx===0) return b.py; var t=(px-a.px)/dx; return a.py+(b.py-a.py)*t; } }
   return raw[raw.length-1].py;
 }
+function arcResample(raw,n){
+  var L=[0]; for(var j=1;j<raw.length;j++) L.push(L[j-1]+Math.hypot(raw[j].px-raw[j-1].px,raw[j].py-raw[j-1].py));
+  var tot=L[L.length-1]; if(raw.length<=n||tot<=0) return raw.slice();
+  var out=[],k=0;
+  for(var i=0;i<n;i++){ var t=tot*i/(n-1); while(k<L.length-2&&L[k+1]<t) k++;
+    var a=raw[k],b=raw[k+1],u=(L[k+1]-L[k])>0?(t-L[k])/(L[k+1]-L[k]):0;
+    var p={px:a.px+(b.px-a.px)*u,py:a.py+(b.py-a.py)*u}; if((u<0.5?a:b).f) p.f=1; out.push(p); }
+  return out;
+}
+function markFlags(rawSorted,out){ // copy hidden/bridged flag from the nearest raw point (by px)
+  if(!rawSorted.some(function(p){return p.f;})) return;
+  out.forEach(function(p){ var lo=0,hi=rawSorted.length-1;
+    while(hi-lo>1){ var m=(lo+hi)>>1; if(rawSorted[m].px<p.px) lo=m; else hi=m; }
+    var q=Math.abs(rawSorted[lo].px-p.px)<=Math.abs(rawSorted[hi].px-p.px)?rawSorted[lo]:rawSorted[hi];
+    if(q.f) p.f=1; else delete p.f; });
+}
 function resampleSeries(s){
   if(!s.raw || !s.raw.length){ s.points=[]; s.data=[]; return; }
+  if(s.path){ // looped / ordered curve: never sort by x, space points along the line
+    var spp=spaceFor(s),rawp=s.raw,np;
+    if(spp.mode==="px"){ var tl=0; for(var q=1;q<rawp.length;q++) tl+=Math.hypot(rawp[q].px-rawp[q-1].px,rawp[q].py-rawp[q-1].py);
+      np=Math.max(2,Math.round(tl/Math.max(1,spp.px))+1); }
+    else np=Math.max(2,spp.count||150);
+    s.points=arcResample(rawp,np);
+    s.data=s.points.map(function(p){return pxToData(p.px,p.py);});
+    return;
+  }
   var raw=s.raw.slice().sort(function(a,b){return a.px-b.px;});
   var sp=spaceFor(s), out=[];
   var x0=raw[0].px, x1=raw[raw.length-1].px;
@@ -1236,6 +1401,7 @@ function resampleSeries(s){
     var last=raw[raw.length-1];
     if(out[out.length-1].px!==last.px || out[out.length-1].py!==last.py) out.push({px:last.px,py:last.py});
   }
+  markFlags(raw,out);
   s.points=out;
   s.data=out.map(function(p){return pxToData(p.px,p.py);});
 }
@@ -1585,6 +1751,10 @@ $("stLine").onchange=function(e){applyStyle("line",e.target.value);};
 $("stWidth").onchange=function(e){applyStyle("w",+e.target.value||1.6);};
 $("stMark").onchange=function(e){applyStyle("mark",e.target.value);};
 $("stColor").onchange=function(e){applyStyle("color",e.target.value);};
+$("stFollow").onchange=function(e){ var v=e.target.value;
+  selectedSeries().forEach(function(s){ s.follow=(v==="auto"?null:v); });
+  pushHistory(); persist(); if(S.mapReady&&S.series.some(function(s){return s.raw;})) extract(true); };
+$("optTrace").onchange=function(){ liveReextract(); };
 $("btnCsv").onclick=function(){download("graph-data.csv",buildDelim(","),"text/csv");};
 $("btnJson").onclick=function(){download("graph-data.json",buildJSON(),"application/json");};
 $("btnTsv").onclick=copyTSV;
