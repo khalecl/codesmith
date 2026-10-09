@@ -21,7 +21,7 @@
     font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
   h1,h2,h3{margin:0;font-weight:600}
   button{font-family:inherit;font-size:13px;cursor:pointer}
-  .app{display:grid;grid-template-columns:330px 1fr;grid-template-rows:auto 1fr;
+  .app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:auto 1fr;
     grid-template-areas:"head head" "side main";height:100%}
   header{grid-area:head;display:flex;align-items:center;gap:14px;
     padding:11px 18px;border-bottom:1px solid var(--line);background:var(--panel);z-index:5}
@@ -35,12 +35,37 @@
     overflow-y:auto;padding:4px 0 32px}
   main{grid-area:main;position:relative;overflow:hidden;background:
     repeating-conic-gradient(#0d1318 0% 25%, #121a21 0% 50%) 50%/22px 22px}
-  .step{border-bottom:1px solid var(--line);padding:13px 18px}
-  .step h2{font-size:12px;color:var(--dim);letter-spacing:.2px;margin-bottom:10px;
-    display:flex;align-items:center;gap:8px}
-  .step h2 .n{display:inline-grid;place-items:center;width:18px;height:18px;
+  .step{border-bottom:1px solid var(--line)}
+  .step .sh{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:9px;width:100%;
+    padding:12px 18px;cursor:pointer;color:var(--ink);font-size:13px;font-weight:600}
+  .step .sh:hover{background:rgba(255,255,255,.025)}
+  .step .sh:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+  .step .sh .n{display:inline-grid;place-items:center;width:20px;height:20px;flex:none;
     border-radius:50%;background:var(--panel2);color:var(--mut);font:600 11px/1 var(--mono)}
-  .step.on h2 .n{background:var(--acc);color:#062b24}
+  .step.done .sh .n{background:rgba(54,194,166,.18);color:var(--acc)}
+  .step.on .sh .n{background:var(--acc);color:#062b24}
+  .step .sh .tt{flex:none}
+  .step .sh .sum{margin-left:auto;font:500 11px/1.2 var(--mono);color:var(--dim);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+  .step.done .sh .sum{color:var(--acc)}
+  .step .sh .chev{color:var(--dim);transition:transform .15s;font-size:15px;line-height:1}
+  .step.open .sh .chev{transform:rotate(90deg)}
+  .step .sb{display:none;padding:2px 18px 16px}
+  .step.open .sb{display:block}
+  .sub{font-size:11.5px;color:var(--mut);margin:12px 0 6px}
+  .ocrField{display:flex;gap:6px;margin:6px 0}
+  .ocrField input{flex:1}
+  .ocrBtn{font-family:var(--mono)!important;flex:none}
+  details.adv{margin-top:10px;border:1px solid var(--line);border-radius:7px;padding:4px 10px}
+  details.adv summary{cursor:pointer;color:var(--mut);font-size:12px;padding:4px 0}
+  details.adv[open]{padding-bottom:8px}
+  .gname{display:flex;gap:6px;align-items:center;flex:1;max-width:460px}
+  .gname input{flex:1;font-weight:600}
+  .ocrCard{top:56px;bottom:auto;left:50%;transform:translateX(-50%);width:min(460px,calc(100% - 24px));z-index:7}
+  .ocrBody{padding:10px 14px 12px!important}
+  .ocrBody textarea{width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);border-radius:6px;padding:7px 9px;font:13px/1.4 var(--mono);resize:vertical}
+  .ocrUse{display:flex;flex-wrap:wrap;gap:6px}
   label.field{display:block;margin:9px 0;color:var(--mut);font-size:12.5px}
   label.field>span{display:block;margin-bottom:4px}
   input[type=text],input[type=number],select{width:100%;background:var(--panel2);
@@ -139,7 +164,7 @@
     .app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;
       grid-template-areas:"head" "side" "main"}
     aside{max-height:44vh;border-right:0;border-bottom:1px solid var(--line)}
-    header .status{display:none}
+    header .status{display:none} header h1{display:none}
   }
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -148,140 +173,167 @@
 <div class="app">
   <header>
     <h1>Graph Digitizer Pro</h1>
-    <span class="tag">pixels&nbsp;&rarr;&nbsp;data</span>
+    <div class="gname"><input type="text" id="graphName" placeholder="Graph name — names your export files" spellcheck="false">
+      <button class="btn sm ocrBtn" data-ocr="graph" title="Read the name from the image (OCR): drag a box over the title">Aa</button></div>
     <div class="tools">
+      <button class="btn sm" id="btnOcr" title="Read text from the image: drag a box over it">Aa&nbsp; Read text</button>
       <div class="status" id="status">Load a chart image to begin.</div>
       <button class="btn sm ghost" id="btnUndo" title="Undo (Ctrl+Z)" disabled>↶</button>
       <button class="btn sm ghost" id="btnRedo" title="Redo (Ctrl+Y)" disabled>↷</button>
     </div>
   </header>
 
-  <aside>
-    <div class="step on" id="step1">
-      <h2><span class="n">1</span> Load image</h2>
-      <button class="btn pri" id="btnLoad">Choose image…</button>
-      <input type="file" id="file" accept="image/*" hidden>
-      <div class="hint">PNG, JPG, GIF, WebP. Or paste (Ctrl+V) / drop onto the canvas.</div>
-    </div>
+  <aside id="side">
+    <section class="step on open" id="step1">
+      <button class="sh" data-step="1"><span class="n">1</span><span class="tt">Image</span><span class="sum" id="sum1">none</span><span class="chev">›</span></button>
+      <div class="sb">
+        <button class="btn pri" id="btnLoad">Choose image…</button>
+        <input type="file" id="file" accept="image/*" hidden>
+        <div class="hint">PNG, JPG, GIF, WebP. Or paste (Ctrl+V) / drop onto the canvas.</div>
+      </div>
+    </section>
 
-    <div class="step" id="step2">
-      <h2><span class="n">2</span> Calibrate axes</h2>
-      <div class="seg" id="axisMode">
-        <button data-m="2pt" class="on">2-point</button>
-        <button data-m="4pt">4-point</button>
+    <section class="step" id="step2">
+      <button class="sh" data-step="2"><span class="n">2</span><span class="tt">Axes</span><span class="sum" id="sum2">not set</span><span class="chev">›</span></button>
+      <div class="sb">
+        <button class="btn" id="btnAutoAxis">Auto-detect axes</button>
+        <div class="seg" id="axisMode" style="margin-top:8px">
+          <button data-m="2pt" class="on">2-point</button>
+          <button data-m="4pt">4-point</button>
+        </div>
+        <div class="hint" id="calibHint">Click two reference points, each with a known X and Y.</div>
+        <div id="calibPoints"></div>
+        <div class="row">
+          <label class="field"><span>X scale</span>
+            <select id="xScale"><option value="lin">Linear</option><option value="log">Log₁₀</option>
+            <option value="date">Date/time</option></select></label>
+          <label class="field"><span>Y scale</span>
+            <select id="yScale"><option value="lin">Linear</option><option value="log">Log₁₀</option></select></label>
+        </div>
+        <div class="hint" id="dateHint" style="display:none">Date mode: type values like 2026-01-15 or 2026-01-15 14:30.</div>
+        <div class="sub">Axis names <span class="dim">(used in table &amp; export headers)</span></div>
+        <div class="ocrField"><input type="text" id="xName" placeholder="X axis, e.g. t[s]"><button class="btn sm ocrBtn" data-ocr="x" title="Read from image (OCR): drag a box over the X-axis title">Aa</button></div>
+        <div class="ocrField"><input type="text" id="yName" placeholder="Y axis, e.g. Tc[°C]"><button class="btn sm ocrBtn" data-ocr="y" title="Read from image (OCR): drag a box over the Y-axis title — vertical text is fine">Aa</button></div>
+        <button class="btn sm ghost" id="btnResetCalib" style="margin-top:8px">Reset calibration</button>
       </div>
-      <div class="hint" id="calibHint">Click two reference points, each with a known X and Y.</div>
-      <button class="btn sm" id="btnAutoAxis" style="margin:8px 0">Auto-detect axes</button>
-      <div id="calibPoints"></div>
-      <div class="row">
-        <label class="field"><span>X scale</span>
-          <select id="xScale"><option value="lin">Linear</option><option value="log">Log₁₀</option>
-          <option value="date">Date/time</option></select></label>
-        <label class="field"><span>Y scale</span>
-          <select id="yScale"><option value="lin">Linear</option><option value="log">Log₁₀</option></select></label>
-      </div>
-      <div class="hint" id="dateHint" style="display:none">Date mode: type values like 2026-01-15 or 2026-01-15 14:30.</div>
-      <button class="btn sm" id="btnResetCalib">Reset calibration</button>
-    </div>
+    </section>
 
-    <div class="step" id="step3">
-      <h2><span class="n">3</span> Curves</h2>
-      <button class="btn" id="btnAuto">Auto-detect by colour</button>
-      <button class="btn" id="btnPick" style="margin-top:8px">+ Pick colour from image</button>
-      <div class="hint">Pick, then click that curve on the image.</div>
-      <div class="seriesList" id="seriesList"></div>
-      <div class="styleBar" id="styleBar" style="display:none">
-        <div class="maskTitle" id="styleTitle">Style</div>
-        <div class="row">
-          <label>Line <select id="stLine"><option value="solid">solid</option><option value="dash">dashed</option><option value="dot">dotted</option><option value="none">none</option></select></label>
-          <label>Width <input type="number" id="stWidth" min="0.5" max="6" step="0.5" value="1.6" style="width:52px"></label>
-        </div>
-        <div class="row">
-          <label>Points <select id="stMark"><option value="dot">dots</option><option value="square">squares</option><option value="none">none</option></select></label>
-          <label>Colour <input type="color" id="stColor" style="width:34px;height:22px;padding:0"></label>
-        </div>
-        <div class="row">
-          <label title="When this curve is hidden under another one">When hidden, follow <select id="stFollow"></select></label>
-        </div>
-      </div>
-      <div class="maskControls">
-        <div class="maskTitle">Ignore parts of the image</div>
+    <section class="step" id="step3">
+      <button class="sh" data-step="3"><span class="n">3</span><span class="tt">Plot area</span><span class="sum" id="sum3">whole image</span><span class="chev">›</span></button>
+      <div class="sb">
         <div class="row">
           <button class="btn sm" id="btnRoi" title="Limit extraction to the plot area">⬚ Set plot area</button>
           <button class="btn sm" id="btnExcl" title="Shade over legend, labels, title…">⊘ Add exclusion</button>
         </div>
         <button class="btn sm ghost" id="btnClearMasks" style="margin-top:6px">Clear mask regions</button>
-        <div class="hint">Draw a box around just the plot to keep axis frame &amp; labels out, and shade over the legend or anything that confuses detection. Click a region's ✕ to remove it.</div>
+        <div class="hint">Box just the plot, inside the axis lines. Shade over the legend or anything that confuses detection. Click a region's ✕ to remove it.</div>
       </div>
-    </div>
+    </section>
 
-    <div class="step" id="step4">
-      <h2><span class="n">4</span> Extract</h2>
-      <label class="field"><span>Colour tolerance <b class="k" id="tolVal">40</b> <span class="dim" id="tolScope" style="font-weight:400">· all series</span></span>
-        <input type="range" class="slider" id="tol" min="8" max="140" value="40"></label>
-      <div class="hint">Select a curve above to tune its tolerance on its own — e.g. tight for a saturated colour, looser for a thin grey/black line.</div>
-      <label class="field"><span>Points per series <b class="k" id="densVal">150</b></span>
-        <input type="range" class="slider" id="dens" min="10" max="800" value="150"></label>
-      <label class="field"><span>Max gap to bridge (px) <b class="k" id="gapVal">12</b></span>
-        <input type="range" class="slider" id="gap" min="0" max="80" value="12"></label>
-      <label class="field"><span>Point size <b class="k" id="pointSizeVal">2.6</b></span>
-        <input type="range" class="slider" id="pointSize" min="1" max="10" step="0.2" value="2.6"></label>
-      <label class="chk"><input type="checkbox" id="optTrack" checked> Path-tracking (handle crossings / vertical runs)</label>
-      <label class="chk"><input type="checkbox" id="optTrace"> Line-trace (curves that loop back \u2014 x goes backwards)</label>
-      <button class="btn pri" id="btnExtract" disabled>Extract data points</button>
+    <section class="step" id="step4">
+      <button class="sh" data-step="4"><span class="n">4</span><span class="tt">Curves</span><span class="sum" id="sum4">none</span><span class="chev">›</span></button>
+      <div class="sb">
+        <div class="row">
+          <button class="btn" id="btnAuto">Auto-detect</button>
+          <button class="btn" id="btnPick">+ Pick colour</button>
+        </div>
+        <button class="btn sm" id="btnLegendOcr" style="margin-top:6px;width:100%" title="Drag a box over the legend: names are read and matched to curves by their line colour">Aa&nbsp; Name curves from legend</button>
+        <div class="hint">Click a row to select · Ctrl-click / Shift-click for several · click a name to rename.</div>
+        <div class="seriesList" id="seriesList"></div>
+        <div class="styleBar" id="styleBar" style="display:none">
+          <div class="maskTitle" id="styleTitle">Style</div>
+          <div class="row">
+            <label>Line <select id="stLine"><option value="solid">solid</option><option value="dash">dashed</option><option value="dot">dotted</option><option value="none">none</option></select></label>
+            <label>Width <input type="number" id="stWidth" min="0.5" max="6" step="0.5" value="1.6" style="width:52px"></label>
+          </div>
+          <div class="row">
+            <label>Points <select id="stMark"><option value="dot">dots</option><option value="square">squares</option><option value="none">none</option></select></label>
+            <label>Colour <input type="color" id="stColor" style="width:34px;height:22px;padding:0"></label>
+          </div>
+          <div class="row">
+            <label title="When this curve is hidden under another one">When hidden, follow <select id="stFollow"></select></label>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      <div class="refineBlock" id="refineBlock" style="display:none">
-        <div class="refineTitle">Refine points <span class="dim" id="refineScope" style="font-weight:400">· all series</span></div>
-        <div class="seg" id="editMode">
-          <button data-m="resample" class="on">Resample</button>
-          <button data-m="shape">Hand-edit</button>
-        </div>
-        <div id="resamplePane">
-          <label class="field"><span>Spacing rule</span>
-            <select id="spaceMode">
-              <option value="count">By number of points</option>
-              <option value="dx">By even X step (period)</option>
-              <option value="px">By spacing along the line</option>
-            </select></label>
-          <label class="field" id="spCountWrap"><span>Number of points <b class="k" id="spCountVal">150</b></span>
-            <input type="range" class="slider" id="spCount" min="5" max="800" value="150"></label>
-          <label class="field" id="spDxWrap" style="display:none"><span>X step (data units) <b class="k" id="spDxVal">0.02</b></span>
-            <input type="range" class="slider" id="spDx" min="0.001" max="0.2" step="0.001" value="0.02"></label>
-          <label class="field" id="spPxWrap" style="display:none"><span>Spacing along line (px) <b class="k" id="spPxVal">6</b></span>
-            <input type="range" class="slider" id="spPx" min="1" max="60" value="6"></label>
-          <div class="hint">Points stay locked to the extracted curve — only their density/period changes. Applies to the selected series, or all if none is selected.</div>
-        </div>
-        <div id="shapePane" style="display:none">
-          <div class="hint">Drag any dot to move it, Alt-click on the line to add one, right-click a dot to delete. Your edits reshape the curve and are kept when you resample.</div>
-        </div>
-      </div>
-      <div class="hint" id="editHint">Extract first, then refine spacing or hand-correct points above.</div>
-    </div>
+    <section class="step" id="step5">
+      <button class="sh" data-step="5"><span class="n">5</span><span class="tt">Extract</span><span class="sum" id="sum5">—</span><span class="chev">›</span></button>
+      <div class="sb">
+        <label class="field"><span>Colour tolerance <b class="k" id="tolVal">40</b> <span class="dim" id="tolScope" style="font-weight:400">· all series</span></span>
+          <input type="range" class="slider" id="tol" min="8" max="140" value="40"></label>
+        <label class="chk"><input type="checkbox" id="optTrace"> Line-trace (curves that loop back — x goes backwards)</label>
+        <button class="btn pri" id="btnExtract" disabled>Extract data points</button>
+        <details class="adv">
+          <summary>Advanced</summary>
+          <div class="hint">Select a curve to tune its tolerance on its own — tight for a saturated colour, looser for a thin grey/black line.</div>
+          <label class="field"><span>Points per series <b class="k" id="densVal">150</b></span>
+            <input type="range" class="slider" id="dens" min="10" max="800" value="150"></label>
+          <label class="field"><span>Max gap to bridge (px) <b class="k" id="gapVal">12</b></span>
+            <input type="range" class="slider" id="gap" min="0" max="80" value="12"></label>
+          <label class="field"><span>Point size <b class="k" id="pointSizeVal">2.6</b></span>
+            <input type="range" class="slider" id="pointSize" min="1" max="10" step="0.2" value="2.6"></label>
+          <label class="chk"><input type="checkbox" id="optTrack" checked> Path-tracking (handle crossings / vertical runs)</label>
+        </details>
 
-    <div class="step" id="step5">
-      <h2><span class="n">5</span> Process &amp; export</h2>
-      <label class="chk"><input type="checkbox" id="optSort" checked> Sort by X</label>
-      <label class="chk"><input type="checkbox" id="optDedup" checked> Deduplicate equal X</label>
-      <label class="chk"><input type="checkbox" id="optGrid"> Resample onto uniform X grid</label>
-      <label class="field" id="gridNWrap" style="display:none"><span>Grid points <b class="k" id="gridNVal">100</b></span>
-        <input type="range" class="slider" id="gridN" min="5" max="500" value="100"></label>
-      <label class="chk"><input type="checkbox" id="optStep"> Common X step (same X for every series)</label>
-      <div id="stepWrap" style="display:none">
-        <div class="row" style="gap:8px;flex-wrap:wrap">
-          <label>Step &Delta;X <input type="number" id="stepDx" value="0.1" step="any" style="width:70px"></label>
-          <label>From <input type="number" id="stepX0" placeholder="auto" step="any" style="width:64px"></label>
-          <label>To <input type="number" id="stepX1" placeholder="auto" step="any" style="width:64px"></label>
+        <div class="refineBlock" id="refineBlock" style="display:none">
+          <div class="refineTitle">Refine points <span class="dim" id="refineScope" style="font-weight:400">· all series</span></div>
+          <div class="seg" id="editMode">
+            <button data-m="resample" class="on">Resample</button>
+            <button data-m="shape">Hand-edit</button>
+          </div>
+          <div id="resamplePane">
+            <label class="field"><span>Spacing rule</span>
+              <select id="spaceMode">
+                <option value="count">By number of points</option>
+                <option value="dx">By even X step (period)</option>
+                <option value="px">By spacing along the line</option>
+              </select></label>
+            <label class="field" id="spCountWrap"><span>Number of points <b class="k" id="spCountVal">150</b></span>
+              <input type="range" class="slider" id="spCount" min="5" max="800" value="150"></label>
+            <label class="field" id="spDxWrap" style="display:none"><span>X step (data units) <b class="k" id="spDxVal">0.02</b></span>
+              <input type="range" class="slider" id="spDx" min="0.001" max="0.2" step="0.001" value="0.02"></label>
+            <label class="field" id="spPxWrap" style="display:none"><span>Spacing along line (px) <b class="k" id="spPxVal">6</b></span>
+              <input type="range" class="slider" id="spPx" min="1" max="60" value="6"></label>
+            <div class="hint">Points stay locked to the extracted curve — only their density/period changes. Applies to the selected series, or all if none is selected.</div>
+          </div>
+          <div id="shapePane" style="display:none">
+            <div class="hint">Drag any dot to move it, Alt-click on the line to add one, right-click a dot to delete. Your edits reshape the curve and are kept when you resample.</div>
+          </div>
         </div>
-        <div class="hint">Y is interpolated at every X step. Blank where a curve doesn't reach that X.</div>
+        <div class="hint" id="editHint">Extract first, then refine spacing or hand-correct points.</div>
       </div>
-      <div class="row">
-        <button class="btn" id="btnCsv" disabled>CSV</button>
-        <button class="btn" id="btnJson" disabled>JSON</button>
-        <button class="btn" id="btnTsv" disabled>Copy TSV</button>
+    </section>
+
+    <section class="step" id="step6">
+      <button class="sh" data-step="6"><span class="n">6</span><span class="tt">Export</span><span class="sum" id="sum6">—</span><span class="chev">›</span></button>
+      <div class="sb">
+        <div class="hint" style="margin-top:0">Files are named after the graph name at the top: <b class="mono" id="fileNamePreview">graph-data</b>.csv</div>
+        <label class="chk"><input type="checkbox" id="optSort" checked> Sort by X</label>
+        <label class="chk"><input type="checkbox" id="optDedup" checked> Deduplicate equal X</label>
+        <label class="chk"><input type="checkbox" id="optGrid"> Resample onto uniform X grid</label>
+        <label class="field" id="gridNWrap" style="display:none"><span>Grid points <b class="k" id="gridNVal">100</b></span>
+          <input type="range" class="slider" id="gridN" min="5" max="500" value="100"></label>
+        <label class="chk"><input type="checkbox" id="optStep"> Common X step (same X for every series)</label>
+        <div id="stepWrap" style="display:none">
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <label>Step &Delta;X <input type="number" id="stepDx" value="0.1" step="any" style="width:70px"></label>
+            <label>From <input type="number" id="stepX0" placeholder="auto" step="any" style="width:64px"></label>
+            <label>To <input type="number" id="stepX1" placeholder="auto" step="any" style="width:64px"></label>
+          </div>
+          <div class="hint">Y is interpolated at every X step. Blank where a curve doesn't reach that X.</div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="btnCsv" disabled>CSV</button>
+          <button class="btn" id="btnJson" disabled>JSON</button>
+          <button class="btn" id="btnTsv" disabled>Copy TSV</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm" id="btnTable" disabled>Data table</button>
+          <button class="btn sm ghost" id="btnClear">Clear saved session</button>
+        </div>
       </div>
-      <button class="btn sm" id="btnTable" style="margin-top:8px" disabled>Toggle data table</button>
-      <button class="btn sm" id="btnClear" style="margin-top:8px">Clear saved session</button>
-    </div>
+    </section>
   </aside>
 
   <main id="main">
@@ -305,6 +357,22 @@
     <div id="minimap">
       <canvas id="minimapC" width="190" height="140" title="Click to recenter"></canvas>
       <div id="mmReadout" class="mono">move over the image</div>
+    </div>
+    <div class="panelCard ocrCard" id="ocrCard" style="display:none">
+      <header>Text read from the image <span class="mut" id="ocrConf" style="font-weight:400"></span>
+        <button class="btn sm ghost" style="margin-left:auto" id="ocrClose">✕</button></header>
+      <div class="body ocrBody">
+        <textarea id="ocrText" rows="3" spellcheck="false"></textarea>
+        <div class="dim" style="font-size:11.5px;margin:6px 0 4px">Fix the text if needed, then use it as:</div>
+        <div class="ocrUse">
+          <button class="btn sm" data-use="graph">Graph name</button>
+          <button class="btn sm" data-use="x">X axis name</button>
+          <button class="btn sm" data-use="y">Y axis name</button>
+          <button class="btn sm" data-use="series">Selected curve's name</button>
+          <button class="btn sm" data-use="legend">Legend → curve names</button>
+          <button class="btn sm ghost" data-use="copy">Copy</button>
+        </div>
+      </div>
     </div>
     <div class="busy" id="busy"><span class="spin"></span><span id="busyText">Working…</span></div>
   </main>
@@ -412,8 +480,13 @@ function cv_traceLine(img,color,tol,mask,others,maxGap){
   function recentre(a,src){ var nx=-Math.sin(a),ny=Math.cos(a),ws=0,o2=0;
     for(var o=-3;o<=3;o++){ var w=src(px+o*nx,py+o*ny); ws+=w; o2+=o*w; }
     if(ws>0){ px+=nx*o2/ws; py+=ny*o2/ws; } }
-  function traceFrom(sx,sy){
-    px=sx; py=sy; h=0; var pts=[{px:px,py:py}],vis=new Int32Array(gw*gh),rev=0;
+  var T=0;                                         // global step stamp shared by all traces
+  function seen(vis,x,y){ // was this spot traced a while ago? (checks jitter around the centre)
+    for(var a=-1.5;a<=1.5;a+=3) for(var b=-1.5;b<=1.5;b+=3){
+      var c=Math.floor((x+a)/3)+Math.floor((y+b)/3)*gw; if(c>=0&&c<vis.length&&vis[c]&&T-vis[c]>40) return 1; }
+    return 0; }
+  function traceFrom(sx,sy,h0,vis){
+    px=sx; py=sy; h=h0; var pts=[{px:px,py:py}],rev=0;
     for(var it=1;it<60000;it++){
       var a=cone(own,80,6),flag=0;
       if(a===null&&hasO){ a=cone(mix,30,5); flag=1; }
@@ -435,9 +508,10 @@ function cv_traceLine(img,color,tol,mask,others,maxGap){
       while(dh>Math.PI) dh-=2*Math.PI; while(dh<-Math.PI) dh+=2*Math.PI;
       h+=0.6*dh;
       var p={px:px,py:py}; if(flag) p.f=1; pts.push(p);
-      var cell=Math.floor(px/3)+Math.floor(py/3)*gw;
-      if(vis[cell]&&it-vis[cell]>12){ if(++rev>8) break; } else rev=0;   // closed loop / doubling back
-      vis[cell]=it;
+      T++;
+      rev=rev*0.85+seen(vis,px,py);                  // riding back over its own path -> stop
+      if(rev>4.5){ while(pts.length>2&&seen(vis,pts[pts.length-1].px,pts[pts.length-1].py)) pts.pop(); break; }
+      vis[Math.floor(px/3)+Math.floor(py/3)*gw]=T;
     }
     return pts;
   }
@@ -446,7 +520,7 @@ function cv_traceLine(img,color,tol,mask,others,maxGap){
     for(var x2=xb[0];x2<xb[1];x2+=3){ tot++; if(own(x2,y)>0||own(x2,y-1)>0||own(x2,y+1)>0) hitc++; }
     return hitc>0.7*tot; }
   // seeds: scan left->right; trace from each new run not already covered; keep the longest real trace
-  var cover=new Uint8Array(gw*gh),best=[],bestScore=0,tries=0;
+  var cover=new Uint8Array(gw*gh),best=[],bestScore=0,tries=0,bestSeed=null;
   for(var x=xb[0];x<xb[1]-3&&tries<12;x+=2){
     var st=-1,wa=0,ya=0;
     for(var y=yb[0];y<=yb[1]&&tries<12;y++){ var w=y<yb[1]?own(x,y):0;
@@ -458,14 +532,20 @@ function cv_traceLine(img,color,tol,mask,others,maxGap){
       var ok=0; for(var dx=1;dx<=3;dx++) for(var dy=-3;dy<=3;dy++) if(own(x+dx,cy+dy)>0){ok++;break;}
       if(ok<2||straightRow(Math.round(cy))) continue;
       tries++;
-      var tp=traceFrom(x,cy),sc=0;
+      var tv=new Int32Array(gw*gh),tp=traceFrom(x,cy,0,tv),sc=0;
       for(var q=0;q<tp.length;q++){ if(!tp[q].f) sc++;
         var cx=Math.floor(tp[q].px/3),cz=Math.floor(tp[q].py/3);
         for(var ex=-1;ex<=1;ex++) for(var ez=-1;ez<=1;ez++){ var ci=(cx+ex)+(cz+ez)*gw; if(ci>=0&&ci<cover.length) cover[ci]=1; } }
-      if(sc>bestScore){ bestScore=sc; best=tp; }
+      if(sc>bestScore){ bestScore=sc; best=tp; bestSeed={x:x,y:cy,vis:tv}; }
     }
   }
   var pts=best;
+  if(bestSeed){ // seed may sit mid-curve: also trace backwards from it and join both halves
+    T+=100; var back=traceFrom(bestSeed.x,bestSeed.y,Math.PI,bestSeed.vis);
+    if(back.length>3) pts=back.slice(1).reverse().concat(pts);
+  }
+  while(pts.length&&pts[0].f) pts.shift();
+  if(pts.length>1&&pts[0].px>pts[pts.length-1].px) pts.reverse();   // start from the left end
   while(pts.length&&pts[pts.length-1].f) pts.pop();
   for(var z=0;z<pts.length;z++) if(!pts[z].f) delete pts[z].f;
   return pts;
@@ -586,6 +666,7 @@ var S={
   pointSize:2.6,
   hover:null,                                       // {px,py} image-space cursor, for minimap readout
   mask:{roi:null,excl:[]},                          // roi:{x,y,w,h} include-box; excl:[{x,y,w,h}] skip-boxes
+  meta:{name:"",x:"",y:""},
   maskTool:null,                                    // null | 'roi' | 'excl' — active rectangle-draw mode
   maskDraft:null,                                   // {x,y,w,h} while dragging a new rectangle
   editMode:"resample"                               // 'resample' (adjust density) | 'shape' (hand-edit the curve)
@@ -636,7 +717,7 @@ function persist(){
       localStorage.setItem(LS_KEY, JSON.stringify({
         axisMode:S.axisMode,calib:S.calib,xScale:S.xScale,yScale:S.yScale,
         series:S.series.map(function(s){return {color:s.color,disp:s.disp,name:s.name,visible:s.visible,data:s.data,tol:s.tol,raw:s.raw,space:s.space,style:s.style||null,path:!!s.path,follow:(s.follow==null?null:s.follow)};}),
-        mask:S.mask, imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
+        mask:S.mask, meta:S.meta, imgW:S.imgW,imgH:S.imgH,savedAt:Date.now()
       }));
     }catch(e){/* quota or disabled: ignore */}
   },500);
@@ -647,6 +728,9 @@ function restoreSession(){
   try{
     var o=JSON.parse(raw);
     if(!o||!o.series) return;
+    if(o.meta){ S.meta={name:o.meta.name||"",x:o.meta.x||"",y:o.meta.y||""};
+      $("graphName").value=S.meta.name; $("xName").value=S.meta.x; $("yName").value=S.meta.y;
+      if(S.meta.name) document.title=S.meta.name+" · Graph Digitizer Pro"; }
     S.axisMode=o.axisMode||"2pt"; S.calib=o.calib||[]; S.xScale=o.xScale||"lin"; S.yScale=o.yScale||"lin";
     S.series=(o.series||[]).map(function(s,i){return {color:s.color,disp:s.disp||paletteColor(i),
       name:s.name,visible:s.visible!==false,points:null,data:s.data||null,tol:(s.tol!=null?s.tol:null),
@@ -762,6 +846,7 @@ function redraw(){
 window.addEventListener("resize",function(){ if(S.img){ fitView(); redraw(); } });
 
 function renderToolbar(){
+  try{ updateSummaries(); }catch(e){}
   var o=$("toolbar"); if(!S.img){o.innerHTML="";return;}
   var need=neededCalib();
   var html="";
@@ -774,6 +859,7 @@ function renderToolbar(){
   if(S.pendingPick) html+='<button class="pill on">clicking picks a colour — Esc to cancel</button>';
   if(S.maskTool==="roi") html+='<span class="pill on">drag to box the PLOT AREA — Esc to cancel</span>';
   if(S.maskTool==="excl") html+='<span class="pill on">drag over area to EXCLUDE — Esc to cancel</span>';
+  if(S.maskTool==="ocr") html+='<span class="pill on">drag a box over the TEXT to read — Esc to cancel</span>';
   o.innerHTML=html;
 }
 
@@ -802,7 +888,7 @@ function drawMasks(){
   }
   // live draft while dragging a new rectangle
   if(S.maskDraft){
-    var d=rectCanvas(S.maskDraft), col=S.maskTool==="roi"?"#36c2a6":"#e5534b";
+    var d=rectCanvas(S.maskDraft), col=S.maskTool==="roi"?"#36c2a6":(S.maskTool==="ocr"?"#f5a623":"#e5534b");
     ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
     ctx.strokeRect(d.x,d.y,d.w,d.h); ctx.setLineDash([]); ctx.restore();
   }
@@ -827,10 +913,13 @@ function setMaskTool(t){
   S.maskTool=(S.maskTool===t?null:t);
   $("btnRoi").classList.toggle("on",S.maskTool==="roi");
   $("btnExcl").classList.toggle("on",S.maskTool==="excl");
+  $("btnOcr").classList.toggle("on",S.maskTool==="ocr");
+  if(S.maskTool!=="ocr") S.ocrTarget=null;
   stage.style.cursor=S.maskTool?"crosshair":"grab";
   renderToolbar();
   if(S.maskTool==="roi") status("Drag a box around the plot area (inside the axes). Esc to cancel.");
   else if(S.maskTool==="excl") status("Drag a box over anything to ignore — legend, labels, title. Esc to cancel.");
+  else if(S.maskTool==="ocr") status("Drag a box over the text to read"+({graph:" (graph title)",x:" (X-axis title)",y:" (Y-axis title — vertical is fine)",legend:" (the legend)"}[S.ocrTarget]||"")+". Esc to cancel.");
 }
 
 /* ===========================================================================
@@ -1295,7 +1384,7 @@ function stepY(sorted,xt){ // null outside this curve's own X range (no extrapol
 function stepTable(vis){
   var xs=stepXs()||[];
   var cols=vis.map(function(s){ return s.path?{path:s.data}:s.data.slice().sort(function(a,b){return a.x-b.x;}); });
-  return {head:["X"].concat(vis.map(function(s){return s.name+" Y";})),
+  return {head:[axName("x")].concat(vis.map(function(s){return s.name+" "+axName("y");})),
     rows:xs.map(function(xt){ return [fmtX(xt)].concat(cols.map(function(c){ var y=c.path?stepYPath(c.path,xt):stepY(c,xt); return y==null?"":fmt(y); })); })};
 }
 function interpY(d,xt){
@@ -1450,7 +1539,7 @@ function renderTable(){
   var cols=vis.map(processedData);
   var maxN=Math.max.apply(null,cols.map(function(c){return c.length;}));
   var head="<tr><th>#</th>";
-  vis.forEach(function(s){head+="<th>"+esc(s.name)+" · X</th><th>"+esc(s.name)+" · Y</th>";});
+  vis.forEach(function(s){head+="<th>"+esc(s.name)+" · "+esc(axName("x"))+"</th><th>"+esc(s.name)+" · "+esc(axName("y"))+"</th>";});
   head+="</tr>";
   var body="",show=Math.min(maxN,600);
   for(var r=0;r<show;r++){ body+="<tr><td>"+(r+1)+"</td>";
@@ -1470,7 +1559,7 @@ function buildDelim(delim){
     return [st.head.map(csvCell).join(delim)].concat(st.rows.map(function(r){return r.map(csvCell).join(delim);})).join("\r\n"); }
   var cols=vis.map(processedData);
   var maxN=Math.max.apply(null,cols.map(function(c){return c.length;}));
-  var head=[]; vis.forEach(function(s){head.push(s.name+" X",s.name+" Y");});
+  var head=[]; vis.forEach(function(s){head.push(s.name+" "+axName("x"),s.name+" "+axName("y"));});
   var lines=[head.map(csvCell).join(delim)];
   for(var r=0;r<maxN;r++){ var row=[];
     cols.forEach(function(c){var p=c[r]; row.push(p?fmtX(p.x):"",p?fmt(p.y):"");});
@@ -1481,6 +1570,7 @@ function buildDelim(delim){
 function buildJSON(){
   var vis=S.series.filter(function(s){return s.visible!==false&&s.data;});
   return JSON.stringify({
+    graph:{name:(S.meta&&S.meta.name)||"",xAxis:(S.meta&&S.meta.x)||"",yAxis:(S.meta&&S.meta.y)||""},
     source:{width:S.imgW,height:S.imgH},
     axes:{xScale:S.xScale,yScale:S.yScale,mode:S.axisMode,
       calibration:S.calib.map(function(c){return {px:c.px,py:c.py,valueX:c.valueX,valueY:c.valueY};})},
@@ -1606,6 +1696,7 @@ window.addEventListener("mouseup",function(){
   var t=S.dragging.type; S.dragging=null; stage.style.cursor=S.maskTool?"crosshair":"grab";
   if(t==="mask"){
     var d=S.maskDraft; S.maskDraft=null;
+    if(d && d.w>4 && d.h>4 && S.maskTool==="ocr"){ var tg=S.ocrTarget; setMaskTool(null); redraw(); runOCR(d,tg); return; }
     if(d && d.w>4 && d.h>4){
       if(S.maskTool==="roi"){ S.mask.roi={x:d.x,y:d.y,w:d.w,h:d.h}; toast("Plot area set. Extraction is now limited to this box."); }
       else { S.mask.excl.push({x:d.x,y:d.y,w:d.w,h:d.h}); toast("Exclusion added. Those pixels will be ignored."); }
@@ -1648,7 +1739,40 @@ function updateLoupe(ev,im){
 /* ===========================================================================
    UI STEPPER / BUTTON STATE
    =========================================================================== */
-function setActive(n){ for(var i=1;i<=5;i++) $("step"+i).classList.toggle("on",i===n); }
+function setActive(n){ for(var i=1;i<=6;i++) $("step"+i).classList.toggle("on",i===n); openStep(n,true); }
+/* sidebar: one section open at a time; header click toggles */
+function openStep(n,force){
+  for(var i=1;i<=6;i++){ var el=$("step"+i); if(!el) continue;
+    if(i===n) el.classList.toggle("open",force?true:!el.classList.contains("open"));
+    else el.classList.remove("open"); }
+}
+/* one-line status on every section header */
+function updateSummaries(){
+  function put(i,txt,done){ var e=$("sum"+i); if(!e) return; e.textContent=txt; $("step"+i).classList.toggle("done",!!done); }
+  put(1,S.img?S.imgW+"×"+S.imgH:"none",!!S.img);
+  var need=neededCalib(),got=S.calib.filter(function(c){return c.valueX!=null&&c.valueX!==""||c.valueY!=null&&c.valueY!=="";}).length;
+  put(2,S.mapReady?"calibrated":(S.calib.length?S.calib.length+"/"+need+" points":"not set"),S.mapReady);
+  var m=S.mask||{},ne=(m.excl||[]).length;
+  put(3,(m.roi?"plot box":"whole image")+(ne?" · "+ne+" excl":""),!!m.roi);
+  var vis=S.series.filter(function(s){return s.visible!==false;}).length;
+  put(4,S.series.length?S.series.length+" curve"+(S.series.length>1?"s":"")+(vis<S.series.length?" ("+vis+" on)":""):"none",S.series.length>0);
+  var tot=S.series.reduce(function(a,s){return a+(s.points?s.points.length:0);},0);
+  put(5,tot?tot+" points":"—",tot>0);
+  put(6,tot?fileBase():"—",false);
+  var fp=$("fileNamePreview"); if(fp) fp.textContent=fileBase();
+}
+/* ---- names: graph name drives export file names; axis names drive headers ---- */
+function fileBase(){
+  var n=(S.meta&&S.meta.name||"").trim().replace(/[\\/:*?"<>|]+/g,"").replace(/\s+/g,"_");
+  return n||"graph-data";
+}
+function axName(a){ var v=S.meta&&S.meta[a]; v=v&&String(v).trim(); return v||a.toUpperCase(); }
+function setMeta(key,val){
+  S.meta=S.meta||{}; S.meta[key]=val;
+  var id={name:"graphName",x:"xName",y:"yName"}[key]; if(id&&$(id).value!==val) $(id).value=val;
+  if(key==="name") document.title=(val?val+" · ":"")+"Graph Digitizer Pro";
+  renderTable(); updateSummaries(); persist();
+}
 function updateExtractBtn(){ $("btnExtract").disabled=!(S.mapReady&&S.series.length); renderToolbar(); }
 function enableExport(on){ ["btnCsv","btnJson","btnTsv","btnTable"].forEach(function(id){$(id).disabled=!on;}); }
 
@@ -1755,9 +1879,136 @@ $("stFollow").onchange=function(e){ var v=e.target.value;
   selectedSeries().forEach(function(s){ s.follow=(v==="auto"?null:v); });
   pushHistory(); persist(); if(S.mapReady&&S.series.some(function(s){return s.raw;})) extract(true); };
 $("optTrace").onchange=function(){ liveReextract(); };
-$("btnCsv").onclick=function(){download("graph-data.csv",buildDelim(","),"text/csv");};
-$("btnJson").onclick=function(){download("graph-data.json",buildJSON(),"application/json");};
+$("btnCsv").onclick=function(){download(fileBase()+".csv",buildDelim(","),"text/csv");};
+$("btnJson").onclick=function(){download(fileBase()+".json",buildJSON(),"application/json");};
 $("btnTsv").onclick=copyTSV;
+
+/* ===========================================================================
+   OCR — read text from a box on the image (Tesseract.js, loaded on first use)
+   =========================================================================== */
+var _ocrWorkerP=null;
+function ocrWorker(){
+  if(_ocrWorkerP) return _ocrWorkerP;
+  _ocrWorkerP=new Promise(function(res,rej){
+    function make(){ window.Tesseract.createWorker("eng").then(res,rej); }
+    if(window.Tesseract) return make();
+    var sc=document.createElement("script");
+    sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    sc.onload=make; sc.onerror=function(){ rej(new Error("load")); };
+    document.head.appendChild(sc);
+  });
+  _ocrWorkerP.catch(function(){ _ocrWorkerP=null; });
+  return _ocrWorkerP;
+}
+/* crop -> upscale -> grey + contrast stretch -> white margin; rot = 0, 90 or -90 degrees */
+function ocrCanvas(r,rot){
+  var sc=Math.max(2,Math.min(6,90/Math.max(8,Math.min(r.w,r.h)))), pad=12;
+  var w=Math.round(r.w*sc),h=Math.round(r.h*sc);
+  var c=document.createElement("canvas"); c.width=w; c.height=h;
+  var x=c.getContext("2d"); x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high";
+  x.drawImage(S.img,r.x,r.y,r.w,r.h,0,0,w,h);
+  var id=x.getImageData(0,0,w,h),d=id.data,lo=255,hi=0,k,v;
+  for(k=0;k<d.length;k+=4){ v=0.3*d[k]+0.59*d[k+1]+0.11*d[k+2]; if(v<lo)lo=v; if(v>hi)hi=v; }
+  var span=Math.max(1,hi-lo);
+  for(k=0;k<d.length;k+=4){ v=(0.3*d[k]+0.59*d[k+1]+0.11*d[k+2]-lo)*255/span; d[k]=d[k+1]=d[k+2]=v; }
+  x.putImageData(id,0,0);
+  var o=document.createElement("canvas"),q=rot?1:0;
+  o.width=(q?h:w)+2*pad; o.height=(q?w:h)+2*pad;
+  var ox=o.getContext("2d"); ox.fillStyle="#fff"; ox.fillRect(0,0,o.width,o.height);
+  ox.translate(o.width/2,o.height/2); ox.rotate((rot||0)*Math.PI/180); ox.drawImage(c,-w/2,-h/2);
+  return {canvas:o,scale:sc,pad:pad};
+}
+function runOCR(r,target){
+  if(!S.img) return;
+  busy(true,"Reading text… (first use downloads the OCR engine)");
+  var rots=r.h>1.4*r.w?[90,-90]:[0];
+  ocrWorker().then(function(w){
+    var jobs=rots.map(function(rot){ var oc=ocrCanvas(r,rot);
+      return w.recognize(oc.canvas).then(function(res){ return {rot:rot,oc:oc,data:res.data}; }); });
+    return Promise.all(jobs);
+  }).then(function(all){
+    busy(false); status("Text read.");
+    var best=all.reduce(function(a,b){ return (b.data.confidence>a.data.confidence)?b:a; });
+    var text=(best.data.text||"").replace(/\s+\n/g,"\n").trim();
+    var words=(best.rot===0?(best.data.words||[]):[]).map(function(wd){ var b=wd.bbox,sc=best.oc.scale,p=best.oc.pad;
+      return {text:wd.text,conf:wd.confidence,x0:r.x+(b.x0-p)/sc,x1:r.x+(b.x1-p)/sc,y0:r.y+(b.y0-p)/sc,y1:r.y+(b.y1-p)/sc}; });
+    S.ocrLast={text:text,words:words,rect:r};
+    if(!text){ toast("No text recognised there. Try a slightly bigger box around just the text.",true); return; }
+    if(target==="legend"){ var n=legendToNames(words); if(n){ toast("Named "+n+" curve"+(n>1?"s":"")+" from the legend."); return; } }
+    if(target==="graph"||target==="x"||target==="y"){
+      setMeta(target==="graph"?"name":target,text.replace(/\n+/g," "));
+      toast("Filled the "+({graph:"graph name",x:"X axis name",y:"Y axis name"}[target])+": \u201c"+text.replace(/\n+/g," ")+"\u201d — edit it if anything is off.");
+      return;
+    }
+    $("ocrText").value=text;
+    $("ocrConf").textContent="· confidence "+Math.round(best.data.confidence)+"%";
+    $("ocrCard").style.display="flex";
+    $("ocrText").focus(); $("ocrText").select();
+  }).catch(function(e){
+    busy(false);
+    toast(e&&e.message==="load"?"Couldn't load the OCR engine — it needs an internet connection the first time.":"OCR failed: "+(e&&e.message||e),true);
+  });
+}
+/* legend: each name sits just right of its line sample -> match that sample's colour to a curve */
+function legendToNames(words){
+  if(!S.series.length||!words.length) return 0;
+  var d=S.srcData.data,W=S.imgW,H=S.imgH,named=0,taken={};
+  function chroma(c){ var mx=Math.max(c[0],c[1],c[2]),mn=Math.min(c[0],c[1],c[2]); return mx>50&&(mx-mn)/mx>0.25; }
+  var ws=words.filter(function(w){ return w.text&&/[A-Za-z0-9]/.test(w.text); })
+    .sort(function(a,b){ return Math.abs(a.y0-b.y0)>8?a.y0-b.y0:a.x0-b.x0; });
+  var picks=[];
+  ws.forEach(function(w,i){
+    var raw=w.text.trim(), name=raw.replace(/^[\-\u2010-\u2015_~=\u2500\u2501|]+/,"").trim();
+    if(!name) return;
+    var dashed=name!==raw, prev=i>0&&Math.abs(ws[i-1].y0-w.y0)<=8?ws[i-1]:null;
+    var xa=Math.max(0,Math.round(prev?prev.x1+2:w.x0-45),Math.round(w.x0-45));
+    var xb=Math.round(dashed?w.x0+(w.x1-w.x0)*0.3:w.x0-1);
+    var ya=Math.max(0,Math.round(w.y0)),yb=Math.min(H-1,Math.round(w.y1));
+    var votes=S.series.map(function(){return 0;});
+    for(var y=ya;y<=yb;y++) for(var x=Math.max(0,xa);x<=Math.min(W-1,xb);x++){
+      var k=(y*W+x)*4,r=d[k],g=d[k+1],b=d[k+2]; if(Math.min(r,g,b)>200) continue;
+      var bi=-1,bd=75; S.series.forEach(function(s,j){ var dd=colorDist(s.color,[r,g,b]); if(dd<bd){bd=dd;bi=j;} });
+      if(bi>=0) votes[bi]++;
+    }
+    var best=-1,bv=3;
+    votes.forEach(function(v,j){ if(chroma(S.series[j].color)&&v>bv){bv=v;best=j;} });   // coloured swatch beats black text
+    if(best<0) votes.forEach(function(v,j){ if(v>bv){bv=v;best=j;} });
+    if(best>=0) picks.push({j:best,name:name,v:bv});
+  });
+  picks.sort(function(a,b){return b.v-a.v;}).forEach(function(p){
+    if(taken[p.j]) return; taken[p.j]=1; S.series[p.j].name=p.name; named++; });
+  if(named){ renderSeries(); renderTable(); syncStyleBar(); pushHistory(); persist(); }
+  else { $("ocrText").value=words.map(function(w){return w.text;}).join(" "); $("ocrCard").style.display="flex";
+    toast("Read the legend but couldn't match the names to curve colours — use the text below.",true); }
+  return named;
+}
+function startOCR(target){
+  if(!S.img){ toast("Load an image first.",true); return; }
+  if(S.maskTool==="ocr") setMaskTool(null);
+  S.ocrTarget=target||null; setMaskTool("ocr");
+}
+$("btnOcr").onclick=function(){ if(S.maskTool==="ocr"){ setMaskTool(null); return; } startOCR(null); };
+document.querySelectorAll(".ocrBtn").forEach(function(b){ b.onclick=function(){ startOCR(b.dataset.ocr); }; });
+$("btnLegendOcr").onclick=function(){ if(!S.series.length){ toast("Detect or pick the curves first, then read the legend.",true); return; } startOCR("legend"); };
+$("ocrClose").onclick=function(){ $("ocrCard").style.display="none"; };
+document.querySelectorAll("#ocrCard [data-use]").forEach(function(b){ b.onclick=function(){
+  var u=b.dataset.use, t=$("ocrText").value.trim(), one=t.replace(/\s*\n\s*/g," ");
+  if(u==="copy"){ if(navigator.clipboard) navigator.clipboard.writeText(t); toast("Copied."); return; }
+  if(!t){ toast("Nothing to use.",true); return; }
+  if(u==="graph") setMeta("name",one);
+  else if(u==="x") setMeta("x",one);
+  else if(u==="y") setMeta("y",one);
+  else if(u==="series"){ var s=S.series[S.activeSeries]; if(!s){ toast("Select a curve first.",true); return; }
+    s.name=one; renderSeries(); renderTable(); pushHistory(); persist(); }
+  else if(u==="legend"){ var n=S.ocrLast?legendToNames(S.ocrLast.words):0;
+    if(!n) return; toast("Named "+n+" curve"+(n>1?"s":"")+" from the legend."); }
+  $("ocrCard").style.display="none";
+}; });
+/* names */
+$("graphName").oninput=function(e){ setMeta("name",e.target.value); };
+$("xName").oninput=function(e){ setMeta("x",e.target.value); };
+$("yName").oninput=function(e){ setMeta("y",e.target.value); };
+document.querySelectorAll("aside .sh").forEach(function(h){ h.onclick=function(){ openStep(+h.dataset.step,false); }; });
 $("btnTable").onclick=function(){var c=$("tableCard");c.style.display=c.style.display==="none"?"flex":"none";};
 $("btnTableClose").onclick=function(){$("tableCard").style.display="none";};
 $("btnClear").onclick=function(){ try{localStorage.removeItem(LS_KEY);}catch(e){} toast("Saved session cleared.");};
