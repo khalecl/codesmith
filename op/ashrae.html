@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1923">
 <title>AuditFlow L1 — ASHRAE Level 1 Energy Audit</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js"></script>
 
 <style>
@@ -93,7 +95,6 @@ button { cursor: pointer; border: none; border-radius: 4px; padding: 6px 14px; f
   position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; transition: transform .3s;
 }
 .sidebar-toggle { display:none; position:fixed; top:8px; left:8px; z-index:201; width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); cursor:pointer; font-size:18px; line-height:36px; text-align:center; }
-@media (max-width:768px) { .sidebar-toggle { display:block; } }
 #sidebar.collapsed { transform: translateX(-100%); pointer-events: none; }
 #sidebar.collapsed ~ #main-wrap { margin-left: 0; }
 #sidebar .logo { padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
@@ -302,12 +303,7 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 /* MOBILE */
 
 @media (max-width:768px) {
-  .sidebar-toggle { display:block; }
-  #sidebar { transform: translateX(-100%); }
-  #sidebar:not(.collapsed) { transform: translateX(0); }
-  body.sidebar-open #sidebar { transform: translateX(0); pointer-events: auto; }
-  body.sidebar-open #main-wrap { margin-left: 0; }
-  #main-wrap { margin-left: 0; }
+
 }
 /* @media (max-width: 768px) {
   .sidebar { display: none; }
@@ -330,16 +326,121 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+/* ================= UX LAYER v2 (shell, readability, mobile) ================= */
+html { font-size: 15px; -webkit-text-size-adjust: 100%; }
+body { height: 100vh; height: 100dvh; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+#app, #main-wrap { height: 100vh; height: 100dvh; }
+.card-title { text-transform: none; letter-spacing: 0; font-size: 1.02rem; }
+.fg label { text-transform: none; letter-spacing: 0; font-size: .8rem; }
+input, select, textarea { border-radius: 6px; }
+button { border-radius: 6px; }
+button:disabled { opacity: .45; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#main-wrap { min-width: 0; }
+#content, .section, .card, .subpanel { min-width: 0; }
+.form-row > *, .form-row-3 > *, .form-row-4 > * { min-width: 0; }
+/* Topbar */
+#topbar { position: sticky; top: 0; z-index: 50; gap: 10px; padding: 0 16px; }
+#topbar .menu-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 8px; }
+#topbar .menu-btn:hover { background: var(--input-bg); }
+.tb-titles { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.tb-section { font-weight: 700; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#topbar .building-name { font-size: .75rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-btn { background: var(--input-bg); border: 1px solid var(--border); width: 38px; height: 34px; padding: 0; border-radius: 20px; }
+
+/* Desktop collapse */
+#sidebar, #main-wrap { transition: transform .25s ease, margin .25s ease; }
+body.sb-collapsed #sidebar { transform: translateX(-100%); }
+body.sb-collapsed #main-wrap { margin-left: 0; }
+#sidebar nav a { font-size: .86rem; }
+#sidebar .sidebar-footer button { font-size: .75rem; padding: 6px 9px; }
+
+/* Content + pager */
+#content { padding: 20px 24px 28px; }
+#content > .section { max-width: 1280px; margin: 0 auto; }
+#sec-pager { max-width: 1280px; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
+#sec-pager button { padding: 10px 16px; max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sec-pager #pg-pos { flex: 1; text-align: center; font-size: .75rem; color: var(--text-muted); font-family: var(--mono); }
+
+/* Sub-tabs scroll instead of wrapping/overflowing */
+.subtabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtab { white-space: nowrap; flex-shrink: 0; }
+
+/* Tables: visible scroll affordance */
+.table-wrap { border: 1px solid var(--border); border-radius: 8px; background:
+  linear-gradient(to right, var(--card-bg) 30%, transparent) left / 24px 100% no-repeat local,
+  linear-gradient(to left, var(--card-bg) 30%, transparent) right / 24px 100% no-repeat local,
+  radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.18), transparent) left / 10px 100% no-repeat scroll,
+  radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.18), transparent) right / 10px 100% no-repeat scroll; }
+.table-wrap tbody tr:nth-child(even), .table-wrap tbody tr { background-color: transparent; }
+
+#drawer-backdrop { display: none; }
+
+/* ---------- Tablet & phone ---------- */
+@media (max-width: 900px) {
+  #sidebar { width: min(84vw, 300px); transform: translateX(-100%); z-index: 300; box-shadow: none; padding-top: env(safe-area-inset-top); }
+  body.drawer-open #sidebar { transform: translateX(0); box-shadow: 8px 0 30px rgba(0,0,0,.35); }
+  #drawer-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 250; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
+  #main-wrap { margin-left: 0 !important; }
+  #sidebar nav a { padding: 13px 18px; font-size: .95rem; }
+  #sidebar .sidebar-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  #sidebar .sidebar-footer button { padding: 9px 11px; font-size: .8rem; }
+  .form-row-3, .form-row-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chart-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+  #topbar { padding: 0 8px; padding-top: env(safe-area-inset-top); height: calc(var(--topbar-h) + env(safe-area-inset-top)); }
+  #topbar .theme-toggle #theme-label { display: none; }
+  #content { padding: 12px 10px calc(16px + env(safe-area-inset-bottom)); }
+  .card { padding: 14px 12px; margin-bottom: 12px; border-radius: 10px; }
+  .card-header { flex-wrap: wrap; gap: 8px; }
+  .form-row, .form-row-3, .form-row-4 { grid-template-columns: 1fr !important; gap: 0 10px; }
+  [style*="grid-template-columns: repeat(3"], [style*="grid-template-columns: repeat(4"],
+  [style*="grid-template-columns:repeat(3"], [style*="grid-template-columns:repeat(4"],
+  [style*="grid-template-columns: 1fr 1fr"], [style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
+  /* 16px inputs stop iOS auto-zoom; 44px touch targets */
+  input[type="number"], input[type="text"], input[type="date"], input[type="tel"], input[type="email"], select, textarea { font-size: 16px; min-height: 44px; padding: 8px 10px; }
+  table input, table select { min-height: 38px; font-size: 15px; }
+  button { min-height: 40px; }
+  .btn-sm, .btn-icon { min-height: 36px; }
+  .checklist label { padding: 10px 0; font-size: .95rem; }
+  .checklist input[type="checkbox"] { width: 22px; height: 22px; }
+  .flag-btn { padding: 8px 12px; }
+  .unit-group select { max-width: 80px; }
+  .metric-row { gap: 8px; }
+  .metric-box { min-width: calc(50% - 4px); padding: 10px 6px; }
+  .metric-box .mv { font-size: 1.25rem; }
+  .tile-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+  .tile { padding: 10px 4px; }
+  .table-wrap { margin: 0 -4px; }
+  .hour-bars { height: 150px; }
+  .hour-labels span:nth-child(odd) { visibility: hidden; }
+  .chart-box { max-height: 260px; }
+  .photo-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .photo-thumb .photo-del { opacity: 1; width: 24px; height: 24px; }
+  .sec-ai-input-row { flex-direction: column; }
+  /* Modals become bottom sheets */
+  .modal-overlay { align-items: flex-end; }
+  .modal { width: 100%; max-width: 100% !important; max-height: 92dvh; border-radius: 16px 16px 0 0; padding: 18px 14px calc(18px + env(safe-area-inset-bottom)); }
+  .modal .modal-actions { position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); background: var(--card-bg); padding: 10px 0; margin-bottom: -10px; flex-wrap: wrap; }
+  .modal .modal-actions button { flex: 1; }
+  #sec-pager button { flex: 1; max-width: none; font-size: .85rem; }
+  #sec-pager #pg-pos { display: none; }
+}
+
 /* PRINT */
-@media print { #sidebar, #topbar, button, .flag-group, .subtabs { display: none !important; } #main-wrap { margin-left: 0; } }
+@media print { #sec-pager, #drawer-backdrop, #sidebar, #topbar, button, .flag-group, .subtabs { display: none !important; } #main-wrap { margin-left: 0; } }
 </style>
 </head>
 <body>
 <div id="app">
 <!-- SIDEBAR -->
-<button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+<div id="drawer-backdrop" onclick="closeDrawer()"></div>
 <aside id="sidebar">
-    <button onclick="toggleSidebar()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-secondary);" title="Collapse sidebar">◀</button>
 
   <div class="logo"><div class="dot"></div><span>AuditFlow L1</span></div>
   <div class="progress-wrap">
@@ -360,10 +461,11 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
 <!-- MAIN -->
   <div id="main-wrap">
     <header id="topbar">
-      <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
-      <span class="building-name" id="topbar-building">No Project</span>
+      <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+      <div class="tb-titles"><span class="tb-section" id="tb-section">Dashboard</span><span class="building-name" id="topbar-building">No Project</span></div>
       <div class="spacer"></div>
       <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="theme-label">Dark</span></button>
+      <button class="tb-btn" onclick="exportJSON()" title="Save project file" aria-label="Save">💾</button>
     </header>
     <main id="content">
 
@@ -1387,7 +1489,8 @@ tfoot td { background: var(--accent-light); font-weight: 700; font-family: var(-
           </div>
         </div>
 
-      </main>
+        <div id="sec-pager"><button class="btn-secondary" id="pg-prev" onclick="pageSection(-1)">‹ Prev</button><span id="pg-pos"></span><button class="btn-primary" id="pg-next" onclick="pageSection(1)">Next ›</button></div>
+    </main>
     </div>
   </div>
 
@@ -2007,7 +2110,7 @@ function showSection(id) {
   const sec = document.getElementById('sec-' + id);
   if (sec) { sec.classList.add('active'); sec.style.display = ''; }
   document.querySelectorAll('#sidebar-nav a').forEach(a => a.classList.toggle('active', a.dataset.sec === id));
-  document.getElementById('sidebar').classList.remove('open');
+  closeDrawer(); updateShellFor(id);
   if (id === 'analysis') setTimeout(renderCharts, 100);
   if (id === 'envelope') updateEnvelope();
   if (id === 'report') buildECMTable();
@@ -2124,14 +2227,28 @@ function toggleTheme() {
   document.getElementById('theme-label').textContent = isDark ? 'Dark' : 'Light';
 }
 
+// ---- Shell / navigation (unified drawer) ----
+const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
 function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  if (!sb) return;
-  const isCollapsed = sb.classList.toggle('collapsed');
-  document.body.classList.toggle('sidebar-open', !isCollapsed);
-  const btn = document.querySelector('.sidebar-toggle');
-  if (btn) btn.style.display = isCollapsed ? 'block' : '';
+  if (isMobile()) { document.body.classList.toggle('drawer-open'); }
+  else { document.body.classList.toggle('sb-collapsed'); try{localStorage.setItem('af_sb', document.body.classList.contains('sb-collapsed')?'1':'0');}catch(e){} }
 }
+function closeDrawer() { document.body.classList.remove('drawer-open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+try { if (localStorage.getItem('af_sb') === '1') document.body.classList.add('sb-collapsed'); } catch(e){}
+let _curSec = 'dashboard';
+function updateShellFor(id) {
+  _curSec = id;
+  const i = NAV_ITEMS.findIndex(n => n.id === id), n = NAV_ITEMS[i];
+  const t = document.getElementById('tb-section'); if (t && n) t.textContent = n.icon + ' ' + n.label;
+  const pv = document.getElementById('pg-prev'), nx = document.getElementById('pg-next'), ps = document.getElementById('pg-pos');
+  if (pv) { pv.disabled = i <= 0; pv.textContent = i > 0 ? '‹ ' + NAV_ITEMS[i-1].label : '‹ Prev'; }
+  if (nx) { nx.disabled = i >= NAV_ITEMS.length - 1; nx.textContent = i < NAV_ITEMS.length - 1 ? NAV_ITEMS[i+1].label + ' ›' : 'Next ›'; }
+  if (ps) ps.textContent = (i + 1) + ' / ' + NAV_ITEMS.length;
+  const c = document.getElementById('content'); if (c) c.scrollTop = 0;
+  const a = document.querySelector('#sidebar-nav a.active'); if (a && a.scrollIntoView) a.scrollIntoView({block:'nearest'});
+}
+function pageSection(d) { const i = NAV_ITEMS.findIndex(n => n.id === _curSec) + d; if (NAV_ITEMS[i]) showSection(NAV_ITEMS[i].id); }
 
 // ========== UTILITY ==========
 function buildUtilityTable() {
