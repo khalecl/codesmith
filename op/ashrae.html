@@ -432,6 +432,94 @@ body.sb-collapsed #main-wrap { margin-left: 0; }
   #sec-pager #pg-pos { display: none; }
 }
 
+
+/* ================= LOOK & FEEL v3 ================= */
+:root { --radius: 12px; --main-bg: #f3f6fa; --shadow-sm: 0 1px 2px rgba(15,25,35,.05), 0 2px 8px rgba(15,25,35,.04); }
+[data-theme="dark"] { --main-bg: #0d141d; --card-bg: #16212e; --border: #263446; }
+.card { border-radius: var(--radius); border-color: transparent; box-shadow: var(--shadow-sm); }
+[data-theme="dark"] .card { border-color: var(--border); }
+.card-accent { border-left: 0; position: relative; overflow: hidden; }
+.card-accent::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background: linear-gradient(var(--accent), #6366f1); }
+.card-title { font-weight: 700; color: var(--text-primary); }
+thead th { background: var(--input-bg); color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+.btn-primary { background: linear-gradient(135deg, #0ea5e9, #0284c7); box-shadow: 0 2px 6px rgba(14,165,233,.3); }
+.btn-secondary { background: var(--input-bg); border: 1px solid var(--border); }
+.tile { border-radius: 10px; text-transform: none; letter-spacing: 0; font-size: .78rem; }
+#sidebar nav a.active { background: linear-gradient(90deg, rgba(14,165,233,.18), transparent); }
+
+/* Dashboard hero */
+.snap-hero { display:flex; align-items:center; gap:16px; padding:18px 20px; margin-bottom:16px; border-radius:16px; color:#fff; cursor:pointer;
+  background: radial-gradient(120% 140% at 0% 0%, #0ea5e9 0%, #2563eb 55%, #4f46e5 100%); box-shadow: 0 8px 24px rgba(37,99,235,.28); }
+.snap-hero .ic { width:56px; height:56px; border-radius:16px; background:rgba(255,255,255,.18); display:grid; place-items:center; font-size:1.7rem; flex-shrink:0; }
+.snap-hero b { font-size:1.15rem; display:block; } .snap-hero span { opacity:.85; font-size:.85rem; }
+.snap-hero .go { margin-left:auto; font-size:1.6rem; opacity:.9; }
+
+/* Floating Snap button */
+#snap-fab { position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom)); z-index:240; display:flex; align-items:center; gap:8px;
+  padding:0 20px 0 16px; height:56px; border-radius:28px; color:#fff; cursor:pointer; font-size:1rem; user-select:none;
+  background: linear-gradient(135deg, #0ea5e9, #4f46e5); box-shadow: 0 8px 22px rgba(37,99,235,.4); transition: transform .15s; }
+#snap-fab:active { transform: scale(.95); } #snap-fab span { font-size:1.35rem; }
+body.drawer-open #snap-fab, body.snap-on #snap-fab { display:none; }
+#content { padding-bottom: 96px !important; }
+
+/* Snap sheet */
+#snap { position:fixed; inset:0; z-index:600; background:var(--main-bg); display:flex; flex-direction:column; transition: transform .28s ease, opacity .2s; }
+#snap.snap-hidden { transform: translateY(100%); opacity:0; pointer-events:none; }
+@media (min-width: 901px) { #snap { inset: 4vh auto 4vh 50%; width: 560px; margin-left:-280px; border-radius:18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); overflow:hidden; } body.snap-on::after { content:''; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:590; } }
+.snap-head { display:flex; align-items:center; gap:10px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; background:var(--card-bg); border-bottom:1px solid var(--border); }
+.snap-x { width:40px; height:40px; padding:0; background:var(--input-bg); border-radius:50%; font-size:1rem; color:var(--text-primary); }
+.snap-title { font-weight:700; font-size:1.05rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.snap-steps { display:flex; gap:4px; } .snap-steps i { width:18px; height:4px; border-radius:2px; background:var(--border); } .snap-steps i.on { background:var(--accent); }
+.snap-body { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; }
+.snap-foot { display:flex; gap:10px; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--card-bg); border-top:1px solid var(--border); }
+.snap-foot button { flex:1; min-height:50px; font-size:.98rem; border-radius:12px; }
+.snap-foot .btn-primary { flex:1.6; }
+
+.snap-shots { display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
+.snap-shot { position:relative; aspect-ratio: 4/3; border-radius:14px; overflow:hidden; background:#000; }
+.snap-shot img { width:100%; height:100%; object-fit:cover; }
+.snap-shot button { position:absolute; top:6px; right:6px; width:30px; height:30px; min-height:0; padding:0; border-radius:50%; background:rgba(0,0,0,.6); color:#fff; }
+.snap-add { aspect-ratio:4/3; border:2px dashed var(--input-border); border-radius:14px; background:var(--card-bg); color:var(--text-secondary); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; font-size:.95rem; }
+.snap-add span { font-size:2.2rem; }
+.snap-shots:has(.snap-shot) .snap-add { grid-column:auto; } .snap-shots:not(:has(.snap-shot)) .snap-add { grid-column: 1 / -1; aspect-ratio: 16/10; background: linear-gradient(160deg, var(--accent-light), var(--card-bg)); border-color: var(--accent); color: var(--accent); font-weight:700; font-size:1.1rem; }
+.snap-tips { margin:16px 0; display:flex; flex-wrap:wrap; gap:6px; font-size:.82rem; color:var(--text-secondary); }
+.snap-tips b { width:100%; color:var(--text-primary); } .snap-tips span { background:var(--card-bg); border:1px solid var(--border); padding:5px 10px; border-radius:20px; }
+.snap-engine { font-size:.82rem; padding:10px 12px; border-radius:10px; background:var(--warning-bg); color:#92400e; } .snap-engine.ok { background:var(--success-bg); color:#065f46; }
+
+.snap-reading { position:relative; border-radius:16px; overflow:hidden; background:#000; }
+.snap-reading img { width:100%; display:block; opacity:.75; max-height:60vh; object-fit:contain; }
+.snap-scan { position:absolute; left:0; right:0; height:3px; background:#38bdf8; box-shadow:0 0 18px 4px #38bdf8; animation: snapscan 1.6s ease-in-out infinite alternate; }
+@keyframes snapscan { from { top:4%; } to { top:94%; } }
+.snap-reading p { position:absolute; left:0; right:0; bottom:0; margin:0; padding:14px; color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.8)); font-weight:600; text-align:center; }
+.snap-err { padding:20px; border-radius:12px; background:var(--danger-bg); color:#991b1b; } .snap-err p { margin-top:6px; font-size:.85rem; }
+
+.snap-summary { display:flex; gap:12px; align-items:center; background:var(--card-bg); padding:10px; border-radius:14px; margin-bottom:14px; box-shadow:var(--shadow-sm); }
+.snap-summary img { width:72px; height:72px; border-radius:10px; object-fit:cover; flex-shrink:0; }
+.snap-summary > div { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; font-size:.85rem; color:var(--text-secondary); }
+.snap-summary b { color:var(--text-primary); font-size:.95rem; }
+.snap-q { margin:4px 2px 10px; font-size:.95rem; }
+.snap-choices { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+.snap-choices button { min-height:58px; text-align:left; padding:10px 12px; background:var(--card-bg); border:1.5px solid var(--border); border-radius:12px; color:var(--text-primary); font-weight:600; font-size:.9rem; line-height:1.25; }
+.snap-choices button.sugg { border-color:var(--accent); background:var(--accent-light); }
+.snap-choices em { display:block; font-style:normal; font-size:.7rem; color:var(--accent); text-transform:uppercase; letter-spacing:.5px; }
+.snap-flags { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; } .snap-flags .badge { text-transform:none; letter-spacing:0; font-size:.8rem; padding:7px 10px; border-radius:8px; white-space:normal; }
+.snap-group { background:var(--card-bg); border-radius:14px; padding:12px; margin-bottom:12px; box-shadow:var(--shadow-sm); }
+.snap-group h4 { font-size:.78rem; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted); margin:2px 2px 10px; }
+.snap-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.sf { display:flex; flex-direction:column; gap:4px; font-size:.78rem; color:var(--text-secondary); font-weight:600; min-width:0; }
+.sf.big { width:100%; } .sf i { font-style:normal; color:var(--text-muted); font-weight:500; }
+.sf em { font-style:normal; font-size:.65rem; background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:6px; margin-left:4px; }
+.sf input, .sf select { width:100%; font-size:16px; min-height:44px; padding:8px 10px; font-family: var(--mono); }
+.sf input.auto { color:#6d28d9; background:#faf5ff; } [data-theme="dark"] .sf input.auto { background:#2e1f4d; color:#c4b5fd; }
+.sf.miss input { background:#fffbeb; border-color:#fcd34d; } [data-theme="dark"] .sf.miss input { background:#3b3412; }
+.snap-check { display:flex; gap:10px; align-items:center; margin-top:12px; font-size:.88rem; } .snap-check input { width:22px; height:22px; accent-color:var(--accent); }
+.snap-raw { font-size:.8rem; color:var(--text-secondary); } .snap-raw pre { white-space:pre-wrap; font-family:var(--mono); font-size:.72rem; background:var(--card-bg); padding:10px; border-radius:10px; margin-top:6px; max-height:200px; overflow:auto; }
+.snap-done { text-align:center; padding:40px 10px; } .snap-done .tick { width:76px; height:76px; margin:0 auto 14px; border-radius:50%; background:var(--success); color:#fff; display:grid; place-items:center; font-size:2.2rem; animation: pop .35s ease; }
+.snap-done b { font-size:1.15rem; display:block; margin-bottom:6px; } .snap-done p { color:var(--text-secondary); }
+@keyframes pop { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }
+@media (max-width: 380px) { .snap-grid, .snap-choices { grid-template-columns: 1fr; } }
+@media print { #snap-fab, #snap { display:none !important; } }
+
 /* PRINT */
 @media print { #sec-pager, #drawer-backdrop, #sidebar, #topbar, button, .flag-group, .subtabs { display: none !important; } #main-wrap { margin-left: 0; } }
 </style>
@@ -471,6 +559,7 @@ body.sb-collapsed #main-wrap { margin-left: 0; }
 
     <!-- ============ SECTION 1: DASHBOARD ============ -->
     <div class="section" id="sec-dashboard">
+      <div class="snap-hero" onclick="snapOpen();document.getElementById('snap-file').click()"><div class="ic">📷</div><div><b>Snap a nameplate</b><span>Photo → equipment identified → data filled in</span></div><div class="go">›</div></div>
       <div class="card card-accent">
         <div class="card-header"><div class="card-title">Project Summary</div><div id="dash-status" class="badge badge-gray">NOT STARTED</div></div>
         <div id="dash-summary" style="font-size:.85rem;color:var(--text-secondary);">Load or create a project to begin.</div>
@@ -5396,5 +5485,372 @@ function elecRate() {
 // ========== INIT ON LOAD ==========
 document.addEventListener('DOMContentLoaded', init);
 </script>
+
+<!-- ================= SNAP: one-shot nameplate capture ================= -->
+<div id="snap-fab" onclick="snapOpen()" title="Snap a nameplate"><span>📷</span><b>Snap</b></div>
+<input type="file" id="snap-file" accept="image/*" capture="environment" style="display:none" onchange="snapGotFile(this)">
+<div id="snap" class="snap-hidden" role="dialog" aria-modal="true">
+  <div class="snap-head">
+    <button class="snap-x" onclick="snapClose()" aria-label="Close">✕</button>
+    <div class="snap-title" id="snap-title">Snap nameplate</div>
+    <div class="snap-steps"><i data-s="1"></i><i data-s="2"></i><i data-s="3"></i></div>
+  </div>
+  <div class="snap-body" id="snap-body"></div>
+  <div class="snap-foot" id="snap-foot"></div>
+</div>
+<div id="snap-toast"></div>
+<script>
+(function(){
+// ---------- Equipment knowledge: what a nameplate of each class should carry ----------
+const F = { // key: [label, unit, inputmode]
+  hp:['Rated power','HP'], kw:['Rated power','kW'], volts:['Voltage','V'], amps:['Full-load current','A'],
+  phase:['Phase','ph'], hz:['Frequency','Hz'], rpm:['Speed','RPM'], pf:['Power factor',''], effPct:['Efficiency','%'],
+  frame:['Frame',''], insClass:['Insulation class',''], sf:['Service factor',''], ieClass:['IE / NEMA class',''],
+  coolBtuh:['Cooling capacity','Btu/h'], coolTons:['Cooling capacity','tons'], coolKw:['Cooling capacity','kW'],
+  heatBtuh:['Heating capacity','Btu/h'], refrigerant:['Refrigerant',''], refrigCharge:['Refrigerant charge','kg'],
+  seer:['SEER',''], eer:['EER',''], cop:['COP',''], mca:['Min. circuit amps','A'], mop:['Max. overcurrent','A'],
+  rla:['Compressor RLA','A'], lra:['Compressor LRA','A'],
+  flowM3h:['Flow','m³/h'], flowGpm:['Flow','GPM'], headM:['Head','m'], cfm:['Airflow','CFM'],
+  pressureBar:['Pressure','bar'], kva:['Rating','kVA'], priV:['Primary voltage','V'], secV:['Secondary voltage','V'],
+  impedancePct:['Impedance','%Z'], coolingType:['Cooling (ONAN/AN…)',''],
+  ratedA:['Rated current','A'], aic:['Short-circuit rating','kA'],
+  tankL:['Tank capacity','L'], tankGal:['Tank capacity','gal'], inputKw:['Input rating','kW'], inputKbtuh:['Input rating','kBtu/h'],
+  fuel:['Fuel',''], uef:['Efficiency (UEF/EF)',''], lampType:['Lamp type',''], lampW:['Lamp wattage','W'],
+  lampsPerFixture:['Lamps per fixture',''], watts:['Power','W'],
+  manufacturer:['Manufacturer',''], model:['Model',''], serial:['Serial no.',''], year:['Year made','']
+};
+const ID = ['manufacturer','model','serial','year'];
+const C = {
+  motor:      {icon:'⚙️', label:'Motor', sec:'other', expect:['kw','hp','volts','amps','rpm','phase','hz','pf','effPct','frame','ieClass','sf','insClass']},
+  pump:       {icon:'💧', label:'Pump', sec:'other', expect:['kw','hp','flowM3h','headM','rpm','volts','amps','effPct']},
+  fan:        {icon:'🌀', label:'Fan / AHU', sec:'other', expect:['kw','hp','cfm','rpm','volts','amps']},
+  air_compressor:{icon:'🗜', label:'Air compressor', sec:'other', expect:['kw','hp','pressureBar','cfm','volts','amps']},
+  hvac:       {icon:'❄️', label:'AC / HVAC unit', sec:'hvac', expect:['coolTons','coolKw','coolBtuh','refrigerant','refrigCharge','seer','eer','cop','volts','phase','mca','mop','rla']},
+  chiller:    {icon:'🧊', label:'Chiller', sec:'hvac', expect:['coolTons','coolKw','refrigerant','refrigCharge','cop','kw','volts','rla']},
+  boiler:     {icon:'🔥', label:'Boiler', sec:'other', expect:['inputKw','inputKbtuh','fuel','effPct','pressureBar']},
+  transformer:{icon:'🔋', label:'Transformer', sec:'electrical', expect:['kva','priV','secV','phase','hz','impedancePct','coolingType']},
+  panel:      {icon:'🗄', label:'Panel / switchboard', sec:'electrical', expect:['ratedA','volts','phase','aic']},
+  dhw:        {icon:'🚿', label:'Water heater', sec:'dhw', expect:['tankL','tankGal','inputKw','inputKbtuh','fuel','uef','volts']},
+  lighting:   {icon:'💡', label:'Light fixture / lamp', sec:'lighting', expect:['lampType','lampW','lampsPerFixture','volts']},
+  appliance:  {icon:'🔌', label:'Appliance / plug load', sec:'plugloads', expect:['watts','volts','amps']},
+  other:      {icon:'📦', label:'Other equipment', sec:'other', expect:['kw','volts','amps']}
+};
+// Things a bare motor could be part of → where its data lands
+const MOTOR_ROLES = [
+  ['pump','💧 Drives a pump'],['fan','🌀 Fan / AHU / cooling tower'],['air_compressor','🗜 Air compressor'],
+  ['hvac','❄️ Inside an AC / HVAC unit'],['chiller','🧊 Chiller compressor'],['motor','⚙️ Standalone / conveyor / other']
+];
+const OTHER_TYPE = {motor:'Motor',pump:'Pump',fan:'Fan',air_compressor:'Compressed Air',boiler:'Boiler',other:'Other'};
+
+let S = null; // current snap session
+const $ = id => document.getElementById(id);
+const esc = v => String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => { const n = parseFloat(String(v).replace(/,/g,'')); return isFinite(n) ? n : null; };
+const r2 = (n,d=2) => Math.round(n*10**d)/10**d;
+
+window.snapOpen = function(){ S = {photos:[], fields:{}, derived:{}, cls:null, role:null, extra:{}}; $('snap').classList.remove('snap-hidden'); document.body.classList.add('snap-on'); stepCapture(); };
+window.snapClose = function(){ $('snap').classList.add('snap-hidden'); document.body.classList.remove('snap-on'); S = null; };
+function steps(n,title){ $('snap-title').textContent = title; document.querySelectorAll('.snap-steps i').forEach(i=>i.classList.toggle('on', +i.dataset.s <= n)); $('snap-body').scrollTop = 0; }
+
+// ---------- Step 1: capture ----------
+function stepCapture(){
+  steps(1,'Snap nameplate');
+  const ai = aiReady();
+  $('snap-body').innerHTML = `
+    <div class="snap-shots">${S.photos.map((p,i)=>`<div class="snap-shot"><img src="${p}"><button onclick="snapDrop(${i})">✕</button></div>`).join('')}
+      <button class="snap-add" onclick="document.getElementById('snap-file').click()"><span>📷</span>${S.photos.length?'Add another angle':'Take photo'}</button></div>
+    <div class="snap-tips"><b>For a clean read</b><span>Fill the frame with the plate</span><span>Avoid glare — tilt slightly</span><span>Add a 2nd photo if the plate is split</span></div>
+    <div class="snap-engine ${ai?'ok':''}">${ai?'🤖 AI reading via '+esc(appState.settings.aiProvider||'gemini')+' — identifies equipment and fields':'🔤 Offline text reading (no AI key set). For much better accuracy add a Gemini key in <a href="#" onclick="snapClose();showSection(\'settings\');return false;">Settings</a>.'}</div>`;
+  $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapManual()">Enter manually</button><button class="btn-primary" ${S.photos.length?'':'disabled'} onclick="snapRead()">Read nameplate ›</button>`;
+}
+window.snapDrop = i => { S.photos.splice(i,1); stepCapture(); };
+window.snapGotFile = async function(inp){
+  const f = inp.files && inp.files[0]; inp.value=''; if(!f || !S) return;
+  const url = await new Promise(r=>{const fr=new FileReader(); fr.onload=e=>r(e.target.result); fr.readAsDataURL(f);});
+  S.photos.push(await shrink(url,1600,.85)); stepCapture();
+  if (S.photos.length===1) snapRead(); // one-snap: start reading immediately
+};
+function shrink(url,max,q){ return new Promise(res=>{ const im=new Image(); im.onload=()=>{ const s=Math.min(1,max/Math.max(im.width,im.height)); const c=document.createElement('canvas'); c.width=im.width*s; c.height=im.height*s; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); }; im.onerror=()=>res(url); im.src=url; }); }
+window.snapManual = function(){ S.fields={}; S.candidates=Object.keys(C).map(k=>({cls:k,confidence:0})); stepWhere(true); };
+
+// ---------- Step 2: read (AI vision, or OCR fallback) ----------
+function aiReady(){ const s=appState.settings||{}; return !!s.aiApiKey && ['gemini','openai'].includes(s.aiProvider||'gemini'); }
+window.snapRead = async function(){
+  steps(2,'Reading…');
+  $('snap-body').innerHTML = `<div class="snap-reading"><img src="${S.photos[0]}"><div class="snap-scan"></div><p id="snap-prog">Reading the plate…</p></div>`;
+  $('snap-foot').innerHTML = '';
+  try {
+    const out = aiReady() ? await readAI() : await readOCR();
+    S.fields = out.fields||{}; S.raw = out.rawText||''; S.candidates = out.candidates||[];
+    if (out.extra) S.extra = out.extra;
+    ID.forEach(k=>{ if(out[k]!=null && S.fields[k]==null) S.fields[k]=out[k]; });
+    const top = S.candidates[0];
+    if (!top || top.confidence < 0.7 || top.cls==='motor') stepWhere(false); else { S.cls = top.cls; stepReview(); }
+  } catch(e){
+    $('snap-body').innerHTML = `<div class="snap-err"><b>Couldn't read that photo</b><p>${esc(e.message||e)}</p></div>`;
+    $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapManual()">Enter manually</button><button class="btn-primary" onclick="stepCaptureRetake()">Retake</button>`;
+  }
+};
+window.stepCaptureRetake = () => { S.photos=[]; stepCapture(); };
+
+async function readAI(){
+  const s = appState.settings, provider = s.aiProvider||'gemini', key = s.aiApiKey;
+  const keys = Object.keys(F).filter(k=>!ID.includes(k));
+  const prompt = `You are reading an equipment NAMEPLATE photographed during an ASHRAE Level 1 energy audit.
+1) Identify the equipment class, one of: ${Object.keys(C).join(', ')}. A plate showing only motor data (HP/kW, RPM, frame, insulation class) is "motor" even if it sits on a pump or fan.
+2) Read every value printed. Copy numbers exactly; do not guess. If the plate gives several voltages/currents (e.g. 380-415V / 50Hz and 460V / 60Hz), use the one matching 50 Hz and list the rest in "notes".
+Reply with ONLY JSON, no markdown:
+{"candidates":[{"cls":"<class>","confidence":0.0-1.0}, ...best first, up to 3],
+ "manufacturer":str|null,"model":str|null,"serial":str|null,"year":str|null,
+ "fields":{${keys.map(k=>`"${k}":${['refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType'].includes(k)?'str':'number'}|null`).join(',')}},
+ "notes":str|null,"rawText":"all legible text, lines separated by |"}
+Use null for anything not printed. Year: from a date or date code if plainly printed, else null.`;
+  const imgs = S.photos;
+  let text='';
+  if (provider==='gemini'){
+    const model = s.aiModel || 'gemini-2.0-flash';
+    const parts = imgs.map(u=>({inlineData:{mimeType:'image/jpeg',data:u.split(',')[1]}})); parts.push({text:prompt});
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1,maxOutputTokens:2048,responseMimeType:'application/json'}})});
+    const d = await r.json(); if (d.error) throw new Error(d.error.message);
+    text = d.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
+  } else {
+    const model = /gpt-4|gpt-5|o\d/.test(s.aiModel||'') ? s.aiModel : 'gpt-4o-mini';
+    const content = imgs.map(u=>({type:'image_url',image_url:{url:u}})); content.push({type:'text',text:prompt});
+    const r = await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model,messages:[{role:'user',content}],max_tokens:1500,response_format:{type:'json_object'}})});
+    const d = await r.json(); if (d.error) throw new Error(d.error.message);
+    text = d.choices?.[0]?.message?.content||'';
+  }
+  const j = JSON.parse(text.replace(/```json|```/g,'').trim().replace(/^[^{]*/,'').replace(/[^}]*$/,''));
+  const fields = {}; Object.entries(j.fields||{}).forEach(([k,v])=>{ if(v!==null && v!=='' && F[k]) fields[k]=v; });
+  if (j.notes) S.notes = j.notes;
+  return {...j, fields, candidates:(j.candidates||[]).filter(c=>C[c.cls]).sort((a,b)=>b.confidence-a.confidence)};
+}
+
+async function readOCR(){
+  if (!window.Tesseract){
+    $('snap-prog').textContent='Loading offline reader (first time only)…';
+    await new Promise((res,rej)=>{const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; sc.onload=res; sc.onerror=()=>rej(new Error('Offline reader could not load — check connection or set an AI key.')); document.head.appendChild(sc);});
+  }
+  let txt='';
+  for (const u of S.photos){
+    const r = await Tesseract.recognize(u,'eng',{logger:m=>{ if(m.status==='recognizing text' && $('snap-prog')) $('snap-prog').textContent='Reading text… '+Math.round(m.progress*100)+'%'; }});
+    txt += '\n' + r.data.text;
+  }
+  return parseText(txt);
+}
+// Regex reader for plain OCR text
+function parseText(t){
+  const T = ' '+t.toUpperCase().replace(/[|]/g,' ').replace(/\s+/g,' ')+' ';
+  const f = {}, g = (re,k,fn) => { const m = T.match(re); if (m && f[k]==null) f[k] = fn ? fn(m) : num(m[1]); };
+  g(/(\d+(?:[.,]\d+)?)\s*HP\b/,'hp'); g(/\bHP\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'hp');
+  g(/(\d+(?:[.,]\d+)?)\s*KW\b/,'kw'); g(/\bKW\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kw');
+  g(/(\d+(?:[.,]\d+)?)\s*KVA\b/,'kva'); g(/\bKVA\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kva');
+  g(/(\d{3,4})\s*(?:\/\s*\d{3,4}\s*)?V(?:OLTS?)?\b/,'volts'); g(/\bV(?:OLTS?)?\s*[:\-]?\s*(\d{3,4})/,'volts');
+  g(/(\d+(?:[.,]\d+)?)\s*A(?:MPS?)?\b(?!\w)/,'amps'); g(/\b(?:AMPS?|F\.?L\.?A\.?|I\s*N)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'amps');
+  g(/(\d{3,4})\s*(?:R\.?P\.?M|MIN-?1|1\/MIN)/,'rpm'); g(/\bR\.?P\.?M\.?\s*[:\-]?\s*(\d{3,4})/,'rpm');
+  g(/\b(50|60)\s*HZ/,'hz'); g(/\b([13])\s*(?:PH|PHASE|~)/,'phase');
+  g(/(?:COS\s*(?:PHI|[ΦφO0])|P\.?F\.?)\s*[:\-]?\s*(0[.,]\d+)/,'pf');
+  g(/(?:EFF(?:ICIENCY)?|η)\s*[:\-]?\s*(\d{2}(?:[.,]\d+)?)\s*%?/,'effPct');
+  g(/\b(IE[1-5])\b/,'ieClass',m=>m[1]); g(/\bFRAME\s*[:\-]?\s*([0-9A-Z]{2,6})/,'frame',m=>m[1]);
+  g(/\b(?:INS(?:UL)?\.?\s*CL(?:ASS)?\.?|CLASS)\s*[:\-]?\s*([ABFH])\b/,'insClass',m=>m[1]); g(/\bS\.?F\.?\s*[:\-]?\s*(1[.,]\d+)/,'sf');
+  g(/\bR-?\s?(22|410A|32|134A|407C|404A|290|1234YF)\b/,'refrigerant',m=>'R-'+m[1].replace('A','A'));
+  g(/(\d+(?:[.,]\d+)?)\s*(?:KG)\b.*?(?:CHARGE|REFRIG)|(?:CHARGE|REFRIGERANT)[^0-9]{0,15}(\d+(?:[.,]\d+)?)\s*KG/,'refrigCharge',m=>num(m[1]||m[2]));
+  g(/(\d{4,6})\s*BTU/,'coolBtuh'); g(/(\d+(?:[.,]\d+)?)\s*TONS?\b/,'coolTons');
+  g(/\bSEER2?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'seer'); g(/\bEER\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'eer'); g(/\bCOP\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'cop');
+  g(/\bM\.?C\.?A\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'mca'); g(/\bM\.?O\.?P\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'mop');
+  g(/\bR\.?L\.?A\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'rla'); g(/\bL\.?R\.?A\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'lra');
+  g(/(\d+(?:[.,]\d+)?)\s*M3\/H/,'flowM3h'); g(/(\d+(?:[.,]\d+)?)\s*GPM/,'flowGpm'); g(/\bH(?:EAD)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*M\b/,'headM');
+  g(/(\d+(?:[.,]\d+)?)\s*CFM/,'cfm'); g(/(\d+(?:[.,]\d+)?)\s*BAR\b/,'pressureBar');
+  g(/(?:IMPEDANCE|UK|%Z|Z%)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'impedancePct'); g(/\b(ONAN|ONAF|AN|AF|KNAN)\b/,'coolingType',m=>m[1]);
+  g(/(\d+(?:[.,]\d+)?)\s*(?:L|LITRES?|LITERS?)\b/,'tankL'); g(/(\d+(?:[.,]\d+)?)\s*(?:GAL|GALLONS?)\b/,'tankGal');
+  g(/\b(?:19|20)\d{2}\b/,'year',m=>m[0]);
+  g(/(?:S\/?N|SERIAL(?:\s*NO)?\.?)\s*[:#\-]?\s*([A-Z0-9\-]{5,})/,'serial',m=>m[1]);
+  g(/(?:MODEL|TYPE)\s*(?:NO\.?)?\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{3,})/,'model',m=>m[1]);
+  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY'];
+  const b = brands.find(x=>T.includes(' '+x)); const ident = {manufacturer: b ? b.replace(/\b\w/g,c=>c).trim() : null};
+  ['year','serial','model'].forEach(k=>{ ident[k]=f[k]||null; delete f[k]; });
+  // class scoring from keywords
+  const sc = {motor:0,pump:0,fan:0,air_compressor:0,hvac:0,chiller:0,boiler:0,transformer:0,panel:0,dhw:0,lighting:0,appliance:0};
+  const k = (cls,re,w) => { if (re.test(T)) sc[cls]+=w; };
+  k('motor',/\bRPM|MIN-1|FRAME|INS\.?\s*CL|\bIP5|\bIP6|\bS\.?F\.?\b|DUTY\s*S1|\bIE[1-5]\b/,2); if(f.hp||f.kw) sc.motor+=1;
+  k('pump',/PUMP|HEAD|M3\/H|GPM|IMPELLER/,3); k('fan',/\bFAN\b|BLOWER|CFM|AHU/,3);
+  k('air_compressor',/COMPRESSOR.*(BAR|PSI|FAD)|\bFAD\b|SCREW/,3);
+  k('hvac',/REFRIGERANT|R-?410|R-?22|R-?32|SEER|\bEER|M\.?C\.?A|M\.?O\.?P|BTU|AIR CONDITION|HEAT PUMP|OUTDOOR UNIT|INDOOR UNIT/,3);
+  k('chiller',/CHILLER/,5); k('boiler',/BOILER|BURNER/,5);
+  k('transformer',/TRANSFORMER|ONAN|\bHV\b|\bLV\b|IMPEDANCE|VECTOR|DYN11/,3); if(f.kva) sc.transformer+=2;
+  k('panel',/PANEL|SWITCHBOARD|BUSBAR|MCCB|\bACB\b|ICW|\bAIC\b/,3);
+  k('dhw',/WATER HEATER|GEYSER|HEATER.*(L|GAL)|\bUEF\b/,4); k('lighting',/LAMP|LED|LUMINAIRE|BALLAST|DRIVER|LUMEN|LM\b/,3);
+  k('appliance',/REFRIGERATOR|MICROWAVE|COPIER|PRINTER|DISPENSER|WASHER|TV\b|MONITOR/,3);
+  const tot = Object.values(sc).reduce((a,b)=>a+b,0) || 1;
+  const candidates = Object.entries(sc).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cls,v])=>({cls,confidence:r2(Math.min(.95,v/tot*.9),2)}));
+  return {fields:f, candidates, rawText:t, ...ident};
+}
+
+// ---------- Step 2b: "Where is this from?" ----------
+function stepWhere(manual){
+  steps(2, manual ? 'What are you recording?' : 'Where is this from?');
+  const top = S.candidates || [];
+  const isMotor = !manual && top[0] && top[0].cls==='motor';
+  const sugg = new Set(top.map(c=>c.cls));
+  const found = Object.keys(S.fields).filter(k=>!ID.includes(k)).length;
+  let h = '';
+  if (!manual) h += `<div class="snap-summary"><img src="${S.photos[0]}"><div><b>${found} value${found===1?'':'s'} read</b>${top[0]?`<span>Looks like: ${C[top[0].cls].icon} ${C[top[0].cls].label} (${Math.round(top[0].confidence*100)}%)</span>`:'<span>Equipment type unclear</span>'}${S.fields.manufacturer?`<span>${esc(S.fields.manufacturer)} ${esc(S.fields.model||'')}</span>`:''}</div></div>`;
+  if (isMotor){
+    h += `<p class="snap-q">This is a motor plate. <b>What does the motor drive?</b> Its data goes to the right place.</p><div class="snap-choices">${MOTOR_ROLES.map(([k,l])=>`<button onclick="snapPick('${k}',true)">${l}</button>`).join('')}</div>`;
+  } else {
+    h += `<p class="snap-q">${manual?'Pick the equipment type.':'Not sure what this is — please choose.'}</p><div class="snap-choices">${Object.entries(C).map(([k,c])=>`<button class="${sugg.has(k)?'sugg':''}" onclick="snapPick('${k}')">${c.icon} ${c.label}${sugg.has(k)&&!manual?' <em>suggested</em>':''}</button>`).join('')}</div>`;
+  }
+  $('snap-body').innerHTML = h;
+  $('snap-foot').innerHTML = manual ? `<button class="btn-secondary" onclick="stepCaptureRetake()">‹ Back</button>` : `<button class="btn-secondary" onclick="stepCaptureRetake()">Retake</button>`;
+}
+window._snapParse = parseText;
+window.snapPick = function(cls, fromMotor){ S.cls = cls; S.role = fromMotor ? cls : null; S.fromMotor = !!fromMotor; stepReview(); };
+
+// ---------- Derived values ----------
+function derive(){
+  const f = S.fields, d = {};
+  const V = num(f.volts), A = num(f.amps), ph = num(f.phase) || (V && V>=380 ? 3 : null);
+  if (num(f.hp)!=null && num(f.kw)==null) d.kw = r2(num(f.hp)*0.746);
+  if (num(f.kw)!=null && num(f.hp)==null) d.hp = r2(num(f.kw)/0.746);
+  if (V && A && ph) d.kvaCalc = r2((ph===3?Math.sqrt(3):1)*V*A/1000);
+  const kwOut = num(f.kw) ?? d.kw, eff = num(f.effPct);
+  if (kwOut!=null) d.kwInput = r2(kwOut/((eff && eff>40 && eff<100) ? eff/100 : 0.9));
+  if (num(f.coolBtuh)!=null && num(f.coolTons)==null) d.coolTons = r2(num(f.coolBtuh)/12000);
+  if (num(f.coolKw)!=null && num(f.coolTons)==null && d.coolTons==null) d.coolTons = r2(num(f.coolKw)/3.517);
+  const tons = num(f.coolTons) ?? d.coolTons;
+  if (tons!=null && num(f.coolKw)==null) d.coolKw = r2(tons*3.517);
+  if (num(f.eer)!=null && num(f.cop)==null) d.cop = r2(num(f.eer)/3.412);
+  if (num(f.tankGal)!=null && num(f.tankL)==null) d.tankL = r2(num(f.tankGal)*3.785,0);
+  if (num(f.tankL)!=null && num(f.tankGal)==null) d.tankGal = r2(num(f.tankL)/3.785,0);
+  if (num(f.inputKbtuh)!=null && num(f.inputKw)==null) d.inputKw = r2(num(f.inputKbtuh)/3.412);
+  const yr = num(f.year); if (yr && yr>1950) d.age = new Date().getFullYear()-yr;
+  S.derived = d; return d;
+}
+const val = k => S.fields[k] ?? S.derived[k];
+
+// ---------- Step 3: review & confirm ----------
+function stepReview(){
+  const c = C[S.cls]; derive();
+  steps(3, c.icon+' '+c.label + (S.fromMotor ? ' motor' : ''));
+  const exp = S.fromMotor ? [...new Set(['kw','hp','volts','amps','rpm','phase','pf','effPct','ieClass',...c.expect.slice(0,3)])] : c.expect;
+  // collapse alternates: show one of each pair that has a value
+  const pairs = [['kw','hp'],['coolTons','coolKw','coolBtuh'],['tankL','tankGal'],['inputKw','inputKbtuh'],['flowM3h','flowGpm']];
+  const missing = exp.filter(k => val(k)==null && !pairs.some(p=>p.includes(k) && p.some(o=>val(o)!=null)));
+  const r22 = /R-?22\b/.test(S.fields.refrigerant||'');
+  const age = S.derived.age;
+  const nm = S.extra.name || defaultName();
+  const field = k => { const [lab,u]=F[k]; const v=S.fields[k], dv=S.derived[k], has=v!=null;
+    return `<label class="sf ${!has&&dv==null?'miss':''}"><span>${lab}${u?` <i>${u}</i>`:''}${!has&&dv!=null?' <em>auto</em>':''}</span><input data-k="${k}" value="${esc(has?v:(dv??''))}" ${dv!=null&&!has?'class="auto"':''} inputmode="${['manufacturer','model','serial','refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType'].includes(k)?'text':'decimal'}" onchange="snapSet('${k}',this.value)"></label>`; };
+  let h = `<div class="snap-summary"><img src="${S.photos[0]||''}" ${S.photos[0]?'':'style="display:none"'}><div>
+      <label class="sf big"><span>Name / tag</span><input id="snap-name" value="${esc(nm)}" onchange="S_name(this.value)"></label></div></div>`;
+  const flags = [];
+  if (r22) flags.push('<span class="badge badge-red">R-22 — phase-out refrigerant, flag for replacement</span>');
+  if (age!=null && age>=15) flags.push(`<span class="badge badge-amber">${age} years old — near/after end of service life</span>`);
+  if (num(S.fields.ieClass?.replace?.(/\D/g,''))!=null && /IE1/.test(S.fields.ieClass)) flags.push('<span class="badge badge-amber">IE1 motor — candidate for IE3/IE4 upgrade</span>');
+  if (missing.length) flags.push(`<span class="badge badge-gray">${missing.length} expected value${missing.length>1?'s':''} not found — highlighted below</span>`);
+  if (flags.length) h += `<div class="snap-flags">${flags.join('')}</div>`;
+  h += `<div class="snap-group"><h4>Nameplate data</h4><div class="snap-grid">${exp.map(field).join('')}</div></div>`;
+  // context-specific questions the plate can't answer
+  h += `<div class="snap-group"><h4>On site</h4><div class="snap-grid">`;
+  h += `<label class="sf"><span>Condition</span><select onchange="S_extra('condition',this.value)">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${ (S.extra.condition||'Fair')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
+  if (['motor','pump','fan','air_compressor','other','boiler','appliance'].includes(S.cls))
+    h += `<label class="sf"><span>Runs</span><select onchange="S_extra('mode',this.value)">${['Business Hours 8am-6pm','24/7 Continuous','Standby/Backup-normally off','Decommissioned-still connected'].map(o=>`<option ${(S.extra.mode||'Business Hours 8am-6pm')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
+  if (S.cls==='lighting') h += `<label class="sf"><span>Space</span><input value="${esc(S.extra.space||'')}" onchange="S_extra('space',this.value)"></label><label class="sf"><span>Fixture count</span><input inputmode="numeric" value="${esc(S.extra.count||'')}" onchange="S_extra('count',this.value)"></label>`;
+  if (S.cls==='appliance') h += `<label class="sf"><span>Quantity</span><input inputmode="numeric" value="${esc(S.extra.count||1)}" onchange="S_extra('count',this.value)"></label>`;
+  h += `</div>`;
+  if (['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls) || S.fromMotor)
+    h += `<label class="snap-check"><input type="checkbox" ${S.extra.toLoads!==false?'checked':''} onchange="S_extra('toLoads',this.checked)"> Also add to the Electrical load list</label>`;
+  h += `</div>`;
+  if (S.notes || S.raw) h += `<details class="snap-raw"><summary>Text read from the plate</summary><pre>${esc((S.notes?'Notes: '+S.notes+'\n\n':'')+(S.raw||'').replace(/\|/g,'\n'))}</pre></details>`;
+  $('snap-body').innerHTML = h;
+  $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="stepWhereAgain()">‹ Type</button><button class="btn-primary" onclick="snapSave()">Save to ${esc(secLabel(c.sec))} ✓</button>`;
+}
+function secLabel(s){ const n = NAV_ITEMS.find(x=>x.id===s); return n ? n.label : s; }
+function defaultName(){
+  const f=S.fields, c=C[S.cls], p = num(f.kw)??S.derived.kw, t = num(f.coolTons)??S.derived.coolTons;
+  const size = t ? t+' TR' : f.kva ? f.kva+' kVA' : p ? p+' kW' : f.lampW ? f.lampW+' W' : '';
+  return [S.fromMotor ? c.label+' motor' : c.label, size].filter(Boolean).join(' ');
+}
+window.S_name = v => S.extra.name = v;
+window.S_extra = (k,v) => S.extra[k] = v;
+window.snapSet = (k,v) => { v = v.trim(); if (v==='') delete S.fields[k]; else S.fields[k] = (F[k][1] && num(v)!=null) ? num(v) : v; const nm=$('snap-name').value; S.extra.name=nm; stepReview(); };
+window.stepWhereAgain = () => stepWhere(!S.photos.length);
+
+// ---------- Save into the audit ----------
+window.snapSave = async function(){
+  const f = S.fields, d = S.derived, c = C[S.cls], ex = S.extra;
+  const name = ($('snap-name')?.value || defaultName()).trim();
+  const cond = ex.condition || 'Fair';
+  const id = [f.manufacturer, f.model, f.serial && 'S/N '+f.serial].filter(Boolean).join(' · ');
+  const kw = num(f.kw) ?? d.kw;
+  let sec = c.sec;
+  const noteBits = [id, f.volts&&f.volts+' V', f.amps&&f.amps+' A', f.rpm&&f.rpm+' rpm', f.effPct&&'η '+f.effPct+'%', f.ieClass, f.pf&&'PF '+f.pf].filter(Boolean).join(', ');
+
+  if (S.cls==='hvac' || S.cls==='chiller'){
+    const tons = num(f.coolTons) ?? d.coolTons;
+    const eff = num(f.seer) ? [f.seer,'SEER'] : num(f.eer) ? [f.eer,'EER'] : num(f.cop)||d.cop ? [num(f.cop)??d.cop,'COP'] : ['','SEER'];
+    const ref = ['R-22','R-410A','R-32','R-134a','R-407C'].find(r=>(f.refrigerant||'').toUpperCase().replace(/\s/g,'')===r.toUpperCase()) || (f.refrigerant?'Other':'R-410A');
+    appState.hvac.rows.push({name, type: S.cls==='chiller'?'Chilled Water':(S.fromMotor?'Other':'Split AC'), cap: tons ?? '', capUnit:'tons', year:f.year||'', condition:cond,
+      refrigerant:ref, eff:eff[0], effUnit:eff[1], controls:'', economizer:'No',
+      notes:[noteBits, f.refrigCharge&&'charge '+f.refrigCharge+' kg', f.mca&&'MCA '+f.mca, f.mop&&'MOP '+f.mop, f.rla&&'RLA '+f.rla, ref==='Other'&&f.refrigerant].filter(Boolean).join(', ')});
+    if (typeof renderHVACRows==='function') renderHVACRows();
+  } else if (S.cls==='transformer'){
+    appState.electrical.transformers.push({tag:name||('TR-'+(appState.electrical.transformers.length+1)), type: /ONAN|ONAF|OIL|KNAN/i.test(f.coolingType||'')?'Oil':'Dry', ratedKVA:f.kva||'', year:f.year||'', priV:f.priV||'', secV:f.secV||'', ironLoss:'', copperLoss:'', measKW:'', measKVAR:'', measKVA:'', measPF:'', tempRise:'', condition:cond});
+    if (typeof renderTransformers==='function') renderTransformers();
+  } else if (S.cls==='panel'){
+    appState.electrical.panels.push({tag:name, type:'Distribution', ratedA:f.ratedA||f.amps||'', voltage:f.volts||'', year:f.year||'', condition:cond, metering:'None'});
+    if (typeof renderPanels==='function') renderPanels();
+  } else if (S.cls==='dhw'){
+    const had = appState.dhw && (appState.dhw.capacity || appState.dhw.inputRating);
+    if (had && !confirm('A water heater is already recorded. Replace its data with this nameplate?')) return;
+    const elec = /ELEC/i.test(f.fuel||'') || (!f.fuel && (num(f.inputKw)!=null));
+    Object.assign(appState.dhw, {
+      type: elec ? 'Electric Storage' : (/GAS/i.test(f.fuel||'')?'Gas Storage':appState.dhw.type), capacity: num(f.tankGal) ?? d.tankGal ?? '', capacityUnit:'gallons',
+      inputRating: num(f.inputKbtuh) ?? (num(f.inputKw)!=null ? r2(num(f.inputKw)*3.412) : ''), inputUnit:'kBtu/h',
+      year: f.year||appState.dhw.year, efficiency: f.uef ?? (f.effPct ? r2(f.effPct/100) : appState.dhw.efficiency),
+      notes: [appState.dhw.notes, name, id].filter(Boolean).join(' | ')});
+    if (typeof bindAll==='function') bindAll();
+  } else if (S.cls==='lighting'){
+    const lt = (f.lampType||'').toUpperCase();
+    const fixture = /PANEL/.test(lt)?'LED Panel':/DOWN/.test(lt)?'LED Downlight':/LED/.test(lt)?'LED Troffer':/T5/.test(lt)?'T5':/T12/.test(lt)?'T12':/CFL/.test(lt)?'CFL':/HALOGEN|INCAND/.test(lt)?'Incandescent':/MH|METAL|HPS|SODIUM|HID/.test(lt)?'HID':lt?'Other':'T8 Fluor';
+    appState.lighting.rows.push({space:ex.space||name, area:'', areaUnit:'ft²', fixture, count:ex.count||'', wpf: (num(f.lampW)||0)*(num(f.lampsPerFixture)||1) || '', control:'Manual', hpd:'10', dpy:'261', pctLed: /LED/.test(fixture)?'100':'0', condition:cond});
+    if (typeof renderLightingRows==='function') renderLightingRows();
+  } else if (S.cls==='appliance'){
+    const w = num(f.watts) ?? (num(f.volts)&&num(f.amps) ? r2(num(f.volts)*num(f.amps)*0.9,0) : 100);
+    appState.plugloads.rows.push({name, watts:w, hrs:8, days:261, count: num(ex.count)||1, powerMgmt:false});
+    if (typeof renderPlugRows==='function') renderPlugRows();
+  } else {
+    if (!appState.other.customEquip) appState.other.customEquip = [];
+    const capPair = kw!=null ? [kw,'kW'] : num(f.inputKw)!=null ? [f.inputKw,'kW'] : num(f.cfm)!=null ? [f.cfm,'CFM'] : num(f.flowGpm)!=null ? [f.flowGpm,'GPM'] : ['','kW'];
+    appState.other.customEquip.push({name, type: OTHER_TYPE[S.cls]||'Other', capacity:capPair[0], unit:capPair[1], year:f.year||'', condition:cond, annKwh:'', notes:noteBits});
+    if (typeof renderCustomEquipment==='function') renderCustomEquipment();
+  }
+  // Electrical load list for rotating equipment
+  if ((['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls) || S.fromMotor) && ex.toLoads!==false && appState.loads && (kw!=null || num(f.inputKw)!=null)){
+    const cat = {pump:'HVAC-Pump',fan:'HVAC-AHU-Fan',air_compressor:'Other',hvac:'HVAC-Compressor',chiller:'HVAC-Chiller'}[S.cls] || 'Other';
+    const mode = ex.mode || 'Business Hours 8am-6pm';
+    const hpd = /24\/7/.test(mode)?24 : /Standby|Decomm/.test(mode)?0 : 10, dpw = /24\/7/.test(mode)?7:5;
+    appState.loads.push({name, category:cat, npKW: d.kwInput ?? num(f.inputKw) ?? kw, measKW:'', measPF:f.pf||'', mode, hpd, dpw, wpy:52, control:'None', condition:cond, notes:noteBits, startType:'None', inrushX:0});
+    if (typeof renderLoadTable==='function') renderLoadTable();
+  }
+  // Keep the nameplate photo as evidence
+  if (S.photos.length){
+    const ps = sec==='plugloads'||sec==='lighting'||sec==='hvac'||sec==='dhw'||sec==='other'||sec==='electrical' ? sec : 'general';
+    if (!appState.photos[ps]) appState.photos[ps] = [];
+    for (const p of S.photos) appState.photos[ps].push({data: await shrink(p,800,.6), caption: name+' nameplate', tag: name, photoType:'nameplate', flag:'', equipment:name, date:new Date().toISOString()});
+    if (typeof renderPhotos==='function') renderPhotos();
+  }
+  save(); if (typeof updateProgress==='function') updateProgress(); if (typeof updateStorageIndicator==='function') updateStorageIndicator();
+  appState._snapCount = (appState._snapCount||0)+1;
+  // done screen
+  steps(3,'Saved ✓');
+  $('snap-body').innerHTML = `<div class="snap-done"><div class="tick">✓</div><b>${esc(name)}</b><p>added to <b>${esc(secLabel(sec))}</b>${S.extra.toLoads!==false && (['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls)||S.fromMotor) ? ' and the Electrical load list':''}, with the nameplate photo.</p></div>`;
+  $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapClose();showSection('${sec}')">View in ${esc(secLabel(sec))}</button><button class="btn-primary" onclick="snapOpen();document.getElementById('snap-file').click()">📷 Snap next</button>`;
+};
+})();
+</script>
+
 </body>
 </html>
