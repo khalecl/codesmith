@@ -521,6 +521,45 @@ body.drawer-open #snap-fab, body.snap-on #snap-fab { display:none; }
 .snap-kpis div { background:var(--input-bg); border-radius:10px; padding:10px 6px; text-align:center; }
 .snap-kpis b { display:block; font-family:var(--mono); font-size:1.15rem; color:var(--accent); } .snap-kpis span { font-size:.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; }
 .snap-tip { margin-top:10px; font-size:.84rem; background:var(--accent-light); color:var(--text-primary); padding:9px 11px; border-radius:10px; }
+/* Snap v2: scanner editor, upload, batch */
+.snap-shot img { cursor:pointer; }
+.snap-edit { position:absolute; left:6px; bottom:6px; background:rgba(0,0,0,.6); color:#fff; font-size:.72rem; padding:3px 8px; border-radius:10px; cursor:pointer; }
+.snap-upload { width:100%; margin-top:10px; min-height:48px; background:var(--card-bg); border:1.5px solid var(--border); border-radius:12px; color:var(--text-primary); font-weight:600; font-size:.92rem; }
+.snap-upload i { font-style:normal; font-weight:400; color:var(--text-muted); }
+.ed-wrap { background:#0b0f14; border-radius:14px; padding:10px; display:flex; justify-content:center; }
+.ed-stage { position:relative; display:inline-block; touch-action:none; user-select:none; overflow:hidden; border-radius:6px; max-width:100%; }
+.ed-stage img { display:block; max-width:100%; max-height:58vh; pointer-events:none; }
+.ed-box { position:absolute; border:2px solid #38bdf8; box-shadow:0 0 0 9999px rgba(0,0,0,.55); cursor:move; }
+.ed-box::before, .ed-box::after { content:''; position:absolute; inset:33.3% 0; border-top:1px solid rgba(56,189,248,.35); border-bottom:1px solid rgba(56,189,248,.35); pointer-events:none; }
+.ed-box::after { inset:0 33.3%; border:0; border-left:1px solid rgba(56,189,248,.35); border-right:1px solid rgba(56,189,248,.35); }
+.ed-h { position:absolute; width:28px; height:28px; border:4px solid #38bdf8; background:transparent; }
+.ed-h.tl { left:-5px; top:-5px; border-right:0; border-bottom:0; cursor:nwse-resize; } .ed-h.tr { right:-5px; top:-5px; border-left:0; border-bottom:0; cursor:nesw-resize; }
+.ed-h.bl { left:-5px; bottom:-5px; border-right:0; border-top:0; cursor:nesw-resize; } .ed-h.br { right:-5px; bottom:-5px; border-left:0; border-top:0; cursor:nwse-resize; }
+.ed-h::after { content:''; position:absolute; inset:-14px; } /* bigger touch target */
+.ed-busy { opacity:.5; pointer-events:none; }
+.ed-tools { display:flex; gap:8px; margin-top:10px; } .ed-tools button { flex:1; min-height:46px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; color:var(--text-primary); font-weight:600; font-size:.88rem; }
+.ed-hint { font-size:.78rem; color:var(--text-muted); margin-top:8px; text-align:center; }
+#snap-toast { position:fixed; left:50%; bottom:calc(90px + env(safe-area-inset-bottom)); transform:translate(-50%,20px); background:#0f1923; color:#fff; padding:10px 16px; border-radius:20px; font-size:.85rem; z-index:700; opacity:0; pointer-events:none; transition:.25s; }
+#snap-toast.on { opacity:1; transform:translate(-50%,0); }
+.bt-card { display:flex; gap:10px; background:var(--card-bg); border-radius:14px; padding:10px; margin-bottom:10px; box-shadow:var(--shadow-sm); border:2px solid transparent; }
+.bt-card.sel { border-color:var(--accent); } .bt-card.saved { opacity:.75; }
+.bt-imgs { width:78px; flex-shrink:0; display:flex; flex-direction:column; gap:4px; position:relative; }
+.bt-imgs img { width:78px; height:64px; object-fit:cover; border-radius:8px; background:#000; }
+.bt-imgs b { position:absolute; right:4px; bottom:4px; background:rgba(0,0,0,.7); color:#fff; font-size:.7rem; padding:1px 6px; border-radius:8px; }
+.bt-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+.bt-name { font-weight:700; font-size:16px; min-height:40px; padding:6px 8px; }
+.bt-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; } .bt-row select { flex:1 1 160px; min-width:0; min-height:40px; font-size:15px; }
+.bt-unsure { font-style:normal; font-size:.7rem; background:var(--warning-bg); color:#92400e; padding:3px 7px; border-radius:8px; white-space:nowrap; }
+.bt-chips { display:flex; flex-wrap:wrap; gap:4px; } .bt-chips span { font-size:.74rem; background:var(--input-bg); padding:3px 8px; border-radius:8px; font-family:var(--mono); }
+.bt-chips .none { font-family:inherit; color:var(--text-muted); background:transparent; padding-left:0; }
+.bt-hint { min-height:38px; background:var(--accent-light); color:var(--accent); border:1px dashed var(--accent); border-radius:10px; font-weight:600; font-size:.82rem; }
+.bt-act { display:flex; align-items:center; gap:8px; } .bt-act label { flex:1; font-size:.85rem; display:flex; align-items:center; gap:6px; }
+.bt-act label input { width:20px; height:20px; accent-color:var(--accent); }
+.bt-act button { min-height:38px; padding:0 14px; background:var(--input-bg); border:1px solid var(--border); border-radius:10px; color:var(--text-primary); font-weight:600; }
+.bt-ok { color:var(--success); font-weight:700; font-size:.85rem; }
+.bt-st { font-size:.85rem; color:var(--text-muted); } .bt-st.err { color:var(--danger); }
+.bt-st.spin::before { content:''; display:inline-block; width:12px; height:12px; margin-right:6px; border:2px solid var(--accent); border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; }
+@keyframes spin { to { transform:rotate(360deg); } }
 @media (max-width: 380px) { .snap-grid, .snap-choices { grid-template-columns: 1fr; } }
 @media print { #snap-fab, #snap { display:none !important; } }
 
@@ -5493,6 +5532,7 @@ document.addEventListener('DOMContentLoaded', init);
 <!-- ================= SNAP: one-shot nameplate capture ================= -->
 <div id="snap-fab" onclick="snapOpen()" title="Snap a nameplate"><span>📷</span><b>Snap</b></div>
 <input type="file" id="snap-file" accept="image/*" capture="environment" style="display:none" onchange="snapGotFile(this)">
+<input type="file" id="snap-files" accept="image/*" multiple style="display:none" onchange="snapGotFiles(this)">
 <div id="snap" class="snap-hidden" role="dialog" aria-modal="true">
   <div class="snap-head">
     <button class="snap-x" onclick="snapClose()" aria-label="Close">✕</button>
@@ -5521,13 +5561,16 @@ const F = { // key: [label, unit, inputmode]
   tankL:['Tank capacity','L'], tankGal:['Tank capacity','gal'], inputKw:['Input rating','kW'], inputKbtuh:['Input rating','kBtu/h'],
   fuel:['Fuel',''], uef:['Efficiency (UEF/EF)',''], lampType:['Lamp type',''], lampW:['Lamp wattage','W'],
   lampsPerFixture:['Lamps per fixture',''], watts:['Power','W'],
+  airLps:['Airflow','L/s'], staticPa:['Total static pressure','Pa'], dn:['Pipe size','DN'], meterReading:['Display reading',''], section:['Section / component',''], tag:['Asset tag',''],
   manufacturer:['Manufacturer',''], model:['Model',''], serial:['Serial no.',''], year:['Year made','']
 };
-const ID = ['manufacturer','model','serial','year'];
+const ID = ['manufacturer','model','serial','year','tag'];
+const TEXT_KEYS = ['manufacturer','model','serial','tag','refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType','meterReading','section'];
 const C = {
   motor:      {icon:'⚙️', label:'Motor', sec:'other', expect:['kw','hp','volts','amps','rpm','phase','hz','pf','effPct','frame','ieClass','sf','insClass']},
   pump:       {icon:'💧', label:'Pump', sec:'other', expect:['kw','hp','flowM3h','headM','rpm','volts','amps','effPct']},
-  fan:        {icon:'🌀', label:'Fan / AHU', sec:'other', expect:['kw','hp','cfm','rpm','volts','amps']},
+  ahu:        {icon:'🌬', label:'AHU / FCU', sec:'hvac', expect:['airLps','cfm','staticPa','rpm','hp','kw','volts','phase','hz','section']},
+  fan:        {icon:'🌀', label:'Fan', sec:'other', expect:['kw','hp','cfm','rpm','volts','amps']},
   air_compressor:{icon:'🗜', label:'Air compressor', sec:'other', expect:['kw','hp','pressureBar','cfm','volts','amps']},
   hvac:       {icon:'❄️', label:'AC / HVAC unit', sec:'hvac', expect:['coolTons','coolKw','coolBtuh','refrigerant','refrigCharge','seer','eer','cop','volts','phase','mca','mop','rla']},
   chiller:    {icon:'🧊', label:'Chiller', sec:'hvac', expect:['coolTons','coolKw','refrigerant','refrigCharge','cop','kw','volts','rla']},
@@ -5537,14 +5580,16 @@ const C = {
   dhw:        {icon:'🚿', label:'Water heater', sec:'dhw', expect:['tankL','tankGal','inputKw','inputKbtuh','fuel','uef','volts']},
   lighting:   {icon:'💡', label:'Light fixture / lamp', sec:'lighting', expect:['lampType','lampW','lampsPerFixture','volts']},
   appliance:  {icon:'🔌', label:'Appliance / plug load', sec:'plugloads', expect:['watts','volts','amps']},
+  meter:      {icon:'📟', label:'Meter / gauge', sec:'other', expect:['meterReading','flowM3h','dn','pressureBar']},
   other:      {icon:'📦', label:'Other equipment', sec:'other', expect:['kw','volts','amps']}
 };
 // Things a bare motor could be part of → where its data lands
 const MOTOR_ROLES = [
-  ['pump','💧 Drives a pump'],['fan','🌀 Fan / AHU / cooling tower'],['air_compressor','🗜 Air compressor'],
+  ['pump','💧 Drives a pump'],['ahu','🌬 AHU / FCU supply fan'],['fan','🌀 Fan / cooling tower'],['air_compressor','🗜 Air compressor'],
   ['hvac','❄️ Inside an AC / HVAC unit'],['chiller','🧊 Chiller compressor'],['motor','⚙️ Standalone / conveyor / other']
 ];
-const OTHER_TYPE = {motor:'Motor',pump:'Pump',fan:'Fan',air_compressor:'Compressed Air',boiler:'Boiler',other:'Other'};
+const OTHER_TYPE = {motor:'Motor',pump:'Pump',fan:'Fan',air_compressor:'Compressed Air',boiler:'Boiler',meter:'BMS/Controls',other:'Other'};
+const ROT = ['motor','pump','fan','ahu','air_compressor','other','boiler'];
 
 // Typical use of common equipment (Saudi office/commercial defaults; all editable on review).
 // h = hours/day it is switched on, d = days/yr, duty = share of those hours drawing rated power, sb = standby W when off
@@ -5552,6 +5597,9 @@ const PROFILES = [
   {re:/WATER HEATER|GEYSER|ВОДОНАГРЕВ|سخان/i, name:'Water heater', cls:'dhw'},
   {re:/AIR[ -]?CONDITION|SPLIT (?:AC|UNIT|TYPE)|INDOOR UNIT|OUTDOOR UNIT|КОНДИЦИОН|مكيف/i, name:'Split AC', cls:'hvac'},
   {re:/CHILLER/i, name:'Chiller', cls:'chiller'},
+  {re:/ENERGY CALCULATOR|AMTRON|HEAT METER|BTU METER|THERMAL METER|AQUA ?METRO|ULTRASONIC FLOW/i, name:'BTU / energy meter', cls:'meter'},
+  {re:/EN ?837|PRESSURE GAUGE|\bWIKA\b/i, name:'Pressure gauge', cls:'meter'},
+  {re:/AIR HANDLING|\bAHU\b|AIR VOL|FAN ?COIL|\bFCU\b|COMPONENT ?ASSEMBLY/i, name:'AHU', cls:'ahu'},
   {re:/\bPUMP|НАСОС|مضخة/i, name:'Pump', cls:'pump', h:10, d:261, duty:.75},
   {re:/COFFEE|ESPRESSO|КОФЕ|قهوة/i, name:'Coffee maker', h:9, d:261, duty:.15, sb:1, tip:'Auto-off timer; thermal carafe instead of a warming plate (cuts ~60%).'},
   {re:/KETTLE|ЧАЙНИК|غلاية/i, name:'Electric kettle', h:9, d:261, duty:.06, sb:0, tip:'Boil only what is needed; one shared kettle per pantry.'},
@@ -5565,7 +5613,7 @@ const PROFILES = [
   {re:/SERVER/i, name:'Server', h:24, d:365, duty:.6, sb:0, tip:'Virtualise; raise server-room setpoint to 24–27 °C.'},
   {re:/\bUPS\b|UNINTERRUPT/i, name:'UPS', h:24, d:365, duty:.1, sb:0, tip:'Check loading; eco-mode on modern UPS.'},
   {re:/ROUTER|ACCESS POINT|NETWORK SWITCH/i, name:'Network device', h:24, d:365, duty:.8, sb:0},
-  {re:/LAPTOP|NOTEBOOK|POWER ADAPTER|AC ADAPTER/i, name:'Laptop', h:9, d:261, duty:.5, sb:.3},
+  {re:/LAPTOP|NOTEBOOK|POWER ADAPTER|AC ADAPTER|\bADAPTER\b/i, name:'Laptop / AC adapter', h:9, d:261, duty:.5, sb:.3},
   {re:/MONITOR|LCD DISPLAY/i, name:'Monitor', h:9, d:261, duty:.8, sb:.5, tip:'Power-management policy (display off after 10 min).'},
   {re:/DESKTOP|PERSONAL COMPUTER|\bPC\b|WORKSTATION/i, name:'Desktop PC', h:9, d:261, duty:.6, sb:3, tip:'Power-management GPO: sleep after 30 min, shut down at night.'},
   {re:/TELEVISION|\bLED TV|\bTV\b/i, name:'TV / display', h:8, d:261, duty:.9, sb:1, tip:'Schedule off outside hours.'},
@@ -5587,8 +5635,8 @@ const esc = v => String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 const num = v => { const n = parseFloat(String(v).replace(/,/g,'')); return isFinite(n) ? n : null; };
 const r2 = (n,d=2) => Math.round(n*10**d)/10**d;
 
-window.snapOpen = function(){ S = {photos:[], fields:{}, derived:{}, cls:null, role:null, extra:{}}; $('snap').classList.remove('snap-hidden'); document.body.classList.add('snap-on'); stepCapture(); };
-window.snapClose = function(){ $('snap').classList.add('snap-hidden'); document.body.classList.remove('snap-on'); S = null; };
+window.snapOpen = function(){ S = {photos:[], orig:[], fields:{}, derived:{}, cls:null, role:null, extra:{}}; $('snap').classList.remove('snap-hidden'); document.body.classList.add('snap-on'); stepCapture(); };
+window.snapClose = function(){ $('snap').classList.add('snap-hidden'); document.body.classList.remove('snap-on'); S = null; BR = null; };
 function steps(n,title){ $('snap-title').textContent = title; document.querySelectorAll('.snap-steps i').forEach(i=>i.classList.toggle('on', +i.dataset.s <= n)); $('snap-body').scrollTop = 0; }
 
 // ---------- Step 1: capture ----------
@@ -5596,19 +5644,83 @@ function stepCapture(){
   steps(1,'Snap nameplate');
   const ai = aiReady();
   $('snap-body').innerHTML = `
-    <div class="snap-shots">${S.photos.map((p,i)=>`<div class="snap-shot"><img src="${p}"><button onclick="snapDrop(${i})">✕</button></div>`).join('')}
+    <div class="snap-shots">${S.photos.map((p,i)=>`<div class="snap-shot"><img src="${p}" onclick="stepEdit(${i})"><button onclick="snapDrop(${i})">✕</button><span class="snap-edit" onclick="stepEdit(${i})">✎ crop</span></div>`).join('')}
       <button class="snap-add" onclick="document.getElementById('snap-file').click()"><span>📷</span>${S.photos.length?'Add another angle':'Take photo'}</button></div>
+    <button class="snap-upload" onclick="document.getElementById('snap-files').click()">🖼 Upload from gallery <i>— pick one or many</i></button>
     <div class="snap-tips"><b>For a clean read</b><span>Fill the frame with the plate</span><span>Avoid glare — tilt slightly</span><span>Add a 2nd photo if the plate is split</span></div>
     <div class="snap-engine ${ai?'ok':''}">${ai?'🤖 AI reading via '+esc(appState.settings.aiProvider||'gemini')+' — identifies equipment and fields':'🔤 Offline text reading (no AI key set). For much better accuracy add a Gemini key in <a href="#" onclick="snapClose();showSection(\'settings\');return false;">Settings</a>.'}</div>`;
   $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapManual()">Enter manually</button><button class="btn-primary" ${S.photos.length?'':'disabled'} onclick="snapRead()">Read nameplate ›</button>`;
 }
-window.snapDrop = i => { S.photos.splice(i,1); stepCapture(); };
+window.snapDrop = i => { S.photos.splice(i,1); S.orig.splice(i,1); stepCapture(); };
 window.snapGotFile = async function(inp){
   const f = inp.files && inp.files[0]; inp.value=''; if(!f || !S) return;
-  const url = await new Promise(r=>{const fr=new FileReader(); fr.onload=e=>r(e.target.result); fr.readAsDataURL(f);});
-  S.photos.push(await shrink(url,1600,.85)); stepCapture();
-  if (S.photos.length===1) snapRead(); // one-snap: start reading immediately
+  const url = await shrink(await fileUrl(f),2400,.9);
+  S.orig.push(url); S.photos.push(url); stepEdit(S.photos.length-1, true); // scanner step: rotate / crop, then read
 };
+window.snapGotFiles = async function(inp){
+  const files = Array.from(inp.files||[]); inp.value=''; if(!files.length || !S) return;
+  if (files.length===1){ const url = await shrink(await fileUrl(files[0]),2400,.9); S.orig.push(url); S.photos.push(url); return stepEdit(S.photos.length-1, true); }
+  startBatch(files);
+};
+const fileUrl = f => new Promise(r=>{const fr=new FileReader(); fr.onload=e=>r(e.target.result); fr.readAsDataURL(f);});
+const loadImg = u => new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=u; });
+
+// ---------- Scanner step: rotate + crop (like a document scanner) ----------
+let ED = null;
+window.stepEdit = async function(i, fresh){
+  const src = S.orig[i] || S.photos[i];
+  ED = {i, fresh, rot: 0, box:[0.03,0.03,0.97,0.97], src};
+  steps(1,'Crop & straighten');
+  await edRender();
+  $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="edFull()">Full photo</button><button class="btn-primary" onclick="edApply()">${fresh && S.photos.length===1 ? 'Read nameplate ›' : 'Done ✓'}</button>`;
+};
+async function edRender(){
+  const url = ED.rot ? await rotateUrl(ED.src, ED.rot) : ED.src;
+  ED.view = url;
+  $('snap-body').innerHTML = `<p class="snap-q" style="margin-top:0">Drag the corners around the <b>plate only</b> — tighter crop = much better reading.</p>
+    <div class="ed-wrap"><div class="ed-stage" id="ed-stage"><img src="${url}" id="ed-img" draggable="false"><div class="ed-box" id="ed-box">${['tl','tr','bl','br'].map(c=>`<i class="ed-h ${c}" data-c="${c}"></i>`).join('')}</div></div></div>
+    <div class="ed-tools"><button onclick="edRot(-90)">⟲ Rotate</button><button onclick="edRot(90)">⟳ Rotate</button><button onclick="edAuto()">✨ Auto-straighten</button></div>
+    <p class="ed-hint">Text sideways or upside down? Rotate until it reads left-to-right.</p>`;
+  edPlace(); edBind();
+}
+function edPlace(){ const b=$('ed-box'); if(!b) return; const [x0,y0,x1,y1]=ED.box; Object.assign(b.style,{left:x0*100+'%',top:y0*100+'%',width:(x1-x0)*100+'%',height:(y1-y0)*100+'%'}); }
+function edBind(){
+  const st=$('ed-stage'); let drag=null;
+  const pt = e => { const r=st.getBoundingClientRect(); return [Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)), Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; };
+  st.addEventListener('pointerdown', e => {
+    const h = e.target.dataset.c; const [x,y]=pt(e); const B=ED.box;
+    drag = h ? {h} : (x>B[0]&&x<B[2]&&y>B[1]&&y<B[3] ? {move:[x,y,...B]} : {h:'new', start:[x,y]});
+    if (drag.h==='new') ED.box=[x,y,x,y];
+    st.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  st.addEventListener('pointermove', e => { if(!drag) return; const [x,y]=pt(e); let [x0,y0,x1,y1]=ED.box;
+    if (drag.move){ const [sx,sy,a,b,c,d]=drag.move; let dx=x-sx, dy=y-sy; dx=Math.max(-a,Math.min(1-c,dx)); dy=Math.max(-b,Math.min(1-d,dy)); ED.box=[a+dx,b+dy,c+dx,d+dy]; }
+    else if (drag.h==='new'){ const [sx,sy]=drag.start; ED.box=[Math.min(sx,x),Math.min(sy,y),Math.max(sx,x),Math.max(sy,y)]; }
+    else { if(drag.h.includes('l')) x0=Math.min(x,x1-.05); if(drag.h.includes('r')) x1=Math.max(x,x0+.05); if(drag.h.includes('t')) y0=Math.min(y,y1-.05); if(drag.h.includes('b')) y1=Math.max(y,y0+.05); ED.box=[x0,y0,x1,y1]; }
+    edPlace(); });
+  const end = () => { if (drag && drag.h==='new' && (ED.box[2]-ED.box[0]<.05 || ED.box[3]-ED.box[1]<.05)) { ED.box=[0.03,0.03,0.97,0.97]; edPlace(); } drag=null; };
+  st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+}
+window.edRot = async d => { ED.rot = (ED.rot + d + 360) % 360; const [x0,y0,x1,y1]=ED.box; ED.box = d>0 ? [1-y1,x0,1-y0,x1] : [y0,1-x1,y1,1-x0]; await edRender(); };
+window._edSetBox = b => { if (ED) { ED.box = b; edPlace(); } };
+window.edFull = () => { ED.box=[0,0,1,1]; edApply(); };
+window.edAuto = async () => {
+  const b=$('ed-stage'); if(b) b.classList.add('ed-busy');
+  try { const r = await bestRotation(ED.src); ED.autoDone = true; if (r!==ED.rot){ ED.rot=r; await edRender(); } toast(r? 'Rotated '+r+'°' : 'Already upright'); }
+  catch(e){ toast('Auto-straighten needs the offline reader — rotate by hand'); }
+  if ($('ed-stage')) $('ed-stage').classList.remove('ed-busy');
+};
+window.edApply = async () => {
+  const im = await loadImg(ED.view); const [x0,y0,x1,y1]=ED.box;
+  const c=document.createElement('canvas'); c.width=Math.round((x1-x0)*im.width); c.height=Math.round((y1-y0)*im.height);
+  c.getContext('2d').drawImage(im, x0*im.width, y0*im.height, c.width, c.height, 0,0, c.width, c.height);
+  S.photos[ED.i] = c.toDataURL('image/jpeg',.92); S.cropped = S.cropped || {}; S.cropped[ED.i] = (x1-x0)*(y1-y0) < .9; S.upright = S.upright || {}; S.upright[ED.i] = ED.rot!==0 || !!ED.autoDone;
+  const go = ED.fresh && S.photos.length===1; ED=null;
+  go ? snapRead() : stepCapture();
+};
+async function rotateUrl(u, deg){ const im=await loadImg(u); const c=document.createElement('canvas'); const sw = deg%180!==0;
+  c.width = sw?im.height:im.width; c.height = sw?im.width:im.height; const x=c.getContext('2d'); x.translate(c.width/2,c.height/2); x.rotate(deg*Math.PI/180); x.drawImage(im,-im.width/2,-im.height/2); return c.toDataURL('image/jpeg',.92); }
+function toast(m){ const t=$('snap-toast'); if(!t) return; t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2200); }
 function shrink(url,max,q){ return new Promise(res=>{ const im=new Image(); im.onload=()=>{ const s=Math.min(1,max/Math.max(im.width,im.height)); const c=document.createElement('canvas'); c.width=im.width*s; c.height=im.height*s; c.getContext('2d').drawImage(im,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); }; im.onerror=()=>res(url); im.src=url; }); }
 window.snapManual = function(){ S.fields={}; S.candidates=Object.keys(C).map(k=>({cls:k,confidence:0})); stepWhere(true); };
 
@@ -5619,15 +5731,8 @@ window.snapRead = async function(){
   $('snap-body').innerHTML = `<div class="snap-reading"><img src="${S.photos[0]}"><div class="snap-scan"></div><p id="snap-prog">Reading the plate…</p></div>`;
   $('snap-foot').innerHTML = '';
   try {
-    const out = aiReady() ? await readAI() : await readOCR();
-    S.fields = out.fields||{}; S.raw = out.rawText||''; S.candidates = out.candidates||[];
-    if (out.extra) S.extra = out.extra;
-    ID.forEach(k=>{ if(out[k]!=null && S.fields[k]==null) S.fields[k]=out[k]; });
-    S.item = out.item || null; S.profile = findProfile((out.item||'')+' '+(out.rawText||''));
-    if (S.profile && !S.item) S.item = S.profile.name;
-    if (S.profile){ const pc = S.profile.cls||'appliance'; const c0 = S.candidates.find(c=>c.cls===pc);
-      if (c0) c0.confidence = Math.max(c0.confidence,.85); else S.candidates.unshift({cls:pc,confidence:.85});
-      S.candidates.sort((a,b)=>b.confidence-a.confidence); }
+    const out = await readAny();
+    applyRead(S, out);
     const top = S.candidates[0];
     if (!top || top.confidence < 0.7 || top.cls==='motor') stepWhere(false); else { S.cls = top.cls; stepReview(); }
   } catch(e){
@@ -5635,9 +5740,10 @@ window.snapRead = async function(){
     $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapManual()">Enter manually</button><button class="btn-primary" onclick="stepCaptureRetake()">Retake</button>`;
   }
 };
+async function readAny(photos){ return aiReady() ? await readAI(photos) : await readOCR(photos); }
 window.stepCaptureRetake = () => { S.photos=[]; stepCapture(); };
 
-async function readAI(){
+async function readAI(photos){
   const s = appState.settings, provider = s.aiProvider||'gemini', key = s.aiApiKey;
   const keys = Object.keys(F).filter(k=>!ID.includes(k));
   const prompt = `You are reading an equipment NAMEPLATE photographed during an ASHRAE Level 1 energy audit.
@@ -5646,10 +5752,11 @@ async function readAI(){
 Reply with ONLY JSON, no markdown:
 {"candidates":[{"cls":"<class>","confidence":0.0-1.0}, ...best first, up to 3],
  "item":"what the product is in 1-3 English words (e.g. Coffee maker, Split AC outdoor unit, Chilled water pump)","manufacturer":str|null,"model":str|null,"serial":str|null,"year":str|null,
- "fields":{${keys.map(k=>`"${k}":${['refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType'].includes(k)?'str':'number'}|null`).join(',')}},
+ "fields":{${keys.map(k=>`"${k}":${TEXT_KEYS.includes(k)?'str':'number'}|null`).join(',')},"tag":str|null},
  "notes":str|null,"rawText":"all legible text, lines separated by |"}
-Use null for anything not printed. Year: from a date or date code if plainly printed, else null.`;
-  const imgs = S.photos;
+Use null for anything not printed. Year: from a date or date code if plainly printed, else null.
+Hints: "AIR VOL 2675 LPS" → airLps; "P.T. 837 PA" → staticPa (total static pressure); "POWER SUPPLY 380/3/60" → volts 380, phase 3, hz 60; an asset label like "3.04-0-AHU-27-08E" or "TAG-AHU-34-8B-3" → tag (put it in fields.tag). A heat/BTU meter (e.g. Aquametro AMTRON): class "meter", put the LCD value with its unit in meterReading (e.g. "14.418 kW"), qp → flowM3h, DN → dn. A pressure gauge: class "meter", meterReading = needle value with unit. A sticker that only names a section (e.g. "HEATER & CHW COIL SECTION") → section. For a laptop/AC adapter: watts = rated OUTPUT watts (e.g. 65 W), volts = the higher INPUT voltage (e.g. 240 from 100-240V).`;
+  const imgs = photos || S.photos;
   let text='';
   if (provider==='gemini'){
     const model = s.aiModel || 'gemini-2.0-flash';
@@ -5668,35 +5775,136 @@ Use null for anything not printed. Year: from a date or date code if plainly pri
   }
   const j = JSON.parse(text.replace(/```json|```/g,'').trim().replace(/^[^{]*/,'').replace(/[^}]*$/,''));
   const fields = {}; Object.entries(j.fields||{}).forEach(([k,v])=>{ if(v!==null && v!=='' && F[k]) fields[k]=v; });
+  if (fields.tag && !j.tag) j.tag = fields.tag;
   if (j.notes) S.notes = j.notes;
   return {...j, fields, candidates:(j.candidates||[]).filter(c=>C[c.cls]).sort((a,b)=>b.confidence-a.confidence)};
 }
 
-async function readOCR(){
+// ---------- Offline reader: clean the image like a scanner, then OCR ----------
+let _tw = null;
+async function ocrWorker(){
   if (!window.Tesseract){
-    $('snap-prog').textContent='Loading offline reader (first time only)…';
+    if ($('snap-prog')) $('snap-prog').textContent='Loading offline reader (first time only)…';
     await new Promise((res,rej)=>{const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; sc.onload=res; sc.onerror=()=>rej(new Error('Offline reader could not load — check connection or set an AI key.')); document.head.appendChild(sc);});
   }
-  let txt='';
-  for (const u of S.photos){
-    const r = await Tesseract.recognize(u,'eng',{logger:m=>{ if(m.status==='recognizing text' && $('snap-prog')) $('snap-prog').textContent='Reading text… '+Math.round(m.progress*100)+'%'; }});
-    txt += '\n' + r.data.text;
+  if (!_tw) { _tw = await Tesseract.createWorker('eng'); }
+  return _tw;
+}
+// Flatten uneven light & glare (divide by blurred background), stretch contrast, upscale small text,
+// optional gamma to pull faint engraved/etched characters out of metal plates.
+async function enhance(u, {gamma=1, target=2200, maxUp=3}={}){
+  const im = await loadImg(u);
+  const sc = Math.min(maxUp, target/Math.max(im.width, im.height));
+  const W = Math.round(im.width*sc), H = Math.round(im.height*sc);
+  const c = document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d',{willReadFrequently:true});
+  x.imageSmoothingQuality='high'; x.drawImage(im,0,0,W,H);
+  // background estimate: shrink hard then blow back up = cheap large blur
+  // step down in halves (proper averaging), to ~1/60 of the long side = blur wider than any character
+  let src = c, sw = W, sh = H; const tgt = Math.max(W,H)/60;
+  while (Math.max(sw,sh)/2 > Math.max(tgt*Math.max(W,H)/Math.max(W,H), 16) && Math.max(sw,sh) > 24){ const t=document.createElement('canvas'); t.width=Math.max(4,sw>>1); t.height=Math.max(4,sh>>1); t.getContext('2d').drawImage(src,0,0,t.width,t.height); src=t; sw=t.width; sh=t.height; }
+  const bw = sw, bh = sh, b = src; const bx = b.getContext('2d',{willReadFrequently:true});
+  const B = document.createElement('canvas'); B.width=W; B.height=H; const Bx=B.getContext('2d',{willReadFrequently:true}); Bx.imageSmoothingQuality='high'; Bx.drawImage(b,0,0,W,H);
+  const id = x.getImageData(0,0,W,H), d = id.data, bg = Bx.getImageData(0,0,W,H).data;
+  const n = W*H, r = new Float32Array(n);
+  for (let i=0,j=0;i<n;i++,j+=4){ const g = .299*d[j]+.587*d[j+1]+.114*d[j+2], gb = .299*bg[j]+.587*bg[j+1]+.114*bg[j+2]; r[i] = g/(gb+1); }
+  // 1–99 % stretch via histogram
+  const hist = new Uint32Array(1024); let mx = 0; for (let i=0;i<n;i++){ if (r[i]>mx) mx=r[i]; }
+  for (let i=0;i<n;i++) hist[Math.min(1023, (r[i]/mx*1023)|0)]++;
+  const pct = q => { let acc=0, t=n*q; for (let k=0;k<1024;k++){ acc+=hist[k]; if (acc>=t) return k/1023*mx; } return mx; };
+  const lo = pct(.01), hi = pct(.99), span = (hi-lo)||1; let sum=0;
+  for (let i=0;i<n;i++){ let v = (r[i]-lo)/span; v = v<0?0:v>1?1:v; if (gamma!==1) v = Math.pow(v,gamma); r[i]=v*255; sum+=r[i]; }
+  const inv = sum/n < 110; // light text on dark plate → invert
+  for (let i=0,j=0;i<n;i++,j+=4){ const v = inv ? 255-r[i] : r[i]; d[j]=d[j+1]=d[j+2]=v; d[j+3]=255; }
+  x.putImageData(id,0,0);
+  enhance.lastScale = sc;
+  return c.toDataURL('image/png');
+}
+async function recog(u, psm){ const w = await ocrWorker(); await w.setParameters({tessedit_pageseg_mode: String(psm||11)}); const r = await w.recognize(u); return r.data; }
+// Which way up? Try 0/90/270/180 on a small cleaned copy, keep the most confident.
+async function bestRotation(u){
+  const small = await enhance(u, {target: 1100, maxUp: 1.5});
+  let best = {rot:0, conf:-1};
+  for (const rot of [0,90,270,180]){
+    const d = await recog(rot ? await rotateUrl(small, rot) : small, 11);
+    const words = (d.words||[]).filter(w=>w.confidence>60 && /[A-Za-z0-9]{2,}/.test(w.text)).length;
+    const score = d.confidence + words*2;
+    if (score > best.conf) best = {rot, conf:score};
+    if (rot===0 && d.confidence > 72) break; // clearly upright already
+  }
+  return best.rot;
+}
+async function readOCR(photos){
+  photos = photos || S.photos;
+  let txt=''; const prog = m => { if ($('snap-prog')) $('snap-prog').textContent = m; };
+  for (let i=0;i<photos.length;i++){
+    let u = photos[i];
+    if (!(S.upright && S.upright[i] && photos===S.photos)) { prog('Checking orientation…'); const rot = await bestRotation(u); if (rot) u = await rotateUrl(u, rot); }
+    let psm = (S.cropped && S.cropped[i]) ? 6 : 11;
+    prog('Cleaning image & reading text…');
+    let a = await recog(await enhance(u,{gamma:1}), psm);
+    // not cropped by hand → find where the readable text sits (the plate), crop to it and read again at higher zoom
+    if (psm===11){
+      const sc = enhance.lastScale, ws = (a.words||[]).filter(w=>w.confidence>55 && /[A-Za-z0-9]{3,}/.test(w.text));
+      if (ws.length >= 3){
+        const im = await loadImg(u);
+        let x0=1e9,y0=1e9,x1=0,y1=0; ws.forEach(w=>{ x0=Math.min(x0,w.bbox.x0); y0=Math.min(y0,w.bbox.y0); x1=Math.max(x1,w.bbox.x1); y1=Math.max(y1,w.bbox.y1); });
+        x0/=sc; y0/=sc; x1/=sc; y1/=sc; const px=(x1-x0)*.08+10, py=(y1-y0)*.15+10;
+        x0=Math.max(0,x0-px); y0=Math.max(0,y0-py); x1=Math.min(im.width,x1+px); y1=Math.min(im.height,y1+py);
+        if ((x1-x0)*(y1-y0) < im.width*im.height*.6){
+          const cc=document.createElement('canvas'); cc.width=x1-x0; cc.height=y1-y0; cc.getContext('2d').drawImage(im,x0,y0,cc.width,cc.height,0,0,cc.width,cc.height);
+          u = cc.toDataURL('image/jpeg',.92); psm = 6; prog('Plate found — zooming in…');
+          const a2 = await recog(await enhance(u,{gamma:1}), psm);
+          a = {text: a.text + '\n' + a2.text};
+        }
+      }
+    }
+    prog('Second pass for faint / engraved text…');
+    const b = await recog(await enhance(u,{gamma:1.8}), psm);
+    txt += '\n' + a.text + '\n' + b.text;
   }
   return parseText(txt);
+}
+function applyRead(T, out){
+  window.__lastRaw = out.rawText;
+  T.fields = out.fields||{}; T.raw = out.rawText||''; T.candidates = out.candidates||[]; T.notes = out.notes || T.notes;
+  ID.forEach(k=>{ if(out[k]!=null && T.fields[k]==null) T.fields[k]=out[k]; });
+  T.item = out.item || null; T.profile = findProfile((out.item||'')+' '+(out.rawText||''));
+  if (T.profile && !T.item) T.item = T.profile.name;
+  if (T.profile){ const pc = T.profile.cls||'appliance'; const c0 = T.candidates.find(c=>c.cls===pc);
+    if (c0) c0.confidence = Math.max(c0.confidence,.85); else T.candidates.unshift({cls:pc,confidence:.85});
+    T.candidates.sort((a,b)=>b.confidence-a.confidence); }
+  // a meter's LCD "14.418 kW" is a reading, not a rating
+  if ((T.candidates[0]||{}).cls==='meter' && T.fields.kw!=null){ if (!T.fields.meterReading && !Number.isInteger(+T.fields.kw)) T.fields.meterReading = T.fields.kw+' kW'; delete T.fields.kw; }
+  T.isPlate = /AIR\s*VOL|MOTOR\s*H|SERIAL|POWER\s*SUPPLY|RATED|INPUT/i.test(out.rawText||'');
 }
 // Regex reader for plain OCR text
 function parseText(t){
   let T = ' '+t.toUpperCase().replace(/[|]/g,' ').replace(/\s+/g,' ')+' ';
   // Cyrillic / OCR look-alikes on CE/EAC plates: кВт→KW, Вт/BT→W, В→V, А→A, Гц→HZ
+  // OCR digit confusions inside numbers: O→0, $/S→5 before digits, H2→HZ
+  T = T.replace(/(\d)O(?=\d)/g,'$10').replace(/(\d)[O](?=\s*[VAW]\b)/g,'$10').replace(/[$](?=\d)/g,'5').replace(/(\d)\s*H2\b/g,'$1HZ').replace(/(\d)\s*HE\b/g,'$1HZ');
   T = T.replace(/(\d)\s*КВТ/g,'$1 KW').replace(/(\d)\s*(?:ВТ|BT)\b/g,'$1W').replace(/(\d)\s*ВТ/g,'$1W')
        .replace(/(\d)\s*ГЦ/g,'$1HZ').replace(/(\d)\s*В\b/g,'$1V').replace(/(\d)\s*А\b/g,'$1A').replace(/~\s*(\d{2})\s*HZ/g,' $1HZ');
   const f = {}, g = (re,k,fn) => { const m = T.match(re); if (m && f[k]==null) f[k] = fn ? fn(m) : num(m[1]); };
+  const gMax = (re,k) => { let best=null; for (const m of T.matchAll(new RegExp(re.source, re.flags.includes('g')?re.flags:re.flags+'g'))) { const v=num(m[1]); if (v!=null && (best==null||v>best)) best=v; } if (best!=null && f[k]==null) f[k]=best; };
+  // power supply written as 380/3/60 or 380V/3PH/60HZ
+  { const m = T.match(/(\d{3})\s*V?\s*\/\s*([13])\s*(?:PH)?\s*\/\s*(50|60)/); if (m){ f.volts=+m[1]; f.phase=+m[2]; f.hz=+m[3]; } }
+  // AHU data
+  g(/(\d{3,6})\s*L\.?\s?P\.?\s?S\b/,'airLps'); g(/AIR\s*VOL\w*\W{0,3}(\d{3,6})/,'airLps');
+  g(/P\.?\s?T\.?\W{0,3}(\d{2,4})\s*PA\b/,'staticPa'); if (/AIR\s*VOL|\d\s*L\.?P\.?S|\d\s*CFM|STATIC/.test(T)) g(/(\d{2,4})\s*PA\b/,'staticPa');
+  g(/MOTOR\s*H\.?P\.?\W{0,3}(\d+(?:[.,]\d+)?)/,'hp');
+  g(/(\d{3,4})\s*R\.?P\.?M/,'rpm');
+  { const parts = [['SUPPLY FAN',/SUPPLY\s*FAN/],['HEATER',/HEATER/],['CHW COIL',/CHW\s*COIL|CHILLED WATER COIL/],['FILTER',/FILTER/],['MIXING',/MIXING/]].filter(([,re])=>re.test(T)).map(([n])=>n);
+    if (parts.length) f.section = parts.join(' / ') + (/SECTION/.test(T) && parts.length<=2 ? ' section' : ''); }
+  // meters
+  g(/\bQP\W{0,3}(\d+(?:[.,]\d+)?)\s*M/,'flowM3h'); g(/\bDN\s*(\d{2,4})\b/,'dn');
+  g(/(?<![.\d])(\d{1,6}[.,]\d{1,3})\s*(KWH|MWH|KW|M3|GJ)\b/,'meterReading',m=>m[1]+' '+m[2].replace('KWH','kWh').replace('MWH','MWh').replace('KW','kW'));
   g(/(\d+(?:[.,]\d+)?)\s*HP\b/,'hp'); g(/\bHP\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'hp');
   g(/(\d+(?:[.,]\d+)?)\s*KW\b/,'kw'); g(/\bKW\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kw');
   g(/(\d+(?:[.,]\d+)?)\s*KVA\b/,'kva');
-  g(/(?<![\d.,K])(\d{1,5}(?:[.,]\d+)?)\s*W(?:ATTS?)?\b/,'watts'); g(/\b(?:POWER|INPUT|RATED POWER)\s*[:\-]?\s*(\d{1,5})\s*W\b/,'watts'); g(/\bKVA\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kva');
-  g(/(\d{3,4})\s*(?:\/\s*\d{3,4}\s*)?V(?:OLTS?)?\b/,'volts'); g(/\bV(?:OLTS?)?\s*[:\-]?\s*(\d{3,4})/,'volts');
-  g(/(\d+(?:[.,]\d+)?)\s*A(?:MPS?)?\b(?!\w)/,'amps'); g(/\b(?:AMPS?|F\.?L\.?A\.?|I\s*N)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'amps');
+  gMax(/(?<![\d.,K])(\d{1,5}(?:[.,]\d+)?)\s*W(?:ATTS?)?\b/,'watts'); g(/\b(?:POWER|INPUT|RATED POWER)\s*[:\-]?\s*(\d{1,5})\s*W\b/,'watts'); g(/\bKVA\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kva');
+  g(/(?:INPUT|ENTR\w*|EINGANG)[^]{0,30}?\d{2,3}\s*-\s*(\d{3})\s*V/,'volts'); g(/\d{2,3}\s*-\s*(\d{3})\s*V\b/,'volts'); g(/(\d{3,4})\s*(?:\/\s*\d{3,4}\s*)?V(?:OLTS?|AC)?\b/,'volts'); g(/\bV(?:OLTS?)?\s*[:\-]?\s*(\d{3,4})/,'volts');
+  g(/(\d+[.,]\d+)\s*A(?:MPS?)?\b(?!\w)/,'amps'); g(/\d{2,3}\s*V\W{0,6}(\d{1,4})\s*A\b/,'amps'); g(/\b(?:AMPS?|F\.?L\.?A\.?|I\s*N)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'amps');
   g(/(\d{3,4})\s*(?:R\.?P\.?M|MIN-?1|1\/MIN)/,'rpm'); g(/\bR\.?P\.?M\.?\s*[:\-]?\s*(\d{3,4})/,'rpm');
   g(/\b(50|60)\s*HZ/,'hz'); g(/\b([13])\s*(?:PH|PHASE|~)/,'phase');
   g(/(?:COS\s*(?:PHI|[ΦφO0])|P\.?F\.?)\s*[:\-]?\s*(0[.,]\d+)/,'pf');
@@ -5711,31 +5919,35 @@ function parseText(t){
   g(/\bR\.?L\.?A\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'rla'); g(/\bL\.?R\.?A\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'lra');
   g(/(\d+(?:[.,]\d+)?)\s*M3\/H/,'flowM3h'); g(/(\d+(?:[.,]\d+)?)\s*GPM/,'flowGpm'); g(/\bH(?:EAD)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*M\b/,'headM');
   g(/(\d+(?:[.,]\d+)?)\s*CFM/,'cfm'); g(/(\d+(?:[.,]\d+)?)\s*BAR\b/,'pressureBar');
-  g(/(?:IMPEDANCE|UK|%Z|Z%)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'impedancePct'); g(/\b(ONAN|ONAF|AN|AF|KNAN)\b/,'coolingType',m=>m[1]);
-  g(/(\d+(?:[.,]\d+)?)\s*(?:L|LITRES?|LITERS?)\b/,'tankL'); g(/(\d+(?:[.,]\d+)?)\s*(?:GAL|GALLONS?)\b/,'tankGal');
+  if (/TRANSFORMER|KVA|IMPEDANCE/.test(T)) g(/(?:IMPEDANCE|\bUK\b|%Z|Z%)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'impedancePct'); g(/\b(ONAN|ONAF|KNAN|KNAF)\b/,'coolingType',m=>m[1]); if (/TRANSFORMER|KVA|IMPEDANCE/.test(T)) g(/(?:COOLING|COOL\.?)\W{0,3}\b(AN|AF)\b/,'coolingType',m=>m[1]);
+  g(/(\d+(?:[.,]\d+)?)\s*(?:LITRES?|LITERS?)\b/,'tankL'); if (/HEATER|TANK|CAPACITY|GEYSER/.test(T) && !/AIR\s*VOL/.test(T)) g(/(?:CAPACITY|VOLUME|TANK)\W{0,3}(\d{2,4})\s*L\b/,'tankL'); g(/(\d+(?:[.,]\d+)?)\s*(?:GAL|GALLONS?)\b/,'tankGal');
   g(/\b(?:19|20)\d{2}\b/,'year',m=>m[0]);
   g(/(?:S\/?N|SERIAL(?:\s*NO)?\.?)\s*[:#\-]?\s*([A-Z0-9\-]{5,})/,'serial',m=>m[1]);
-  g(/(?:MODEL|TYPE)\s*(?:NO\.?)?\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{3,})/,'model',m=>m[1]);
-  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY','SATURN','TEFAL','MOULINEX','BRAUN','KENWOOD','DELONGHI','PANASONIC','SHARP','CANON','EPSON','DELL','LENOVO','BOSCH','ELECTROLUX','WHIRLPOOL','HAIER','MIDEA','HISENSE','SONY','XEROX','RICOH','KYOCERA','NESPRESSO','KRUPS','HOOVER','BEKO','INDESIT','ZANUSSI','TCL','BLACK+DECKER','SIEMENS','SMEG','GORENJE','HEWLETT','BROTHER','APC','VERTIV','FUJITSU','TOSHIBA','DAEWOO','NIKAI','GEEPAS','KELVINATOR','GENERAL','O GENERAL','SUPER GENERAL','WANSA'];
+  g(/\b(\d\.\d{2}-\d-[A-Z]{2,5}-[0-9A-Z]+(?:-[0-9A-Z]+)*)/,'tag',m=>m[1]); g(/\bTAG\W{0,3}([A-Z0-9][A-Z0-9\-]{3,})/,'tag',m=>m[1].replace(/^-+/,''));
+  g(/(?:MODEL|TYPE)\s*(?:NO\.?)?\s*[:;#\-\s]{0,3}((?=[A-Z0-9\-\/\.]*\d)[A-Z0-9][A-Z0-9\-\/\.]{2,}(?:\s[A-Z]{2}\b)?)/,'model',m=>m[1]);
+  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY','SATURN','TEFAL','MOULINEX','BRAUN','KENWOOD','DELONGHI','PANASONIC','SHARP','CANON','EPSON','DELL','LENOVO','BOSCH','ELECTROLUX','WHIRLPOOL','HAIER','MIDEA','HISENSE','SONY','XEROX','RICOH','KYOCERA','NESPRESSO','KRUPS','HOOVER','BEKO','INDESIT','ZANUSSI','TCL','BLACK+DECKER','SIEMENS','SMEG','GORENJE','HEWLETT','BROTHER','APC','VERTIV','FUJITSU','TOSHIBA','DAEWOO','NIKAI','GEEPAS','KELVINATOR','O GENERAL','SUPER GENERAL','WANSA','ROYAL TEMP','ROYALTEMP','AQUAMETRO','AQUA METRO','AMTRON','WIKA','PETRA','SKM','ALMUTLAQ','AL-ZAMIL','KHIARY','ARMSTRONG','EBARA','LOWARA','PEDROLLO','CALEFFI','HONEYWELL','JOHNSON CONTROLS','BELIMO'];
   const Tns = T.replace(/[^A-Z+]/g,'');
-  const b = brands.find(x=>T.includes(' '+x)) || brands.find(x=>x.length>=5 && Tns.startsWith(x)) || brands.find(x=>x.length>=6 && Tns.includes(x.replace(/[^A-Z+]/g,'')));
+  const b = brands.find(x=>new RegExp('(^|[^A-Z])'+x.replace(/[.+]/g,'\\$&')+'(?![A-Z])').test(T)) || brands.find(x=>x.length>=5 && Tns.startsWith(x)) || brands.find(x=>x.length>=6 && Tns.includes(x.replace(/[^A-Z+]/g,'')));
   let mf = b || null;
-  if (!mf) { const w = (t.split(/\n/).map(l=>l.trim()).find(l=>/^[A-Za-z][A-Za-z\-&.]{2,}/.test(l))||'').match(/^[A-Za-z][A-Za-z\-&.]{2,}/); if (w && !/^(MODEL|TYPE|SERIAL|MADE|INPUT|RATED|POWER|WARNING|CAUTION)$/i.test(w[0])) mf = w[0]; }
-  const ident = {manufacturer: mf ? mf.charAt(0)+mf.slice(1).toLowerCase() : null, item: (findProfile(t)||{}).name || null};
-  ['year','serial','model'].forEach(k=>{ ident[k]=f[k]||null; delete f[k]; });
+  const ident = {manufacturer: mf ? mf.split(' ').map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join(' ') : null, item: (findProfile(t)||{}).name || null};
+  if (b && /AMTRON|AQUA/.test(b)) ident.manufacturer = 'Aquametro'; if (b && /ROYAL/.test(b)) ident.manufacturer = 'Royal Temp';
+  ['year','serial','model','tag'].forEach(k=>{ ident[k]=f[k]||null; delete f[k]; });
   // class scoring from keywords
-  const sc = {motor:0,pump:0,fan:0,air_compressor:0,hvac:0,chiller:0,boiler:0,transformer:0,panel:0,dhw:0,lighting:0,appliance:0};
+  const sc = {motor:0,pump:0,fan:0,ahu:0,air_compressor:0,hvac:0,chiller:0,boiler:0,transformer:0,panel:0,dhw:0,lighting:0,appliance:0,meter:0};
   const k = (cls,re,w) => { if (re.test(T)) sc[cls]+=w; };
   k('motor',/\bRPM|MIN-1|FRAME|INS\.?\s*CL|\bIP5|\bIP6|\bS\.?F\.?\b|DUTY\s*S1|\bIE[1-5]\b/,2); if(f.hp||f.kw) sc.motor+=1;
-  k('pump',/PUMP|HEAD|M3\/H|GPM|IMPELLER/,3); k('fan',/\bFAN\b|BLOWER|CFM|AHU/,3);
+  k('pump',/PUMP|\bHEAD\b|IMPELLER/,3); k('fan',/\bFAN\b|BLOWER|CFM/,2);
+  k('ahu',/AIR\s*VOL|\bAHU\b|\d\s*L\.?P\.?S\b|COMPONENT\s*ASSEMBLY|MIXING SECTION|CHW COIL|SUPPLY FAN|ROYAL ?TEMP/,4);
+  k('meter',/ENERGY CALC|AMTRON|\bQP\s*[:=]?\s*\d|\bDN\s*\d{2}\b.*\bPN|PS\/PN|EN ?837|\bPSI\b.*\bBAR\b|LCD LOOP/,4);
   k('air_compressor',/COMPRESSOR.*(BAR|PSI|FAD)|\bFAD\b|SCREW/,3);
-  k('hvac',/REFRIGERANT|R-?410|R-?22|R-?32|SEER|\bEER|M\.?C\.?A|M\.?O\.?P|BTU|AIR CONDITION|HEAT PUMP|OUTDOOR UNIT|INDOOR UNIT/,3);
+  k('hvac',/REFRIGERANT|\bR-?410A\b|\bR-?22\b|\bR-?32\b|SEER|\bEER|M\.?C\.?A|M\.?O\.?P|BTU|AIR CONDITION|HEAT PUMP|OUTDOOR UNIT|INDOOR UNIT/,3);
   k('chiller',/CHILLER/,5); k('boiler',/BOILER|BURNER/,5);
   k('transformer',/TRANSFORMER|ONAN|\bHV\b|\bLV\b|IMPEDANCE|VECTOR|DYN11/,3); if(f.kva) sc.transformer+=2;
   k('panel',/PANEL|SWITCHBOARD|BUSBAR|MCCB|\bACB\b|ICW|\bAIC\b/,3);
   k('dhw',/WATER HEATER|GEYSER|HEATER.*(L|GAL)|\bUEF\b/,4); k('lighting',/LAMP|LED|LUMINAIRE|BALLAST|DRIVER|LUMEN|LM\b/,3);
   const pf0 = findProfile(t); if (pf0) sc[pf0.cls||'appliance'] += 6;
-  if (f.watts && !f.kw && !f.hp && !f.kva) sc.appliance += 2;
+  if (f.watts && !f.kw && !f.hp && !f.kva && !f.airLps) sc.appliance += 2;
+  if (f.airLps || f.staticPa) sc.ahu += 3;
   const tot = Object.values(sc).reduce((a,b)=>a+b,0) || 1;
   const candidates = Object.entries(sc).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cls,v])=>({cls,confidence:r2(Math.min(.95,v/tot*.9),2)}));
   return {fields:f, candidates, rawText:t, ...ident};
@@ -5779,6 +5991,16 @@ function derive(){
   if (num(f.tankL)!=null && num(f.tankGal)==null) d.tankGal = r2(num(f.tankL)/3.785,0);
   if (num(f.inputKbtuh)!=null && num(f.inputKw)==null) d.inputKw = r2(num(f.inputKbtuh)/3.412);
   if (num(f.watts)==null && V && A) d.watts = r2((ph===3?Math.sqrt(3):1)*V*A*(num(f.pf)||0.9),0);
+  // AHU / fan: airflow, air power, motor loading, specific fan power
+  const lps = num(f.airLps) ?? (num(f.cfm)!=null ? num(f.cfm)/2.119 : null);
+  if (num(f.airLps)!=null && num(f.cfm)==null) d.cfm = r2(num(f.airLps)*2.119,0);
+  if (num(f.cfm)!=null && num(f.airLps)==null) d.airLps = r2(num(f.cfm)/2.119,0);
+  const pa = num(f.staticPa), mkw = num(f.kw) ?? d.kw;
+  if (lps && pa){ d.airKw = r2(lps/1000*pa/1000, 2); d.shaftKw = r2(d.airKw/0.65, 2); // ~65 % fan total efficiency
+    if (mkw) d.motorLoad = Math.round(d.shaftKw/mkw*100);
+    d.sfp = r2((d.shaftKw/0.9)/(lps/1000), 2); } // kW per m³/s at the motor input
+  else if (lps && mkw) d.sfp = r2((mkw*0.75/0.9)/(lps/1000), 2);
+  if (!f.volts && S && (S.cls==='appliance' || (S.profile && S.profile.h))) d.volts = 230; // KSA single-phase supply
   const yr = num(f.year); if (yr && yr>1950) d.age = new Date().getFullYear()-yr;
   S.derived = d; return d;
 }
@@ -5790,31 +6012,35 @@ function stepReview(){
   steps(3, c.icon+' '+c.label + (S.fromMotor ? ' motor' : ''));
   const exp = S.fromMotor ? [...new Set(['kw','hp','volts','amps','rpm','phase','pf','effPct','ieClass',...c.expect.slice(0,3)])] : c.expect;
   // collapse alternates: show one of each pair that has a value
-  const pairs = [['kw','hp'],['coolTons','coolKw','coolBtuh'],['tankL','tankGal'],['inputKw','inputKbtuh'],['flowM3h','flowGpm']];
+  const pairs = [['airLps','cfm'],['kw','hp'],['coolTons','coolKw','coolBtuh'],['tankL','tankGal'],['inputKw','inputKbtuh'],['flowM3h','flowGpm']];
   const missing = exp.filter(k => val(k)==null && !pairs.some(p=>p.includes(k) && p.some(o=>val(o)!=null)));
   const r22 = /R-?22\b/.test(S.fields.refrigerant||'');
   const age = S.derived.age;
   const nm = S.extra.name || defaultName();
   const field = k => { const [lab,u]=F[k]; const v=S.fields[k], dv=S.derived[k], has=v!=null;
-    return `<label class="sf ${!has&&dv==null?'miss':''}"><span>${lab}${u?` <i>${u}</i>`:''}${!has&&dv!=null?' <em>auto</em>':''}</span><input data-k="${k}" value="${esc(has?v:(dv??''))}" ${dv!=null&&!has?'class="auto"':''} inputmode="${['manufacturer','model','serial','refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType'].includes(k)?'text':'decimal'}" onchange="snapSet('${k}',this.value)"></label>`; };
+    return `<label class="sf ${!has&&dv==null?'miss':''}"><span>${lab}${u?` <i>${u}</i>`:''}${!has&&dv!=null?' <em>auto</em>':''}</span><input data-k="${k}" value="${esc(has?v:(dv??''))}" ${dv!=null&&!has?'class="auto"':''} inputmode="${TEXT_KEYS.includes(k)?'text':'decimal'}" onchange="snapSet('${k}',this.value)"></label>`; };
   let h = `<div class="snap-summary"><img src="${S.photos[0]||''}" ${S.photos[0]?'':'style="display:none"'}><div>
       <label class="sf big"><span>Name / tag</span><input id="snap-name" value="${esc(nm)}" onchange="S_name(this.value)"></label></div></div>`;
   const flags = [];
   if (r22) flags.push('<span class="badge badge-red">R-22 — phase-out refrigerant, flag for replacement</span>');
   if (age!=null && age>=15) flags.push(`<span class="badge badge-amber">${age} years old — near/after end of service life</span>`);
   if (num(S.fields.ieClass?.replace?.(/\D/g,''))!=null && /IE1/.test(S.fields.ieClass)) flags.push('<span class="badge badge-amber">IE1 motor — candidate for IE3/IE4 upgrade</span>');
+  const D = S.derived;
+  if (D.motorLoad!=null) flags.push(D.motorLoad < 50 ? `<span class="badge badge-amber">Fan needs ≈ ${D.shaftKw} kW shaft power — motor only ~${D.motorLoad}% loaded (oversized; check belt/VSD)</span>` : D.motorLoad > 105 ? `<span class="badge badge-red">Fan duty ≈ ${D.shaftKw} kW exceeds the motor rating (~${D.motorLoad}%) — check nameplate/airflow</span>` : `<span class="badge badge-gray">Fan duty ≈ ${D.shaftKw} kW shaft — motor ~${D.motorLoad}% loaded</span>`);
+  if (D.sfp!=null) flags.push(D.sfp > 2 ? `<span class="badge badge-amber">Specific fan power ≈ ${D.sfp} kW/(m³/s) — high (good practice ≤ 1.6–2.0); EC fan / VSD candidate</span>` : `<span class="badge badge-gray">Specific fan power ≈ ${D.sfp} kW/(m³/s)</span>`);
+  if (S.cls==='meter') flags.push('<span class="badge badge-gray">Meter reading is logged as a spot measurement with the date & time</span>');
   if (missing.length) flags.push(`<span class="badge badge-gray">${missing.length} expected value${missing.length>1?'s':''} not found — highlighted below</span>`);
   if (flags.length) h += `<div class="snap-flags">${flags.join('')}</div>`;
   h += `<div class="snap-group"><h4>Nameplate data</h4><div class="snap-grid">${exp.map(field).join('')}</div></div>`;
   // context-specific questions the plate can't answer
   h += `<div class="snap-group"><h4>On site</h4><div class="snap-grid">`;
   h += `<label class="sf"><span>Condition</span><select onchange="S_extra('condition',this.value)">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${ (S.extra.condition||'Fair')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
-  if (['motor','pump','fan','air_compressor','other','boiler','appliance'].includes(S.cls))
+  if ([...ROT,'appliance'].includes(S.cls))
     h += `<label class="sf"><span>Runs</span><select onchange="S_name(document.getElementById('snap-name').value);S_extra('mode',this.value)">${['Business Hours 8am-6pm','24/7 Continuous','Standby/Backup-normally off','Decommissioned-still connected'].map(o=>`<option ${(S.extra.mode||'Business Hours 8am-6pm')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
   if (S.cls==='lighting') h += `<label class="sf"><span>Space</span><input value="${esc(S.extra.space||'')}" onchange="S_extra('space',this.value)"></label><label class="sf"><span>Fixture count</span><input inputmode="numeric" value="${esc(S.extra.count||'')}" onchange="S_extra('count',this.value)"></label>`;
   if (S.cls==='appliance') h += `<label class="sf"><span>Quantity</span><input inputmode="numeric" value="${esc(S.extra.count||1)}" oninput="S_extra('count',this.value);const el=document.getElementById('snap-kpis');if(el)el.innerHTML=window._snapKpis()"></label>`;
   h += `</div>`;
-  if (['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls) || S.fromMotor)
+  if (ROT.includes(S.cls) || S.fromMotor)
     h += `<label class="snap-check"><input type="checkbox" ${S.extra.toLoads!==false?'checked':''} onchange="S_extra('toLoads',this.checked)"> Also add to the Electrical load list</label>`;
   h += `</div>`;
   h += estimateBlock();
@@ -5823,10 +6049,10 @@ function stepReview(){
   $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="stepWhereAgain()">‹ Type</button><button class="btn-primary" onclick="snapSave()">Save to ${esc(secLabel(c.sec))} ✓</button>`;
 }
 // ---------- Energy & cost estimate ----------
-const ESTIMATED = ['appliance','motor','pump','fan','air_compressor','other','boiler'];
+const ESTIMATED = ['appliance', ...ROT];
 function estBase(){
   const f=S.fields, d=S.derived, pr=S.profile||{};
-  const rot = S.fromMotor || ['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls);
+  const rot = S.fromMotor || ROT.includes(S.cls);
   const mh = MODE_HRS[S.extra.mode||'Business Hours 8am-6pm'];
   const kw = S.cls==='appliance' ? (num(f.watts)??d.watts??0)/1000 : (d.kwInput ?? num(f.inputKw) ?? num(f.kw) ?? d.kw ?? (num(f.watts)??d.watts??0)/1000);
   return { kw, h: S.extra.h ?? (rot ? mh[0] : pr.h ?? 9), d: S.extra.d ?? (rot ? mh[1] : pr.d ?? 261),
@@ -5858,7 +6084,8 @@ window.snapEst = function(k,v,div){ const n=num(v); if(n==null) return; S.extra[
 function secLabel(s){ const n = NAV_ITEMS.find(x=>x.id===s); return n ? n.label : s; }
 function defaultName(){
   const f=S.fields, c=C[S.cls], p = num(f.kw)??S.derived.kw, t = num(f.coolTons)??S.derived.coolTons;
-  const size = t ? t+' TR' : f.kva ? f.kva+' kVA' : p ? p+' kW' : f.lampW ? f.lampW+' W' : '';
+  const size = t ? t+' TR' : f.kva ? f.kva+' kVA' : f.airLps ? f.airLps+' L/s' : p ? p+' kW' : f.lampW ? f.lampW+' W' : f.watts ? f.watts+' W' : '';
+  if (f.tag) return f.tag + (S.cls==='ahu' && f.model ? ' — '+f.model : '');
   const what = S.fromMotor ? c.label+' motor' : (S.item || c.label);
   return [what, [f.manufacturer, f.model].filter(Boolean).join(' ') || size].filter(Boolean).join(' — ');
 }
@@ -5870,8 +6097,13 @@ window.stepWhereAgain = () => stepWhere(!S.photos.length);
 
 // ---------- Save into the audit ----------
 window.snapSave = async function(){
+  const name = ($('snap-name')?.value || S.extra.name || defaultName()).trim();
+  const res = await saveCore(name); if (!res) return;
+  saveDone(res);
+};
+async function saveCore(name){
+  derive();
   const f = S.fields, d = S.derived, c = C[S.cls], ex = S.extra;
-  const name = ($('snap-name')?.value || defaultName()).trim();
   const cond = ex.condition || 'Fair';
   const id = [f.manufacturer, f.model, f.serial && 'S/N '+f.serial].filter(Boolean).join(' · ');
   const kw = num(f.kw) ?? d.kw;
@@ -5886,6 +6118,18 @@ window.snapSave = async function(){
       refrigerant:ref, eff:eff[0], effUnit:eff[1], controls:'', economizer:'No',
       notes:[noteBits, f.refrigCharge&&'charge '+f.refrigCharge+' kg', f.mca&&'MCA '+f.mca, f.mop&&'MOP '+f.mop, f.rla&&'RLA '+f.rla, ref==='Other'&&f.refrigerant].filter(Boolean).join(', ')});
     if (typeof renderHVACRows==='function') renderHVACRows();
+  } else if (S.cls==='ahu'){
+    const chw = /CHW|CHILLED/i.test((f.section||'')+' '+(S.raw||''));
+    appState.hvac.rows.push({name, type: chw ? 'Chilled Water' : 'Other', cap:'', capUnit:'tons', year:f.year||'', condition:cond, refrigerant:'Other', eff:'', effUnit:'SEER', controls:'', economizer:'No',
+      notes:[id, f.tag && f.tag!==name && 'tag '+f.tag, (f.airLps??d.airLps) && (f.airLps??d.airLps)+' L/s ('+(f.cfm??d.cfm)+' CFM)', f.staticPa && f.staticPa+' Pa', f.rpm && 'fan '+f.rpm+' rpm',
+        (f.hp??d.hp) && 'motor '+(f.hp??d.hp)+' HP', f.volts && f.volts+'/'+(f.phase||'3')+'/'+(f.hz||'60'), d.motorLoad!=null && 'motor ~'+d.motorLoad+'% loaded', d.sfp && 'SFP '+d.sfp, f.section].filter(Boolean).join(', ')});
+    if (typeof renderHVACRows==='function') renderHVACRows();
+  } else if (S.cls==='meter'){
+    if (!appState.other.customEquip) appState.other.customEquip = [];
+    appState.other.customEquip.push({name, type:'BMS/Controls', capacity: num(f.flowM3h) ?? '', unit: f.flowM3h!=null ? 'GPM' : 'kW', year:f.year||'', condition:cond, annKwh:'',
+      notes:[S.item, id, f.meterReading && 'reading '+f.meterReading+' @ '+new Date().toLocaleString(), f.flowM3h && 'qp '+f.flowM3h+' m³/h', f.dn && 'DN'+f.dn, f.pressureBar && f.pressureBar+' bar'].filter(Boolean).join(', ')});
+    if (f.flowM3h!=null) appState.other.customEquip[appState.other.customEquip.length-1].capacity = r2(num(f.flowM3h)*4.403,1);
+    if (typeof renderCustomEquipment==='function') renderCustomEquipment();
   } else if (S.cls==='transformer'){
     appState.electrical.transformers.push({tag:name||('TR-'+(appState.electrical.transformers.length+1)), type: /ONAN|ONAF|OIL|KNAN/i.test(f.coolingType||'')?'Oil':'Dry', ratedKVA:f.kva||'', year:f.year||'', priV:f.priV||'', secV:f.secV||'', ironLoss:'', copperLoss:'', measKW:'', measKVAR:'', measKVA:'', measPF:'', tempRise:'', condition:cond});
     if (typeof renderTransformers==='function') renderTransformers();
@@ -5894,7 +6138,7 @@ window.snapSave = async function(){
     if (typeof renderPanels==='function') renderPanels();
   } else if (S.cls==='dhw'){
     const had = appState.dhw && (appState.dhw.capacity || appState.dhw.inputRating);
-    if (had && !confirm('A water heater is already recorded. Replace its data with this nameplate?')) return;
+    if (had && !S.batchMode && !confirm('A water heater is already recorded. Replace its data with this nameplate?')) return null;
     const elec = /ELEC/i.test(f.fuel||'') || (!f.fuel && (num(f.inputKw)!=null));
     Object.assign(appState.dhw, {
       type: elec ? 'Electric Storage' : (/GAS/i.test(f.fuel||'')?'Gas Storage':appState.dhw.type), capacity: num(f.tankGal) ?? d.tankGal ?? '', capacityUnit:'gallons',
@@ -5920,8 +6164,8 @@ window.snapSave = async function(){
     if (typeof renderCustomEquipment==='function') renderCustomEquipment();
   }
   // Electrical load list for rotating equipment
-  if ((['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls) || S.fromMotor) && ex.toLoads!==false && appState.loads && (kw!=null || num(f.inputKw)!=null)){
-    const cat = {pump:'HVAC-Pump',fan:'HVAC-AHU-Fan',air_compressor:'Other',hvac:'HVAC-Compressor',chiller:'HVAC-Chiller'}[S.cls] || 'Other';
+  if ((ROT.includes(S.cls) || S.fromMotor) && ex.toLoads!==false && appState.loads && (kw!=null || num(f.inputKw)!=null)){
+    const cat = {pump:'HVAC-Pump',fan:'HVAC-AHU-Fan',ahu:'HVAC-AHU-Fan',air_compressor:'Other',hvac:'HVAC-Compressor',chiller:'HVAC-Chiller'}[S.cls] || 'Other';
     const mode = ex.mode || 'Business Hours 8am-6pm';
     const e = estCalc(), hpd = e.h, dpw = Math.min(7, Math.max(0, Math.round(e.d/52)));
     appState.loads.push({name, category:cat, npKW: d.kwInput ?? num(f.inputKw) ?? kw, measKW:'', measPF:f.pf||'', mode, hpd, dpw, wpy:52, control:'None', condition:cond, notes:noteBits, startType:'None', inrushX:0});
@@ -5936,11 +6180,100 @@ window.snapSave = async function(){
   }
   save(); if (typeof updateProgress==='function') updateProgress(); if (typeof updateStorageIndicator==='function') updateStorageIndicator();
   appState._snapCount = (appState._snapCount||0)+1;
-  // done screen
+  return {name, sec, loads: S.extra.toLoads!==false && (ROT.includes(S.cls)||S.fromMotor) && (kw!=null || num(f.inputKw)!=null)};
+}
+function saveDone({name, sec, loads}){
+  if (S.inBatch){ S.status='saved'; S.savedTo=sec; S = BR; return renderBatch(); }
   steps(3,'Saved ✓');
-  $('snap-body').innerHTML = `<div class="snap-done"><div class="tick">✓</div><b>${esc(name)}</b><p>added to <b>${esc(secLabel(sec))}</b>${S.extra.toLoads!==false && (['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls)||S.fromMotor) ? ' and the Electrical load list':''}, with the nameplate photo.</p></div>`;
+  $('snap-body').innerHTML = `<div class="snap-done"><div class="tick">✓</div><b>${esc(name)}</b><p>added to <b>${esc(secLabel(sec))}</b>${loads ? ' and the Electrical load list':''}, with the nameplate photo.</p></div>`;
   $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapClose();showSection('${sec}')">View in ${esc(secLabel(sec))}</button><button class="btn-primary" onclick="snapOpen();document.getElementById('snap-file').click()">📷 Snap next</button>`;
+}
+
+// ---------- Batch: many photos → draft cards → merge → save all ----------
+let BR = null; // batch root session
+const withS = (card, fn) => { const keep = S; S = card; try { return fn(); } finally { S = keep; } };
+async function startBatch(files){
+  BR = S = {batch:true, cards:[], photos:[], extra:{}};
+  steps(2, 'Reading '+files.length+' photos…');
+  for (const f of files){ const u = await shrink(await fileUrl(f),2400,.9); BR.cards.push({id:Math.random().toString(36).slice(2,8), orig:[u], photos:[u], fields:{}, derived:{}, extra:{}, status:'queued', inBatch:true}); }
+  renderBatch();
+  for (const c of BR.cards){
+    if (!BR || S!==BR && !S.inBatch) break;
+    c.status='reading'; renderBatch();
+    try {
+      const out = await withS(c, () => readAny(c.photos));
+      applyRead(c, out);
+      const top = c.candidates[0];
+      c.cls = top ? top.cls : 'other'; c.unsure = !top || top.confidence < .7 || top.cls==='motor';
+      const vals = Object.keys(c.fields).filter(k=>!ID.includes(k) && k!=='section');
+      c.labelOnly = vals.length===0 && !c.isPlate && c.cls!=='meter' && !!(c.fields.tag || c.fields.section || c.fields.model);
+      c.status='done';
+    } catch(e){ c.status='error'; c.err = e.message||String(e); }
+    if (BR) { autoLink(); renderBatch(); }
+  }
+}
+// a photo that is only a tag/section label is most likely the label of the plate photographed next to it
+function autoLink(){ const ok = (c,j) => { const o = BR.cards[j]; return o && !o.merged && o!==c && o.status!=='saved' && o.cls!=='meter' && !o.labelOnly && (o.cls===c.cls || o.cls==='ahu' || o.cls==='other' || !c.cls || c.cls==='other'); };
+  BR.cards.forEach((c,i)=>{ c.mergeHint = c.status==='done' && c.labelOnly && !c.merged ? (ok(c,i-1) ? i-1 : ok(c,i+1) ? i+1 : null) : null; }); }
+function cardSummary(c){
+  const f=c.fields, d = withS(c, derive), bits=[];
+  if (f.tag) bits.push('🏷 '+f.tag);
+  if (f.model) bits.push(f.model);
+  if (f.hp!=null) bits.push(f.hp+' HP'); else if (f.kw!=null) bits.push(f.kw+' kW');
+  if (f.watts!=null) bits.push(f.watts+' W');
+  if (f.airLps!=null) bits.push(f.airLps+' L/s'); if (f.staticPa!=null) bits.push(f.staticPa+' Pa'); if (f.rpm!=null) bits.push(f.rpm+' rpm');
+  if (f.volts!=null) bits.push(f.volts+' V'); if (f.meterReading) bits.push('📟 '+f.meterReading);
+  if (f.coolTons!=null) bits.push(f.coolTons+' TR'); if (f.flowM3h!=null) bits.push('qp '+f.flowM3h+' m³/h'); if (f.dn!=null) bits.push('DN'+f.dn); if (f.serial) bits.push('S/N '+f.serial); if (f.year) bits.push(f.year); if (f.section) bits.push(f.section.toLowerCase());
+  return bits;
+}
+function renderBatch(){
+  if (!BR || S!==BR) return;
+  const cards = BR.cards, live = cards.filter(c=>!c.merged), done = live.filter(c=>c.status==='done'), saved = live.filter(c=>c.status==='saved');
+  const busy = cards.some(c=>c.status==='queued'||c.status==='reading');
+  steps(2, busy ? `Reading ${cards.filter(c=>c.status!=='queued'&&c.status!=='reading').length+1} of ${cards.length}…` : `${live.length} item${live.length===1?'':'s'} found`);
+  const sel = live.filter(c=>c.sel).length;
+  $('snap-body').innerHTML = `<p class="snap-q" style="margin-top:0">${busy?'Reading each photo — you can review finished ones meanwhile.':'Check each item. <b>Merge</b> photos of the same equipment (e.g. plate + tag label), then save.'}</p>` +
+    live.map(c => { const i = cards.indexOf(c), cc = C[c.cls]||C.other, nm = c.extra.name || (c.status==='done'||c.status==='saved' ? withS(c, defaultName) : '');
+      return `<div class="bt-card ${c.status} ${c.sel?'sel':''}">
+        <div class="bt-imgs">${c.photos.slice(0,3).map(u=>`<img src="${u}">`).join('')}${c.photos.length>3?`<b>+${c.photos.length-3}</b>`:''}</div>
+        <div class="bt-main">
+          ${c.status==='queued'?'<span class="bt-st">Waiting…</span>':c.status==='reading'?'<span class="bt-st spin">Reading…</span>':c.status==='error'?`<span class="bt-st err">Couldn't read: ${esc(c.err)}</span>`:''}
+          ${c.status==='done'||c.status==='saved'?`
+          <input class="bt-name" value="${esc(nm)}" onchange="btSet(${i},'name',this.value)" ${c.status==='saved'?'disabled':''}>
+          <div class="bt-row"><select onchange="btSet(${i},'cls',this.value)" ${c.status==='saved'?'disabled':''}>${Object.entries(C).map(([k,v])=>`<option value="${k}" ${k===c.cls?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select>${c.unsure&&c.status!=='saved'?'<em class="bt-unsure">check type</em>':''}</div>
+          <div class="bt-chips">${cardSummary(c).map(b=>`<span>${esc(b)}</span>`).join('') || '<span class="none">no values read — open to enter</span>'}</div>
+          ${c.mergeHint!=null && c.status!=='saved' ? `<button class="bt-hint" onclick="btMerge([${c.mergeHint},${i}])">⤴ Looks like a label — merge with ${c.mergeHint<i?'item above':'item below'}</button>` : ''}
+          <div class="bt-act">${c.status==='saved'?`<span class="bt-ok">✓ Saved to ${esc(secLabel(c.savedTo))}</span>`:`<label><input type="checkbox" ${c.sel?'checked':''} onchange="btSet(${i},'sel',this.checked)"> select</label><button onclick="btReview(${i})">Review ›</button><button onclick="btDrop(${i})">✕</button>`}</div>`:''}
+        </div></div>`; }).join('');
+  $('snap-foot').innerHTML = sel>=2 ? `<button class="btn-secondary" onclick="btClear()">Cancel</button><button class="btn-primary" onclick="btMergeSel()">⤴ Merge ${sel} into one</button>`
+    : `<button class="btn-secondary" onclick="document.getElementById('snap-files').click()">+ More photos</button><button class="btn-primary" ${busy||!done.length?'disabled':''} onclick="btSaveAll()">${done.length?'Save all '+done.length+' ✓':saved.length?'All saved ✓':'Save all'}</button>`;
+}
+window.btSet = (i,k,v) => { const c = BR.cards[i]; if (k==='name') c.extra.name = v; else if (k==='cls') { c.cls = v; c.unsure=false; c.fromMotor=false; } else c[k] = v; renderBatch(); };
+window.btClear = () => { BR.cards.forEach(c=>c.sel=false); renderBatch(); };
+window.btDrop = i => { BR.cards[i].merged = true; autoLink(); renderBatch(); };
+window.btMergeSel = () => btMerge(BR.cards.map((c,i)=>c.sel&&!c.merged?i:-1).filter(i=>i>=0));
+window.btMerge = idx => {
+  idx = [...new Set(idx)].sort((a,b)=>a-b); if (idx.length<2) return;
+  const cs = idx.map(i=>BR.cards[i]);
+  // the card with the most real values is the main one
+  const main = cs.slice().sort((a,b)=>Object.keys(b.fields).length-Object.keys(a.fields).length)[0];
+  for (const c of cs){ if (c===main) continue;
+    Object.entries(c.fields).forEach(([k,v])=>{ if (main.fields[k]==null) main.fields[k]=v; });
+    main.photos.push(...c.photos); main.orig.push(...c.orig); main.raw = (main.raw||'')+'\n'+(c.raw||'');
+    if ((!main.cls || main.cls==='other') && c.cls) main.cls = c.cls;
+    c.merged = true; c.sel = false; }
+  main.sel=false; main.labelOnly=false; main.unsure=false; main.status = main.status==='saved'?'saved':'done'; autoLink(); renderBatch();
 };
+window.btReview = i => { const c = BR.cards[i]; S = c; stepReview(); $('snap-foot').querySelector('.btn-secondary').outerHTML = `<button class="btn-secondary" onclick="btBack()">‹ All items</button>`; };
+window.btBack = () => { if (S && S.inBatch) { const nm=$('snap-name'); if (nm) S.extra.name = nm.value; } S = BR; renderBatch(); };
+window.btSaveAll = async () => {
+  const todo = BR.cards.filter(c=>!c.merged && c.status==='done');
+  for (const c of todo){ S = c; c.batchMode = true; const r = await saveCore(c.extra.name || defaultName()); if (r){ c.status='saved'; c.savedTo=r.sec; } }
+  S = BR; renderBatch(); toast(todo.length+' items saved');
+};
+window._snapBatch = () => BR;
+window._snapDbg = {enhance, bestRotation, recog};
+window._snapOCR = async (u, crop) => { S = S || {photos:[],extra:{}}; let src=u; if (crop){ const im=await loadImg(u); const c=document.createElement('canvas'); c.width=(crop[2]-crop[0])*im.width; c.height=(crop[3]-crop[1])*im.height; c.getContext('2d').drawImage(im,crop[0]*im.width,crop[1]*im.height,c.width,c.height,0,0,c.width,c.height); src=c.toDataURL('image/jpeg',.92); S.cropped={0:true}; } else S.cropped={}; const r = await readOCR([src]); return r; };
 })();
 </script>
 
