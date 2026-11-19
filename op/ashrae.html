@@ -507,7 +507,7 @@ body.drawer-open #snap-fab, body.snap-on #snap-fab { display:none; }
 .snap-group h4 { font-size:.78rem; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted); margin:2px 2px 10px; }
 .snap-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
 .sf { display:flex; flex-direction:column; gap:4px; font-size:.78rem; color:var(--text-secondary); font-weight:600; min-width:0; }
-.sf.big { width:100%; } .sf i { font-style:normal; color:var(--text-muted); font-weight:500; }
+.sf.big { width:100%; } .sf.wide { grid-column:1 / -1; } .sf textarea { width:100%; font-size:15px; padding:8px 10px; border-radius:8px; } .sf i { font-style:normal; color:var(--text-muted); font-weight:500; }
 .sf em { font-style:normal; font-size:.65rem; background:#ede9fe; color:#6d28d9; padding:1px 6px; border-radius:6px; margin-left:4px; }
 .sf input, .sf select { width:100%; font-size:16px; min-height:44px; padding:8px 10px; font-family: var(--mono); }
 .sf input.auto { color:#6d28d9; background:#faf5ff; } [data-theme="dark"] .sf input.auto { background:#2e1f4d; color:#c4b5fd; }
@@ -560,6 +560,15 @@ body.drawer-open #snap-fab, body.snap-on #snap-fab { display:none; }
 .bt-st { font-size:.85rem; color:var(--text-muted); } .bt-st.err { color:var(--danger); }
 .bt-st.spin::before { content:''; display:inline-block; width:12px; height:12px; margin-right:6px; border:2px solid var(--accent); border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; }
 @keyframes spin { to { transform:rotate(360deg); } }
+.g-read { display:flex; gap:8px; } .g-read input { flex:1; min-width:0; width:auto !important; font-size:2rem !important; min-height:64px !important; text-align:center; font-family:var(--mono); font-weight:700; }
+.g-read select { width:96px; flex-shrink:0; font-size:1.1rem; min-height:64px; }
+.g-hint { font-size:.8rem; color:#92400e; background:var(--warning-bg); padding:7px 10px; border-radius:8px; margin-top:8px; }
+.g-pts { display:flex; flex-wrap:wrap; gap:6px; } .g-pts button { min-height:40px; padding:0 12px; background:var(--input-bg); border:1.5px solid var(--border); border-radius:20px; color:var(--text-primary); font-size:.85rem; font-weight:600; }
+.g-pts button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.fr-list { display:flex; flex-direction:column; } .fr-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+.fr-row:last-child { border-bottom:0; } .fr-ic { font-size:1.2rem; width:26px; text-align:center; } .fr-row > div { flex:1; min-width:0; display:flex; flex-direction:column; }
+.fr-row b { font-size:.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .fr-row small { font-size:.72rem; color:var(--text-muted); }
+.fr-v { font-family:var(--mono); font-weight:700; color:var(--accent); white-space:nowrap; }
 @media (max-width: 380px) { .snap-grid, .snap-choices { grid-template-columns: 1fr; } }
 @media print { #snap-fab, #snap { display:none !important; } }
 
@@ -5561,11 +5570,11 @@ const F = { // key: [label, unit, inputmode]
   tankL:['Tank capacity','L'], tankGal:['Tank capacity','gal'], inputKw:['Input rating','kW'], inputKbtuh:['Input rating','kBtu/h'],
   fuel:['Fuel',''], uef:['Efficiency (UEF/EF)',''], lampType:['Lamp type',''], lampW:['Lamp wattage','W'],
   lampsPerFixture:['Lamps per fixture',''], watts:['Power','W'],
-  airLps:['Airflow','L/s'], staticPa:['Total static pressure','Pa'], dn:['Pipe size','DN'], meterReading:['Display reading',''], section:['Section / component',''], tag:['Asset tag',''],
+  airLps:['Airflow','L/s'], readingVal:['Reading',''], kwhReading:['Register reading','kWh'], meterNo:['Meter / serial no.',''], account:['Account / premise no.',''], meterError:['Error / alarm code',''], maintNotes:['Maintenance record',''], staticPa:['Total static pressure','Pa'], dn:['Pipe size','DN'], meterReading:['Display reading',''], section:['Section / component',''], tag:['Asset tag',''],
   manufacturer:['Manufacturer',''], model:['Model',''], serial:['Serial no.',''], year:['Year made','']
 };
 const ID = ['manufacturer','model','serial','year','tag'];
-const TEXT_KEYS = ['manufacturer','model','serial','tag','refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType','meterReading','section'];
+const TEXT_KEYS = ['meterNo','account','meterError','maintNotes','manufacturer','model','serial','tag','refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType','meterReading','section'];
 const C = {
   motor:      {icon:'⚙️', label:'Motor', sec:'other', expect:['kw','hp','volts','amps','rpm','phase','hz','pf','effPct','frame','ieClass','sf','insClass']},
   pump:       {icon:'💧', label:'Pump', sec:'other', expect:['kw','hp','flowM3h','headM','rpm','volts','amps','effPct']},
@@ -5580,7 +5589,10 @@ const C = {
   dhw:        {icon:'🚿', label:'Water heater', sec:'dhw', expect:['tankL','tankGal','inputKw','inputKbtuh','fuel','uef','volts']},
   lighting:   {icon:'💡', label:'Light fixture / lamp', sec:'lighting', expect:['lampType','lampW','lampsPerFixture','volts']},
   appliance:  {icon:'🔌', label:'Appliance / plug load', sec:'plugloads', expect:['watts','volts','amps']},
-  meter:      {icon:'📟', label:'Meter / gauge', sec:'other', expect:['meterReading','flowM3h','dn','pressureBar']},
+  meter:      {icon:'📟', label:'BTU / flow meter', sec:'other', expect:['meterReading','meterError','flowM3h','dn']},
+  gauge:      {icon:'🌡', label:'Gauge (temp / pressure)', sec:'hvac', expect:['readingVal']},
+  elecmeter:  {icon:'⚡', label:'Electricity meter (kWh)', sec:'electrical', expect:['kwhReading','meterNo','account','ratedA','volts','phase','hz']},
+  maintlog:   {icon:'📋', label:'Maintenance / PPM sheet', sec:'hvac', expect:['maintNotes']},
   other:      {icon:'📦', label:'Other equipment', sec:'other', expect:['kw','volts','amps']}
 };
 // Things a bare motor could be part of → where its data lands
@@ -5596,9 +5608,14 @@ const ROT = ['motor','pump','fan','ahu','air_compressor','other','boiler'];
 const PROFILES = [
   {re:/WATER HEATER|GEYSER|ВОДОНАГРЕВ|سخان/i, name:'Water heater', cls:'dhw'},
   {re:/AIR[ -]?CONDITION|SPLIT (?:AC|UNIT|TYPE)|INDOOR UNIT|OUTDOOR UNIT|КОНДИЦИОН|مكيف/i, name:'Split AC', cls:'hvac'},
+  {re:/DISPLAY\s*CHILLER|DISPLAY COOLER|BOTTLE COOLER|REFRIGERATED (?:DISPLAY|SHOWCASE)|SHOWCASE|MERCHANDIS|GAS LOAD|EXPANSION GAS/i, name:'Refrigerated display', h:24, d:365, duty:.55, sb:0, tip:'Night blinds/doors on open cases; LED case lighting; set point 3–5 °C, not lower; clean condenser coils (−10–15 %).'},
   {re:/CHILLER/i, name:'Chiller', cls:'chiller'},
   {re:/ENERGY CALCULATOR|AMTRON|HEAT METER|BTU METER|THERMAL METER|AQUA ?METRO|ULTRASONIC FLOW/i, name:'BTU / energy meter', cls:'meter'},
-  {re:/EN ?837|PRESSURE GAUGE|\bWIKA\b/i, name:'Pressure gauge', cls:'meter'},
+  {re:/SAUDI METERS|SEC ITEM|SMR\d{6,}|NB-?IOT|IMP\/KWH|IEC ?6205[23]/i, name:'SEC electricity meter', cls:'elecmeter'},
+  {re:/PPM|PREVENTIVE MAINT|MAINTENANCE (?:LOG|SCHEDULE|RECORD)|REPLACE (?:FILTER|BELT)|TEC(?:H)? NAME|TECHNICIAN/i, name:'PPM / maintenance sheet', cls:'maintlog'},
+  {re:/EN ?837|PRESSURE GAUGE|THERMOMETER|\bWIKA\b/i, name:'Gauge', cls:'gauge'},
+  {re:/ICE ?MAKER|ICE MACHINE|صانعة ثلج/i, name:'Ice maker', h:24, d:365, duty:.5, sb:2, tip:'Timer off overnight/weekends if ice demand allows; descale & clean condenser; ENERGY STAR model uses ~15 % less.'},
+  {re:/HEATED DISPLAY|FOOD WARMER|WARMING (?:CABINET|DISPLAY)|HOT FOOD|BAIN/i, name:'Heated display case', h:10, d:261, duty:.45, sb:0, tip:'Switch on only 30 min before service; keep doors closed; consider a timer.'},
   {re:/AIR HANDLING|\bAHU\b|AIR VOL|FAN ?COIL|\bFCU\b|COMPONENT ?ASSEMBLY/i, name:'AHU', cls:'ahu'},
   {re:/\bPUMP|НАСОС|مضخة/i, name:'Pump', cls:'pump', h:10, d:261, duty:.75},
   {re:/COFFEE|ESPRESSO|КОФЕ|قهوة/i, name:'Coffee maker', h:9, d:261, duty:.15, sb:1, tip:'Auto-off timer; thermal carafe instead of a warming plate (cuts ~60%).'},
@@ -5755,7 +5772,7 @@ Reply with ONLY JSON, no markdown:
  "fields":{${keys.map(k=>`"${k}":${TEXT_KEYS.includes(k)?'str':'number'}|null`).join(',')},"tag":str|null},
  "notes":str|null,"rawText":"all legible text, lines separated by |"}
 Use null for anything not printed. Year: from a date or date code if plainly printed, else null.
-Hints: "AIR VOL 2675 LPS" → airLps; "P.T. 837 PA" → staticPa (total static pressure); "POWER SUPPLY 380/3/60" → volts 380, phase 3, hz 60; an asset label like "3.04-0-AHU-27-08E" or "TAG-AHU-34-8B-3" → tag (put it in fields.tag). A heat/BTU meter (e.g. Aquametro AMTRON): class "meter", put the LCD value with its unit in meterReading (e.g. "14.418 kW"), qp → flowM3h, DN → dn. A pressure gauge: class "meter", meterReading = needle value with unit. A sticker that only names a section (e.g. "HEATER & CHW COIL SECTION") → section. For a laptop/AC adapter: watts = rated OUTPUT watts (e.g. 65 W), volts = the higher INPUT voltage (e.g. 240 from 100-240V).`;
+Hints: "AIR VOL 2675 LPS" → airLps; "P.T. 837 PA" → staticPa (total static pressure); "POWER SUPPLY 380/3/60" → volts 380, phase 3, hz 60; an asset label like "3.04-0-AHU-27-08E" or "TAG-AHU-34-8B-3" → tag (put it in fields.tag). A heat/BTU meter (e.g. Aquametro AMTRON): class "meter", put the LCD value with its unit in meterReading (e.g. "14.418 kW"), qp → flowM3h, DN → dn. Analog dial (thermometer or pressure gauge): class "gauge"; read the NEEDLE carefully against the scale and give fields.readingVal (number) and fields.meterReading as value+unit (e.g. "6 °C", "7.2 bar"); if both bar and psi scales, use bar. Electricity revenue meter (e.g. SEC / Saudi Meters Company smart meter): class "elecmeter"; kwhReading = register value in kWh without leading zeros (00038241 → 38241); meterNo = serial like SMR2420875811879; ratedA = max current in brackets (0.5-10(100)A → 100); volts 400, phase 3 for 3x230/400V; a handwritten label (e.g. "Space 1") → tag; a premise/account sticker like 498/02/726 → account. If a meter display shows an error (e.g. "E----9-"), put it in meterError. Maintenance / PPM sheet (paper log): class "maintlog"; summarise in maintNotes every filled row with date and action (e.g. "27-Sep-2025: filter replaced, belt replaced (A52 ×2), AHU cleaned — Tec: Rafik/Qasim"), location/asset in tag if written. Refrigerant charge printed in grams → refrigCharge in kg. Commercial refrigeration (display chiller, ice maker, bottle cooler) and heated display cases are class "appliance" with watts = total rated electric power. A sticker that only names a section (e.g. "HEATER & CHW COIL SECTION") → section. For a laptop/AC adapter: watts = rated OUTPUT watts (e.g. 65 W), volts = the higher INPUT voltage (e.g. 240 from 100-240V).`;
   const imgs = photos || S.photos;
   let text='';
   if (provider==='gemini'){
@@ -5823,15 +5840,17 @@ async function recog(u, psm){ const w = await ocrWorker(); await w.setParameters
 // Which way up? Try 0/90/270/180 on a small cleaned copy, keep the most confident.
 async function bestRotation(u){
   const small = await enhance(u, {target: 1100, maxUp: 1.5});
-  let best = {rot:0, conf:-1};
+  let best = {rot:0, conf:-1}, base = 0;
   for (const rot of [0,90,270,180]){
     const d = await recog(rot ? await rotateUrl(small, rot) : small, 11);
     const words = (d.words||[]).filter(w=>w.confidence>60 && /[A-Za-z0-9]{2,}/.test(w.text)).length;
     const score = d.confidence + words*2;
-    if (score > best.conf) best = {rot, conf:score};
+    if (rot===0) base = score;
+    if (score > best.conf) best = {rot, conf:score, raw:d.confidence};
     if (rot===0 && d.confidence > 72) break; // clearly upright already
   }
-  return best.rot;
+  // only turn the photo when another orientation is clearly better — noise scores alike in every direction
+  return (best.rot && best.conf - base >= 15 && best.raw >= 45) ? best.rot : 0;
 }
 async function readOCR(photos){
   photos = photos || S.photos;
@@ -5876,11 +5895,14 @@ function applyRead(T, out){
   // a meter's LCD "14.418 kW" is a reading, not a rating
   if ((T.candidates[0]||{}).cls==='meter' && T.fields.kw!=null){ if (!T.fields.meterReading && !Number.isInteger(+T.fields.kw)) T.fields.meterReading = T.fields.kw+' kW'; delete T.fields.kw; }
   T.isPlate = /AIR\s*VOL|MOTOR\s*H|SERIAL|POWER\s*SUPPLY|RATED|INPUT/i.test(out.rawText||'');
+  if ((T.candidates[0]||{}).cls==='maintlog' && !T.fields.maintNotes){ const lines=(out.rawText||'').split(/\n|\|/).filter(l=>/\d{1,2}\s*[-\/.]\s*(?:\d{1,2}|[A-Z]{3})\s*[-\/.]\s*\d{2,4}/i.test(l)).slice(0,6); if (lines.length) T.fields.maintNotes = lines.map(l=>l.trim()).join(' | '); }
 }
 // Regex reader for plain OCR text
 function parseText(t){
   let T = ' '+t.toUpperCase().replace(/[|]/g,' ').replace(/\s+/g,' ')+' ';
   // Cyrillic / OCR look-alikes on CE/EAC plates: кВт→KW, Вт/BT→W, В→V, А→A, Гц→HZ
+  // decimal comma (3,7 A) → 3.7 ; thousands (1,500) untouched
+  T = T.replace(/(\d),(\d{1,2})(?!\d)/g,'$1.$2');
   // OCR digit confusions inside numbers: O→0, $/S→5 before digits, H2→HZ
   T = T.replace(/(\d)O(?=\d)/g,'$10').replace(/(\d)[O](?=\s*[VAW]\b)/g,'$10').replace(/[$](?=\d)/g,'5').replace(/(\d)\s*H2\b/g,'$1HZ').replace(/(\d)\s*HE\b/g,'$1HZ');
   T = T.replace(/(\d)\s*КВТ/g,'$1 KW').replace(/(\d)\s*(?:ВТ|BT)\b/g,'$1W').replace(/(\d)\s*ВТ/g,'$1W')
@@ -5889,6 +5911,20 @@ function parseText(t){
   const gMax = (re,k) => { let best=null; for (const m of T.matchAll(new RegExp(re.source, re.flags.includes('g')?re.flags:re.flags+'g'))) { const v=num(m[1]); if (v!=null && (best==null||v>best)) best=v; } if (best!=null && f[k]==null) f[k]=best; };
   // power supply written as 380/3/60 or 380V/3PH/60HZ
   { const m = T.match(/(\d{3})\s*V?\s*\/\s*([13])\s*(?:PH)?\s*\/\s*(50|60)/); if (m){ f.volts=+m[1]; f.phase=+m[2]; f.hz=+m[3]; } }
+  // labelled values on tabular appliance plates ("Rated Current (A): 4.1", "Power Supply 220", "Electric power 818 W")
+  g(/(?:RATED|ELECTRICAL)\s*CURRENT\W{0,6}(?:\(A\))?\W{0,3}(\d+(?:\.\d+)?)/,'amps');
+  g(/(?:RATED\s*VOLTAGE|POWER\s*SUPPLY|SUPPLY\s*VOLTAGE)\W{0,6}(?:\(V\))?\W{0,3}(\d{3})/,'volts');
+  g(/(?:RATED\s*INPUT\s*POWER|ELECTRIC\s*POWER|INPUT\s*POWER|RATED\s*POWER)\W{0,8}(?:\(W\))?\W{0,3}(\d{2,5})/,'watts');
+  g(/(?:GAS\s*LOAD|CHARGE)\W{0,8}(\d{2,5})\s*G\b/,'refrigCharge',m=>num(m[1])/1000);
+  g(/(?:STORAGE\s*VOLUME)\W{0,4}(?:\(L\))?\W{0,3}(\d{2,4})/,'tankL');
+  // electricity meter
+  g(/\b(SMR\s?\d{8,})/,'meterNo',m=>m[1].replace(/\s/g,''));
+  g(/(?<!\d)(\d{6,9})\s*KWH/,'kwhReading',m=>+m[1]);
+  g(/\((\d{2,3})\)\s*A\b/,'ratedA');
+  { const m = T.match(/3\s*X\s*\d{3}\s*\/\s*(\d{3})\s*V/); if (m){ f.volts = f.volts || +m[1]; f.phase = 3; } }
+  g(/\b(\d{3}\/\d{2}\/\d{3,4})\b/,'account',m=>m[1]);
+  // meter error codes like "E----9-", "ERR 9"
+  g(/\b(E-{2,}\s?\d{1,3}-?|ERR(?:OR)?\s?\d{1,3})(?![\w])/,'meterError',m=>m[1].replace(/\s/g,''));
   // AHU data
   g(/(\d{3,6})\s*L\.?\s?P\.?\s?S\b/,'airLps'); g(/AIR\s*VOL\w*\W{0,3}(\d{3,6})/,'airLps');
   g(/P\.?\s?T\.?\W{0,3}(\d{2,4})\s*PA\b/,'staticPa'); if (/AIR\s*VOL|\d\s*L\.?P\.?S|\d\s*CFM|STATIC/.test(T)) g(/(\d{2,4})\s*PA\b/,'staticPa');
@@ -5911,8 +5947,8 @@ function parseText(t){
   g(/(?:EFF(?:ICIENCY)?|η)\s*[:\-]?\s*(\d{2}(?:[.,]\d+)?)\s*%?/,'effPct');
   g(/\b(IE[1-5])\b/,'ieClass',m=>m[1]); g(/\bFRAME\s*[:\-]?\s*([0-9A-Z]{2,6})/,'frame',m=>m[1]);
   g(/\b(?:INS(?:UL)?\.?\s*CL(?:ASS)?\.?|CLASS)\s*[:\-]?\s*([ABFH])\b/,'insClass',m=>m[1]); g(/\bS\.?F\.?\s*[:\-]?\s*(1[.,]\d+)/,'sf');
-  g(/\bR-?\s?(22|410A|32|134A|407C|404A|290|1234YF)\b/,'refrigerant',m=>'R-'+m[1].replace('A','A'));
-  g(/(\d+(?:[.,]\d+)?)\s*(?:KG)\b.*?(?:CHARGE|REFRIG)|(?:CHARGE|REFRIGERANT)[^0-9]{0,15}(\d+(?:[.,]\d+)?)\s*KG/,'refrigCharge',m=>num(m[1]||m[2]));
+  g(/\bR-?\s?(22|410A|32|134A|407C|404A|507A?|290|600A|744|1234YF|1234ZE|448A|449A|452A|454B)\b/,'refrigerant',m=>'R-'+m[1]);
+  g(/(?:CHARGE|REFRIGERANT\s*(?:QTY|QUANTITY|AMOUNT|CHARGE))[^0-9]{0,15}(\d+(?:[.,]\d+)?)\s*KG/,'refrigCharge');
   g(/(\d{4,6})\s*BTU/,'coolBtuh'); g(/(\d+(?:[.,]\d+)?)\s*TONS?\b/,'coolTons');
   g(/\bSEER2?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'seer'); g(/\bEER\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'eer'); g(/\bCOP\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'cop');
   g(/\bM\.?C\.?A\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'mca'); g(/\bM\.?O\.?P\.?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'mop');
@@ -5922,31 +5958,45 @@ function parseText(t){
   if (/TRANSFORMER|KVA|IMPEDANCE/.test(T)) g(/(?:IMPEDANCE|\bUK\b|%Z|Z%)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'impedancePct'); g(/\b(ONAN|ONAF|KNAN|KNAF)\b/,'coolingType',m=>m[1]); if (/TRANSFORMER|KVA|IMPEDANCE/.test(T)) g(/(?:COOLING|COOL\.?)\W{0,3}\b(AN|AF)\b/,'coolingType',m=>m[1]);
   g(/(\d+(?:[.,]\d+)?)\s*(?:LITRES?|LITERS?)\b/,'tankL'); if (/HEATER|TANK|CAPACITY|GEYSER/.test(T) && !/AIR\s*VOL/.test(T)) g(/(?:CAPACITY|VOLUME|TANK)\W{0,3}(\d{2,4})\s*L\b/,'tankL'); g(/(\d+(?:[.,]\d+)?)\s*(?:GAL|GALLONS?)\b/,'tankGal');
   g(/\b(?:19|20)\d{2}\b/,'year',m=>m[0]);
-  g(/(?:S\/?N|SERIAL(?:\s*NO)?\.?)\s*[:#\-]?\s*([A-Z0-9\-]{5,})/,'serial',m=>m[1]);
-  g(/\b(\d\.\d{2}-\d-[A-Z]{2,5}-[0-9A-Z]+(?:-[0-9A-Z]+)*)/,'tag',m=>m[1]); g(/\bTAG\W{0,3}([A-Z0-9][A-Z0-9\-]{3,})/,'tag',m=>m[1].replace(/^-+/,''));
+  g(/(?:S\/?N|SERIAL(?:\s*(?:NO|NUMBER))?\.?)\s*[:#\-]?\s*((?=[A-Z\-]*\d)[A-Z0-9\-]{5,})/,'serial',m=>m[1]);
+  g(/\b(\d[.,]\d{2}\s?-\s?\d\s?-\s?[A-Z]{2,5}\s?-\s?\d{1,3}\s?-\s?\d{2}[A-Z]?)\b/,'tag',m=>m[1].replace(/\s/g,'').replace(',','.')); g(/\bTAG\W{0,3}([A-Z0-9][A-Z0-9\-]{3,})/,'tag',m=>m[1].replace(/^-+/,''));
   g(/(?:MODEL|TYPE)\s*(?:NO\.?)?\s*[:;#\-\s]{0,3}((?=[A-Z0-9\-\/\.]*\d)[A-Z0-9][A-Z0-9\-\/\.]{2,}(?:\s[A-Z]{2}\b)?)/,'model',m=>m[1]);
-  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY','SATURN','TEFAL','MOULINEX','BRAUN','KENWOOD','DELONGHI','PANASONIC','SHARP','CANON','EPSON','DELL','LENOVO','BOSCH','ELECTROLUX','WHIRLPOOL','HAIER','MIDEA','HISENSE','SONY','XEROX','RICOH','KYOCERA','NESPRESSO','KRUPS','HOOVER','BEKO','INDESIT','ZANUSSI','TCL','BLACK+DECKER','SIEMENS','SMEG','GORENJE','HEWLETT','BROTHER','APC','VERTIV','FUJITSU','TOSHIBA','DAEWOO','NIKAI','GEEPAS','KELVINATOR','O GENERAL','SUPER GENERAL','WANSA','ROYAL TEMP','ROYALTEMP','AQUAMETRO','AQUA METRO','AMTRON','WIKA','PETRA','SKM','ALMUTLAQ','AL-ZAMIL','KHIARY','ARMSTRONG','EBARA','LOWARA','PEDROLLO','CALEFFI','HONEYWELL','JOHNSON CONTROLS','BELIMO'];
+  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG ELECTRONICS','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY','SATURN','TEFAL','MOULINEX','BRAUN','KENWOOD','DELONGHI','PANASONIC','SHARP','CANON','EPSON','DELL','LENOVO','BOSCH','ELECTROLUX','WHIRLPOOL','HAIER','MIDEA','HISENSE','SONY','XEROX','RICOH','KYOCERA','NESPRESSO','KRUPS','HOOVER','BEKO','INDESIT','ZANUSSI','TCL','BLACK+DECKER','SIEMENS','SMEG','GORENJE','HEWLETT','BROTHER','APC','VERTIV','FUJITSU','TOSHIBA','DAEWOO','NIKAI','GEEPAS','KELVINATOR','O GENERAL','SUPER GENERAL','WANSA','ROYAL TEMP','ROYALTEMP','AQUAMETRO','AQUA METRO','AMTRON','WIKA','PETRA','SKM','ALMUTLAQ','AL-ZAMIL','KHIARY','ARMSTRONG','EBARA','LOWARA','PEDROLLO','CALEFFI','HONEYWELL','JOHNSON CONTROLS','BELIMO','TECNODOM','EDISON','SAUDI METERS','KAIFA','HEXING','LANDIS','ITRON','ELSTER'];
   const Tns = T.replace(/[^A-Z+]/g,'');
-  const b = brands.find(x=>new RegExp('(^|[^A-Z])'+x.replace(/[.+]/g,'\\$&')+'(?![A-Z])').test(T)) || brands.find(x=>x.length>=5 && Tns.startsWith(x)) || brands.find(x=>x.length>=6 && Tns.includes(x.replace(/[^A-Z+]/g,'')));
+  const bHits = brands.map(x=>{ const m = new RegExp('(^|[^A-Z])'+x.replace(/[.+]/g,'\\$&')+'(?![A-Z])').exec(T); return m ? [x, m.index] : null; }).filter(Boolean).sort((a,b)=>a[1]-b[1]);
+  const b = (bHits[0]||[])[0] || brands.find(x=>x.length>=5 && Tns.startsWith(x)) || brands.find(x=>x.length>=6 && Tns.includes(x.replace(/[^A-Z+]/g,'')));
   let mf = b || null;
   const ident = {manufacturer: mf ? mf.split(' ').map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join(' ') : null, item: (findProfile(t)||{}).name || null};
   if (b && /AMTRON|AQUA/.test(b)) ident.manufacturer = 'Aquametro'; if (b && /ROYAL/.test(b)) ident.manufacturer = 'Royal Temp';
   ['year','serial','model','tag'].forEach(k=>{ ident[k]=f[k]||null; delete f[k]; });
+  if (ident.year && (+ident.year<1980 || +ident.year>new Date().getFullYear())) ident.year = null;
+  if (f.hp!=null && f.hp>500) delete f.hp;
+  // sanity: drop values that can't be real
+  const V = num(f.volts); if (V!=null && !((V>=100&&V<=127)||(V>=200&&V<=250)||(V>=340&&V<=480)||(V>=575&&V<=690)||V>=1000&&V<=36000&&V%100===0)) delete f.volts;
+  if (f.phase!=null && ![1,3].includes(+f.phase)) delete f.phase; if (f.hz!=null && ![50,60].includes(+f.hz)) delete f.hz;
+  if (f.rpm!=null && (f.rpm<300 || f.rpm>3700)) delete f.rpm;
+  if (f.year!=null && (+f.year<1980 || +f.year>new Date().getFullYear())) delete f.year;
   // class scoring from keywords
-  const sc = {motor:0,pump:0,fan:0,ahu:0,air_compressor:0,hvac:0,chiller:0,boiler:0,transformer:0,panel:0,dhw:0,lighting:0,appliance:0,meter:0};
+  const sc = {motor:0,pump:0,fan:0,ahu:0,air_compressor:0,hvac:0,chiller:0,boiler:0,transformer:0,panel:0,dhw:0,lighting:0,appliance:0,meter:0,gauge:0,elecmeter:0,maintlog:0};
   const k = (cls,re,w) => { if (re.test(T)) sc[cls]+=w; };
   k('motor',/\bRPM|MIN-1|FRAME|INS\.?\s*CL|\bIP5|\bIP6|\bS\.?F\.?\b|DUTY\s*S1|\bIE[1-5]\b/,2); if(f.hp||f.kw) sc.motor+=1;
   k('pump',/PUMP|\bHEAD\b|IMPELLER/,3); k('fan',/\bFAN\b|BLOWER|CFM/,2);
   k('ahu',/AIR\s*VOL|\bAHU\b|\d\s*L\.?P\.?S\b|COMPONENT\s*ASSEMBLY|MIXING SECTION|CHW COIL|SUPPLY FAN|ROYAL ?TEMP/,4);
+  k('elecmeter',/SAUDI METERS|SEC ITEM|SMR\d|IMP\/KWH|NB-?IOT|3\s*-?\s*PHASE,?\s*4\s*-?\s*WIRE/,6);
+  k('gauge',/EN ?837|\bWIKA\b/,4); if (/°C|\bBAR\b|\bPSI\b/.test(T) && Object.keys(f).length<=2) sc.gauge+=2;
+  k('maintlog',/PPM|SCHEDULE|REPLACE FILTER|REPLACE BELT|TEC NAME|CLEAN AHU/,4); k('maintlog',/TECHNICIAN|REMARK/,1);
   k('meter',/ENERGY CALC|AMTRON|\bQP\s*[:=]?\s*\d|\bDN\s*\d{2}\b.*\bPN|PS\/PN|EN ?837|\bPSI\b.*\bBAR\b|LCD LOOP/,4);
   k('air_compressor',/COMPRESSOR.*(BAR|PSI|FAD)|\bFAD\b|SCREW/,3);
-  k('hvac',/REFRIGERANT|\bR-?410A\b|\bR-?22\b|\bR-?32\b|SEER|\bEER|M\.?C\.?A|M\.?O\.?P|BTU|AIR CONDITION|HEAT PUMP|OUTDOOR UNIT|INDOOR UNIT/,3);
-  k('chiller',/CHILLER/,5); k('boiler',/BOILER|BURNER/,5);
-  k('transformer',/TRANSFORMER|ONAN|\bHV\b|\bLV\b|IMPEDANCE|VECTOR|DYN11/,3); if(f.kva) sc.transformer+=2;
+  k('hvac',/\bR-?410A\b|\bR-?22\b|\bR-?32\b|SEER|\bEER|M\.?C\.?A|M\.?O\.?P|BTU|AIR CONDITION|HEAT PUMP|OUTDOOR UNIT|INDOOR UNIT/,3);
+  k('chiller',/(?<!DISPLAY\s?)CHILLER/,5); k('boiler',/BOILER|BURNER/,5);
+  k('transformer',/TRANSFORMER|ONAN|IMPEDANCE|VECTOR GROUP|DYN11|\bHV\b.*\bLV\b/,3); if(f.kva) sc.transformer+=2;
   k('panel',/PANEL|SWITCHBOARD|BUSBAR|MCCB|\bACB\b|ICW|\bAIC\b/,3);
-  k('dhw',/WATER HEATER|GEYSER|HEATER.*(L|GAL)|\bUEF\b/,4); k('lighting',/LAMP|LED|LUMINAIRE|BALLAST|DRIVER|LUMEN|LM\b/,3);
+  k('dhw',/WATER HEATER|GEYSER|HEATER.*(L|GAL)|\bUEF\b/,4); k('lighting',/LUMINAIRE|BALLAST|LUMEN|\bLM\b|LAMP TYPE/,3); k('lighting',/\bLAMP\b|\bLED\b/,1);
+  k('appliance',/CLIMAT\w* CLASS|GAS (?:TYPE|LOAD)|EXPANSION GAS|SAFETY CLASS|IPX\d|NET WEIGHT/,3);
   const pf0 = findProfile(t); if (pf0) sc[pf0.cls||'appliance'] += 6;
   if (f.watts && !f.kw && !f.hp && !f.kva && !f.airLps) sc.appliance += 2;
+  if (f.account || f.meterNo || f.kwhReading!=null) sc.elecmeter += 5;
+  if (/CLIMAT\w* CLASS|GAS (?:TYPE|LOAD)|EXPANSION GAS/.test(T)) sc.chiller = 0;
   if (f.airLps || f.staticPa) sc.ahu += 3;
   const tot = Object.values(sc).reduce((a,b)=>a+b,0) || 1;
   const candidates = Object.entries(sc).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cls,v])=>({cls,confidence:r2(Math.min(.95,v/tot*.9),2)}));
@@ -6001,6 +6051,15 @@ function derive(){
     d.sfp = r2((d.shaftKw/0.9)/(lps/1000), 2); } // kW per m³/s at the motor input
   else if (lps && mkw) d.sfp = r2((mkw*0.75/0.9)/(lps/1000), 2);
   if (!f.volts && S && (S.cls==='appliance' || (S.profile && S.profile.h))) d.volts = 230; // KSA single-phase supply
+  // refrigerant climate impact (AR4 GWP values used for F-gas / Kigali reporting)
+  const GWP = {'R-22':1810,'R-410A':2088,'R-32':675,'R-134A':1430,'R-407C':1774,'R-404A':3922,'R-507':3985,'R-507A':3985,'R-290':3,'R-600A':3,'R-744':1,'R-1234YF':4,'R-1234ZE':7,'R-448A':1387,'R-449A':1397,'R-452A':2140,'R-454B':466};
+  const rk = (f.refrigerant||'').toUpperCase().replace(/\s/g,'').replace(/^R(?=\d)/,'R-'); const gw = GWP[rk];
+  if (gw && num(f.refrigCharge)) { d.gwp = gw; d.co2e = r2(num(f.refrigCharge)*gw/1000, 2); } else if (gw) d.gwp = gw;
+  // previous reading of the same electricity meter → consumption & average demand
+  if (S && S.cls==='elecmeter' && num(f.kwhReading)!=null){
+    const id = f.meterNo || f.tag; const prev = (appState.fieldReadings||[]).filter(r=>r.kind==='kWh' && id && (r.meterNo===id || r.tag===id)).sort((a,b)=>b.t-a.t)[0];
+    if (prev && num(f.kwhReading) >= prev.value){ const hrs = (Date.now()-prev.t)/3.6e6; d.kwhSince = r2(num(f.kwhReading)-prev.value,0); d.hrsSince = r2(hrs,1); if (hrs>0.25) d.avgKw = r2(d.kwhSince/hrs,1); d.prevAt = new Date(prev.t).toLocaleString(); }
+  }
   const yr = num(f.year); if (yr && yr>1950) d.age = new Date().getFullYear()-yr;
   S.derived = d; return d;
 }
@@ -6018,6 +6077,7 @@ function stepReview(){
   const age = S.derived.age;
   const nm = S.extra.name || defaultName();
   const field = k => { const [lab,u]=F[k]; const v=S.fields[k], dv=S.derived[k], has=v!=null;
+    if (k==='maintNotes') return `<label class="sf wide ${!has?'miss':''}"><span>${lab}</span><textarea rows="4" onchange="snapSet('${k}',this.value)">${esc(v??'')}</textarea></label>`;
     return `<label class="sf ${!has&&dv==null?'miss':''}"><span>${lab}${u?` <i>${u}</i>`:''}${!has&&dv!=null?' <em>auto</em>':''}</span><input data-k="${k}" value="${esc(has?v:(dv??''))}" ${dv!=null&&!has?'class="auto"':''} inputmode="${TEXT_KEYS.includes(k)?'text':'decimal'}" onchange="snapSet('${k}',this.value)"></label>`; };
   let h = `<div class="snap-summary"><img src="${S.photos[0]||''}" ${S.photos[0]?'':'style="display:none"'}><div>
       <label class="sf big"><span>Name / tag</span><input id="snap-name" value="${esc(nm)}" onchange="S_name(this.value)"></label></div></div>`;
@@ -6029,9 +6089,24 @@ function stepReview(){
   if (D.motorLoad!=null) flags.push(D.motorLoad < 50 ? `<span class="badge badge-amber">Fan needs ≈ ${D.shaftKw} kW shaft power — motor only ~${D.motorLoad}% loaded (oversized; check belt/VSD)</span>` : D.motorLoad > 105 ? `<span class="badge badge-red">Fan duty ≈ ${D.shaftKw} kW exceeds the motor rating (~${D.motorLoad}%) — check nameplate/airflow</span>` : `<span class="badge badge-gray">Fan duty ≈ ${D.shaftKw} kW shaft — motor ~${D.motorLoad}% loaded</span>`);
   if (D.sfp!=null) flags.push(D.sfp > 2 ? `<span class="badge badge-amber">Specific fan power ≈ ${D.sfp} kW/(m³/s) — high (good practice ≤ 1.6–2.0); EC fan / VSD candidate</span>` : `<span class="badge badge-gray">Specific fan power ≈ ${D.sfp} kW/(m³/s)</span>`);
   if (S.cls==='meter') flags.push('<span class="badge badge-gray">Meter reading is logged as a spot measurement with the date & time</span>');
+  if (S.fields.meterError) flags.push(`<span class="badge badge-red">Display shows error ${esc(S.fields.meterError)} — meter in alarm; its energy data is unreliable until the fault is cleared (check sensors / flow / manufacturer error list)</span>`);
+  if (D.co2e!=null) flags.push(`<span class="badge ${D.gwp>2500?'badge-red':D.gwp>700?'badge-amber':'badge-gray'}">${esc(S.fields.refrigerant)} · GWP ${D.gwp} × ${S.fields.refrigCharge} kg = ${D.co2e} t CO₂e if fully leaked${D.gwp>2500?' — high-GWP, phase-down candidate':''}</span>`);
+  else if (D.gwp>2500) flags.push(`<span class="badge badge-red">${esc(S.fields.refrigerant)} · GWP ${D.gwp} — high-GWP refrigerant, phase-down candidate</span>`);
+  if (S.cls==='elecmeter') flags.push(D.kwhSince!=null ? `<span class="badge badge-gray">Since last reading (${esc(D.prevAt)}): ${D.kwhSince.toLocaleString()} kWh over ${D.hrsSince} h${D.avgKw!=null?' → average '+D.avgKw+' kW':''}</span>` : '<span class="badge badge-gray">First reading of this meter — snap it again later (e.g. next visit) to get consumption and average kW automatically</span>');
   if (missing.length) flags.push(`<span class="badge badge-gray">${missing.length} expected value${missing.length>1?'s':''} not found — highlighted below</span>`);
   if (flags.length) h += `<div class="snap-flags">${flags.join('')}</div>`;
+  if (S.cls==='gauge'){
+    const unit = S.extra.gUnit || (/BAR|PSI/i.test(S.raw||'')&&!/°C/.test(S.raw||'') ? 'bar' : /°C|THERM/i.test((S.raw||'')+(S.item||'')) ? '°C' : ((S.fields.meterReading||'').replace(/[\d.\s-]/g,'') || '°C'));
+    const pts = unit==='°C' ? ['CHW supply','CHW return','CW in (condenser)','CW out (condenser)','Supply air','Return air','HW / other'] : ['CHW pump suction','CHW pump discharge','CHW header','CW line','Other'];
+    const v = S.fields.readingVal ?? num(S.fields.meterReading);
+    h += `<div class="snap-group"><h4>Needle reading</h4><div class="g-read"><input id="g-val" inputmode="decimal" value="${v??''}" placeholder="?" onchange="snapSet('readingVal',this.value)"><select onchange="S_extra('gUnit',this.value);stepReview()">${['°C','bar','psi','kPa'].map(u=>`<option ${u===unit?'selected':''}>${u}</option>`).join('')}</select></div>
+      ${v==null?'<p class="g-hint">The offline reader can\'t interpret a needle — type the value you see (the AI reader does this automatically).</p>':''}
+      <h4 style="margin-top:12px">Where is it?</h4><div class="g-pts">${pts.map(pn=>`<button class="${S.extra.point===pn?'on':''}" onclick="S_extra('point','${pn}');stepReview()">${pn}</button>`).join('')}</div></div>`;
+    S.extra.gUnit = unit;
+  } else
   h += `<div class="snap-group"><h4>Nameplate data</h4><div class="snap-grid">${exp.map(field).join('')}</div></div>`;
+  const extraKeys = Object.keys(S.fields).filter(k=>F[k] && !exp.includes(k) && !['manufacturer','readingVal','tag'].includes(k));
+  if (extraKeys.length && S.cls!=='gauge') h += `<div class="snap-group"><h4>Also on the plate</h4><div class="snap-grid">${extraKeys.map(field).join('')}</div></div>`;
   // context-specific questions the plate can't answer
   h += `<div class="snap-group"><h4>On site</h4><div class="snap-grid">`;
   h += `<label class="sf"><span>Condition</span><select onchange="S_extra('condition',this.value)">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${ (S.extra.condition||'Fair')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
@@ -6122,12 +6197,28 @@ async function saveCore(name){
     const chw = /CHW|CHILLED/i.test((f.section||'')+' '+(S.raw||''));
     appState.hvac.rows.push({name, type: chw ? 'Chilled Water' : 'Other', cap:'', capUnit:'tons', year:f.year||'', condition:cond, refrigerant:'Other', eff:'', effUnit:'SEER', controls:'', economizer:'No',
       notes:[id, f.tag && f.tag!==name && 'tag '+f.tag, (f.airLps??d.airLps) && (f.airLps??d.airLps)+' L/s ('+(f.cfm??d.cfm)+' CFM)', f.staticPa && f.staticPa+' Pa', f.rpm && 'fan '+f.rpm+' rpm',
-        (f.hp??d.hp) && 'motor '+(f.hp??d.hp)+' HP', f.volts && f.volts+'/'+(f.phase||'3')+'/'+(f.hz||'60'), d.motorLoad!=null && 'motor ~'+d.motorLoad+'% loaded', d.sfp && 'SFP '+d.sfp, f.section].filter(Boolean).join(', ')});
+        (f.hp??d.hp) && 'motor '+(f.hp??d.hp)+' HP', f.volts && f.volts+'/'+(f.phase||'3')+'/'+(f.hz||'60'), d.motorLoad!=null && 'motor ~'+d.motorLoad+'% loaded', d.sfp && 'SFP '+d.sfp, f.section, f.maintNotes && 'PPM: '+f.maintNotes].filter(Boolean).join(', ')});
     if (typeof renderHVACRows==='function') renderHVACRows();
+  } else if (S.cls==='gauge'){
+    const v = num(f.readingVal ?? f.meterReading), unit = ex.gUnit || '°C', pt = ex.point || 'Other';
+    if (v!=null && unit==='°C'){ const H = appState.hvac, F_ = r2(v*9/5+32,1);
+      const map = {'CHW supply':'chwSupply','CHW return':'chwReturn','CW in (condenser)':'cwIn','CW out (condenser)':'cwOut','Supply air':'measSAT','Return air':'measRAT'};
+      if (map[pt]) H[map[pt]] = F_;
+      if (num(H.chwSupply)!=null && num(H.chwReturn)!=null) H.chwDeltaT = r2(num(H.chwReturn)-num(H.chwSupply),1); }
+    appState.hvac.measNotes = [appState.hvac.measNotes, `${new Date().toLocaleString()}: ${pt} = ${v??'?'} ${unit}${f.tag?' @ '+f.tag:''}`].filter(Boolean).join('\n');
+    if (typeof bindAll==='function') bindAll();
+    logReading({kind: unit==='°C'?'temp':'pressure', value:v, unit, point:pt, tag:f.tag||''});
+  } else if (S.cls==='elecmeter'){
+    logReading({kind:'kWh', value:num(f.kwhReading), unit:'kWh', meterNo:f.meterNo||'', account:f.account||'', tag:f.tag||name, note: d.kwhSince!=null ? `+${d.kwhSince} kWh in ${d.hrsSince} h (avg ${d.avgKw} kW)` : ''});
+    if (!(appState.electrical.panels||[]).some(p=>p.tag===name)){ appState.electrical.panels.push({tag:name, type:'Meter', ratedA:f.ratedA||'', voltage:f.volts||'', year:f.year||'', condition:cond, metering:'Revenue (utility)'}); if (typeof renderPanels==='function') renderPanels(); }
+  } else if (S.cls==='maintlog'){
+    logReading({kind:'PPM', value:null, unit:'', tag:f.tag||name, note:f.maintNotes||'(see photo)'});
+    appState.hvac.measNotes = [appState.hvac.measNotes, `PPM ${f.tag||name}: ${f.maintNotes||'see photo'}`].filter(Boolean).join('\n'); if (typeof bindAll==='function') bindAll();
   } else if (S.cls==='meter'){
+    if (f.meterReading || f.meterError) logReading({kind:'BTU', value:num(f.meterReading), unit:(f.meterReading||'').replace(/[\d.\s]/g,''), meterNo:f.serial||'', tag:f.tag||name, note:f.meterError?'ERROR '+f.meterError:''});
     if (!appState.other.customEquip) appState.other.customEquip = [];
     appState.other.customEquip.push({name, type:'BMS/Controls', capacity: num(f.flowM3h) ?? '', unit: f.flowM3h!=null ? 'GPM' : 'kW', year:f.year||'', condition:cond, annKwh:'',
-      notes:[S.item, id, f.meterReading && 'reading '+f.meterReading+' @ '+new Date().toLocaleString(), f.flowM3h && 'qp '+f.flowM3h+' m³/h', f.dn && 'DN'+f.dn, f.pressureBar && f.pressureBar+' bar'].filter(Boolean).join(', ')});
+      notes:[S.item, id, f.meterError && 'ERROR '+f.meterError, f.meterReading && 'reading '+f.meterReading+' @ '+new Date().toLocaleString(), f.flowM3h && 'qp '+f.flowM3h+' m³/h', f.dn && 'DN'+f.dn, f.pressureBar && f.pressureBar+' bar'].filter(Boolean).join(', ')});
     if (f.flowM3h!=null) appState.other.customEquip[appState.other.customEquip.length-1].capacity = r2(num(f.flowM3h)*4.403,1);
     if (typeof renderCustomEquipment==='function') renderCustomEquipment();
   } else if (S.cls==='transformer'){
@@ -6156,6 +6247,7 @@ async function saveCore(name){
     // plug-load table works in full-power hours, so store h × duty (+ standby converted to equivalent hours)
     const eqH = e.d ? r2((e.kw*e.duty*e.h*e.d + (e.sb/1000)*Math.max(0,8760-e.h*e.d)) / Math.max(e.kw,0.001) / e.d, 2) : 0;
     appState.plugloads.rows.push({name, watts:w, hrs:eqH, days:e.d, count: num(ex.count)||1, powerMgmt:false});
+    if (f.refrigerant) logReading({kind:'refrigerant', value:num(f.refrigCharge), unit:'kg', tag:name, note:[f.refrigerant, d.co2e!=null && d.co2e+' t CO₂e potential'].filter(Boolean).join(' · ')});
     if (typeof renderPlugRows==='function') renderPlugRows();
   } else {
     if (!appState.other.customEquip) appState.other.customEquip = [];
@@ -6173,13 +6265,13 @@ async function saveCore(name){
   }
   // Keep the nameplate photo as evidence
   if (S.photos.length){
-    const ps = sec==='plugloads'||sec==='lighting'||sec==='hvac'||sec==='dhw'||sec==='other'||sec==='electrical' ? sec : 'general';
+    const ps = S.cls==='elecmeter' ? 'electrical' : sec==='plugloads'||sec==='lighting'||sec==='hvac'||sec==='dhw'||sec==='other'||sec==='electrical' ? sec : 'general';
     if (!appState.photos[ps]) appState.photos[ps] = [];
     for (const p of S.photos) appState.photos[ps].push({data: await shrink(p,800,.6), caption: name+' nameplate', tag: name, photoType:'nameplate', flag:'', equipment:name, date:new Date().toISOString()});
     if (typeof renderPhotos==='function') renderPhotos();
   }
   save(); if (typeof updateProgress==='function') updateProgress(); if (typeof updateStorageIndicator==='function') updateStorageIndicator();
-  appState._snapCount = (appState._snapCount||0)+1;
+  appState._snapCount = (appState._snapCount||0)+1; renderFR();
   return {name, sec, loads: S.extra.toLoads!==false && (ROT.includes(S.cls)||S.fromMotor) && (kw!=null || num(f.inputKw)!=null)};
 }
 function saveDone({name, sec, loads}){
@@ -6188,6 +6280,21 @@ function saveDone({name, sec, loads}){
   $('snap-body').innerHTML = `<div class="snap-done"><div class="tick">✓</div><b>${esc(name)}</b><p>added to <b>${esc(secLabel(sec))}</b>${loads ? ' and the Electrical load list':''}, with the nameplate photo.</p></div>`;
   $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="snapClose();showSection('${sec}')">View in ${esc(secLabel(sec))}</button><button class="btn-primary" onclick="snapOpen();document.getElementById('snap-file').click()">📷 Snap next</button>`;
 }
+
+// ---------- Field readings log (gauges, meters, PPM, refrigerant) ----------
+function logReading(r){ if (!appState.fieldReadings) appState.fieldReadings = []; appState.fieldReadings.push({t:Date.now(), ...r}); }
+function renderFR(){
+  const host = document.getElementById('sec-dashboard'); if (!host) return;
+  let card = document.getElementById('fr-card'); const rows = (appState.fieldReadings||[]).slice().sort((a,b)=>b.t-a.t);
+  if (!rows.length){ if (card) card.remove(); return; }
+  if (!card){ card = document.createElement('div'); card.id='fr-card'; card.className='card'; const hero = host.querySelector('.snap-hero'); hero ? hero.after(card) : host.prepend(card); }
+  const ic = {kWh:'⚡',temp:'🌡',pressure:'⏲',BTU:'📟',PPM:'📋',refrigerant:'🧊'};
+  card.innerHTML = `<div class="card-header"><span class="card-title">📍 Field readings</span><span class="badge badge-gray">${rows.length}</span></div>
+    <div class="fr-list">${rows.slice(0,12).map(r=>`<div class="fr-row"><span class="fr-ic">${ic[r.kind]||'•'}</span><div><b>${esc(r.tag||r.meterNo||r.kind)}${r.point?' · '+esc(r.point):''}</b><small>${new Date(r.t).toLocaleString()}${r.note?' — '+esc(r.note):''}</small></div><span class="fr-v">${r.value!=null?esc(r.value.toLocaleString())+' '+esc(r.unit||''):''}</span></div>`).join('')}</div>`;
+}
+window.renderFieldReadings = renderFR;
+{ const _ss = window.showSection; if (typeof _ss==='function') window.showSection = function(id){ const r = _ss.apply(this, arguments); if (id==='dashboard') renderFR(); return r; }; }
+setTimeout(renderFR, 800);
 
 // ---------- Batch: many photos → draft cards → merge → save all ----------
 let BR = null; // batch root session
@@ -6206,14 +6313,14 @@ async function startBatch(files){
       const top = c.candidates[0];
       c.cls = top ? top.cls : 'other'; c.unsure = !top || top.confidence < .7 || top.cls==='motor';
       const vals = Object.keys(c.fields).filter(k=>!ID.includes(k) && k!=='section');
-      c.labelOnly = vals.length===0 && !c.isPlate && c.cls!=='meter' && !!(c.fields.tag || c.fields.section || c.fields.model);
+      c.labelOnly = (c.cls==='maintlog') || (vals.length===0 && !c.isPlate && !['meter','gauge','elecmeter'].includes(c.cls) && !!(c.fields.tag || c.fields.section || c.fields.model));
       c.status='done';
     } catch(e){ c.status='error'; c.err = e.message||String(e); }
     if (BR) { autoLink(); renderBatch(); }
   }
 }
 // a photo that is only a tag/section label is most likely the label of the plate photographed next to it
-function autoLink(){ const ok = (c,j) => { const o = BR.cards[j]; return o && !o.merged && o!==c && o.status!=='saved' && o.cls!=='meter' && !o.labelOnly && (o.cls===c.cls || o.cls==='ahu' || o.cls==='other' || !c.cls || c.cls==='other'); };
+function autoLink(){ const ok = (c,j) => { const o = BR.cards[j]; return o && !o.merged && o!==c && o.status!=='saved' && !['meter','gauge','elecmeter','maintlog'].includes(o.cls) && !o.labelOnly && (o.cls===c.cls || o.cls==='ahu' || o.cls==='other' || !c.cls || c.cls==='other'); };
   BR.cards.forEach((c,i)=>{ c.mergeHint = c.status==='done' && c.labelOnly && !c.merged ? (ok(c,i-1) ? i-1 : ok(c,i+1) ? i+1 : null) : null; }); }
 function cardSummary(c){
   const f=c.fields, d = withS(c, derive), bits=[];
@@ -6222,7 +6329,8 @@ function cardSummary(c){
   if (f.hp!=null) bits.push(f.hp+' HP'); else if (f.kw!=null) bits.push(f.kw+' kW');
   if (f.watts!=null) bits.push(f.watts+' W');
   if (f.airLps!=null) bits.push(f.airLps+' L/s'); if (f.staticPa!=null) bits.push(f.staticPa+' Pa'); if (f.rpm!=null) bits.push(f.rpm+' rpm');
-  if (f.volts!=null) bits.push(f.volts+' V'); if (f.meterReading) bits.push('📟 '+f.meterReading);
+  if (f.volts!=null) bits.push(f.volts+' V'); if (f.meterReading) bits.push('📟 '+f.meterReading); if (f.readingVal!=null && !f.meterReading) bits.push('🌡 '+f.readingVal);
+  if (f.kwhReading!=null) bits.push('⚡ '+f.kwhReading+' kWh'); if (f.meterNo) bits.push(f.meterNo); if (f.meterError) bits.push('⚠ '+f.meterError); if (f.refrigerant) bits.push(f.refrigerant+(f.refrigCharge?' '+f.refrigCharge+' kg':'')); if (f.maintNotes) bits.push('📋 '+f.maintNotes.slice(0,60));
   if (f.coolTons!=null) bits.push(f.coolTons+' TR'); if (f.flowM3h!=null) bits.push('qp '+f.flowM3h+' m³/h'); if (f.dn!=null) bits.push('DN'+f.dn); if (f.serial) bits.push('S/N '+f.serial); if (f.year) bits.push(f.year); if (f.section) bits.push(f.section.toLowerCase());
   return bits;
 }
@@ -6256,7 +6364,7 @@ window.btMerge = idx => {
   idx = [...new Set(idx)].sort((a,b)=>a-b); if (idx.length<2) return;
   const cs = idx.map(i=>BR.cards[i]);
   // the card with the most real values is the main one
-  const main = cs.slice().sort((a,b)=>Object.keys(b.fields).length-Object.keys(a.fields).length)[0];
+  const main = cs.filter(c=>c.cls!=='maintlog' && !c.labelOnly)[0] || cs.slice().sort((a,b)=>Object.keys(b.fields).length-Object.keys(a.fields).length)[0];
   for (const c of cs){ if (c===main) continue;
     Object.entries(c.fields).forEach(([k,v])=>{ if (main.fields[k]==null) main.fields[k]=v; });
     main.photos.push(...c.photos); main.orig.push(...c.orig); main.raw = (main.raw||'')+'\n'+(c.raw||'');
@@ -6272,6 +6380,7 @@ window.btSaveAll = async () => {
   S = BR; renderBatch(); toast(todo.length+' items saved');
 };
 window._snapBatch = () => BR;
+window.stepReview = stepReview;
 window._snapDbg = {enhance, bestRotation, recog};
 window._snapOCR = async (u, crop) => { S = S || {photos:[],extra:{}}; let src=u; if (crop){ const im=await loadImg(u); const c=document.createElement('canvas'); c.width=(crop[2]-crop[0])*im.width; c.height=(crop[3]-crop[1])*im.height; c.getContext('2d').drawImage(im,crop[0]*im.width,crop[1]*im.height,c.width,c.height,0,0,c.width,c.height); src=c.toDataURL('image/jpeg',.92); S.cropped={0:true}; } else S.cropped={}; const r = await readOCR([src]); return r; };
 })();
