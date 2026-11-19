@@ -517,6 +517,10 @@ body.drawer-open #snap-fab, body.snap-on #snap-fab { display:none; }
 .snap-done { text-align:center; padding:40px 10px; } .snap-done .tick { width:76px; height:76px; margin:0 auto 14px; border-radius:50%; background:var(--success); color:#fff; display:grid; place-items:center; font-size:2.2rem; animation: pop .35s ease; }
 .snap-done b { font-size:1.15rem; display:block; margin-bottom:6px; } .snap-done p { color:var(--text-secondary); }
 @keyframes pop { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }
+.snap-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
+.snap-kpis div { background:var(--input-bg); border-radius:10px; padding:10px 6px; text-align:center; }
+.snap-kpis b { display:block; font-family:var(--mono); font-size:1.15rem; color:var(--accent); } .snap-kpis span { font-size:.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; }
+.snap-tip { margin-top:10px; font-size:.84rem; background:var(--accent-light); color:var(--text-primary); padding:9px 11px; border-radius:10px; }
 @media (max-width: 380px) { .snap-grid, .snap-choices { grid-template-columns: 1fr; } }
 @media print { #snap-fab, #snap { display:none !important; } }
 
@@ -5542,6 +5546,41 @@ const MOTOR_ROLES = [
 ];
 const OTHER_TYPE = {motor:'Motor',pump:'Pump',fan:'Fan',air_compressor:'Compressed Air',boiler:'Boiler',other:'Other'};
 
+// Typical use of common equipment (Saudi office/commercial defaults; all editable on review).
+// h = hours/day it is switched on, d = days/yr, duty = share of those hours drawing rated power, sb = standby W when off
+const PROFILES = [
+  {re:/WATER HEATER|GEYSER|ВОДОНАГРЕВ|سخان/i, name:'Water heater', cls:'dhw'},
+  {re:/AIR[ -]?CONDITION|SPLIT (?:AC|UNIT|TYPE)|INDOOR UNIT|OUTDOOR UNIT|КОНДИЦИОН|مكيف/i, name:'Split AC', cls:'hvac'},
+  {re:/CHILLER/i, name:'Chiller', cls:'chiller'},
+  {re:/\bPUMP|НАСОС|مضخة/i, name:'Pump', cls:'pump', h:10, d:261, duty:.75},
+  {re:/COFFEE|ESPRESSO|КОФЕ|قهوة/i, name:'Coffee maker', h:9, d:261, duty:.15, sb:1, tip:'Auto-off timer; thermal carafe instead of a warming plate (cuts ~60%).'},
+  {re:/KETTLE|ЧАЙНИК|غلاية/i, name:'Electric kettle', h:9, d:261, duty:.06, sb:0, tip:'Boil only what is needed; one shared kettle per pantry.'},
+  {re:/WATER (?:DISPENSER|COOLER)|DISPENSER|КУЛЕР|برادة/i, name:'Water dispenser', h:24, d:365, duty:.25, sb:0, tip:'Timer plug off nights and weekends (saves ~40–60%).'},
+  {re:/MICROWAVE|СВЧ|МИКРОВОЛН|ميكروويف/i, name:'Microwave', h:9, d:261, duty:.05, sb:3, tip:'Low impact; remove duplicates.'},
+  {re:/FREEZER|МОРОЗИЛ|فريزر/i, name:'Freezer', h:24, d:365, duty:.4, sb:0, tip:'Replace units >10 yrs with inverter models; check door seals.'},
+  {re:/REFRIGERAT|FRIDGE|ХОЛОДИЛ|ثلاجة/i, name:'Refrigerator', h:24, d:365, duty:.35, sb:0, tip:'Consolidate under-used fridges; replace >10 yrs with inverter models.'},
+  {re:/VENDING/i, name:'Vending machine', h:24, d:365, duty:.5, sb:0, tip:'Vending-miser occupancy controller (saves ~45%).'},
+  {re:/COPIER|MULTIFUNCTION|\bMFP\b|\bMFD\b/i, name:'Copier / MFD', h:9, d:261, duty:.1, sb:30, tip:'Enable sleep after 15 min; consolidate printers into MFDs.'},
+  {re:/PRINTER|ПРИНТЕР|طابعة/i, name:'Printer', h:9, d:261, duty:.05, sb:5, tip:'Enable sleep mode; consolidate desktop printers.'},
+  {re:/SERVER/i, name:'Server', h:24, d:365, duty:.6, sb:0, tip:'Virtualise; raise server-room setpoint to 24–27 °C.'},
+  {re:/\bUPS\b|UNINTERRUPT/i, name:'UPS', h:24, d:365, duty:.1, sb:0, tip:'Check loading; eco-mode on modern UPS.'},
+  {re:/ROUTER|ACCESS POINT|NETWORK SWITCH/i, name:'Network device', h:24, d:365, duty:.8, sb:0},
+  {re:/LAPTOP|NOTEBOOK|POWER ADAPTER|AC ADAPTER/i, name:'Laptop', h:9, d:261, duty:.5, sb:.3},
+  {re:/MONITOR|LCD DISPLAY/i, name:'Monitor', h:9, d:261, duty:.8, sb:.5, tip:'Power-management policy (display off after 10 min).'},
+  {re:/DESKTOP|PERSONAL COMPUTER|\bPC\b|WORKSTATION/i, name:'Desktop PC', h:9, d:261, duty:.6, sb:3, tip:'Power-management GPO: sleep after 30 min, shut down at night.'},
+  {re:/TELEVISION|\bLED TV|\bTV\b/i, name:'TV / display', h:8, d:261, duty:.9, sb:1, tip:'Schedule off outside hours.'},
+  {re:/DISHWASHER|ПОСУДОМ/i, name:'Dishwasher', h:1.5, d:261, duty:.6, sb:1},
+  {re:/WASHING MACHINE|WASHER|СТИРАЛ|غسالة/i, name:'Washing machine', h:1, d:200, duty:.5, sb:1},
+  {re:/TOASTER|ТОСТЕР/i, name:'Toaster', h:1, d:261, duty:.3, sb:0},
+  {re:/HAIR ?DRYER|ФЕН/i, name:'Hair dryer', h:.5, d:261, duty:.8, sb:0},
+  {re:/\bIRON\b|УТЮГ|مكواة/i, name:'Iron', h:1, d:200, duty:.5, sb:0},
+  {re:/OVEN|COOKER|\bHOB\b|ДУХОВ|ПЛИТ|فرن/i, name:'Oven / cooker', h:3, d:261, duty:.4, sb:2},
+  {re:/SPACE HEATER|ОБОГРЕВАТ|دفاية/i, name:'Space heater', h:6, d:60, duty:.6, sb:0, tip:'Remove; fix the HVAC zone instead.'},
+  {re:/\bFAN\b|ВЕНТИЛЯТОР|مروحة/i, name:'Fan', h:9, d:261, duty:.9, sb:0}
+];
+function findProfile(txt){ return PROFILES.find(p=>p.re.test(txt||'')) || null; }
+const MODE_HRS = {'24/7 Continuous':[24,365,.75],'Business Hours 8am-6pm':[10,261,.75],'Standby/Backup-normally off':[0,0,.75],'Decommissioned-still connected':[0,0,0]};
+
 let S = null; // current snap session
 const $ = id => document.getElementById(id);
 const esc = v => String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -5584,6 +5623,11 @@ window.snapRead = async function(){
     S.fields = out.fields||{}; S.raw = out.rawText||''; S.candidates = out.candidates||[];
     if (out.extra) S.extra = out.extra;
     ID.forEach(k=>{ if(out[k]!=null && S.fields[k]==null) S.fields[k]=out[k]; });
+    S.item = out.item || null; S.profile = findProfile((out.item||'')+' '+(out.rawText||''));
+    if (S.profile && !S.item) S.item = S.profile.name;
+    if (S.profile){ const pc = S.profile.cls||'appliance'; const c0 = S.candidates.find(c=>c.cls===pc);
+      if (c0) c0.confidence = Math.max(c0.confidence,.85); else S.candidates.unshift({cls:pc,confidence:.85});
+      S.candidates.sort((a,b)=>b.confidence-a.confidence); }
     const top = S.candidates[0];
     if (!top || top.confidence < 0.7 || top.cls==='motor') stepWhere(false); else { S.cls = top.cls; stepReview(); }
   } catch(e){
@@ -5598,10 +5642,10 @@ async function readAI(){
   const keys = Object.keys(F).filter(k=>!ID.includes(k));
   const prompt = `You are reading an equipment NAMEPLATE photographed during an ASHRAE Level 1 energy audit.
 1) Identify the equipment class, one of: ${Object.keys(C).join(', ')}. A plate showing only motor data (HP/kW, RPM, frame, insulation class) is "motor" even if it sits on a pump or fan.
-2) Read every value printed. Copy numbers exactly; do not guess. If the plate gives several voltages/currents (e.g. 380-415V / 50Hz and 460V / 60Hz), use the one matching 50 Hz and list the rest in "notes".
+2) Plates may be multilingual (English/Russian/Arabic/Chinese): Вт=W, кВт=kW, В=V, А=A, Гц=Hz. Read every value printed. Copy numbers exactly; do not guess. If the plate gives several voltages/currents (e.g. 380-415V / 50Hz and 460V / 60Hz), use the one matching 50 Hz and list the rest in "notes".
 Reply with ONLY JSON, no markdown:
 {"candidates":[{"cls":"<class>","confidence":0.0-1.0}, ...best first, up to 3],
- "manufacturer":str|null,"model":str|null,"serial":str|null,"year":str|null,
+ "item":"what the product is in 1-3 English words (e.g. Coffee maker, Split AC outdoor unit, Chilled water pump)","manufacturer":str|null,"model":str|null,"serial":str|null,"year":str|null,
  "fields":{${keys.map(k=>`"${k}":${['refrigerant','frame','insClass','ieClass','coolingType','fuel','lampType'].includes(k)?'str':'number'}|null`).join(',')}},
  "notes":str|null,"rawText":"all legible text, lines separated by |"}
 Use null for anything not printed. Year: from a date or date code if plainly printed, else null.`;
@@ -5642,11 +5686,15 @@ async function readOCR(){
 }
 // Regex reader for plain OCR text
 function parseText(t){
-  const T = ' '+t.toUpperCase().replace(/[|]/g,' ').replace(/\s+/g,' ')+' ';
+  let T = ' '+t.toUpperCase().replace(/[|]/g,' ').replace(/\s+/g,' ')+' ';
+  // Cyrillic / OCR look-alikes on CE/EAC plates: кВт→KW, Вт/BT→W, В→V, А→A, Гц→HZ
+  T = T.replace(/(\d)\s*КВТ/g,'$1 KW').replace(/(\d)\s*(?:ВТ|BT)\b/g,'$1W').replace(/(\d)\s*ВТ/g,'$1W')
+       .replace(/(\d)\s*ГЦ/g,'$1HZ').replace(/(\d)\s*В\b/g,'$1V').replace(/(\d)\s*А\b/g,'$1A').replace(/~\s*(\d{2})\s*HZ/g,' $1HZ');
   const f = {}, g = (re,k,fn) => { const m = T.match(re); if (m && f[k]==null) f[k] = fn ? fn(m) : num(m[1]); };
   g(/(\d+(?:[.,]\d+)?)\s*HP\b/,'hp'); g(/\bHP\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'hp');
   g(/(\d+(?:[.,]\d+)?)\s*KW\b/,'kw'); g(/\bKW\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kw');
-  g(/(\d+(?:[.,]\d+)?)\s*KVA\b/,'kva'); g(/\bKVA\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kva');
+  g(/(\d+(?:[.,]\d+)?)\s*KVA\b/,'kva');
+  g(/(?<![\d.,K])(\d{1,5}(?:[.,]\d+)?)\s*W(?:ATTS?)?\b/,'watts'); g(/\b(?:POWER|INPUT|RATED POWER)\s*[:\-]?\s*(\d{1,5})\s*W\b/,'watts'); g(/\bKVA\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'kva');
   g(/(\d{3,4})\s*(?:\/\s*\d{3,4}\s*)?V(?:OLTS?)?\b/,'volts'); g(/\bV(?:OLTS?)?\s*[:\-]?\s*(\d{3,4})/,'volts');
   g(/(\d+(?:[.,]\d+)?)\s*A(?:MPS?)?\b(?!\w)/,'amps'); g(/\b(?:AMPS?|F\.?L\.?A\.?|I\s*N)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/,'amps');
   g(/(\d{3,4})\s*(?:R\.?P\.?M|MIN-?1|1\/MIN)/,'rpm'); g(/\bR\.?P\.?M\.?\s*[:\-]?\s*(\d{3,4})/,'rpm');
@@ -5668,8 +5716,12 @@ function parseText(t){
   g(/\b(?:19|20)\d{2}\b/,'year',m=>m[0]);
   g(/(?:S\/?N|SERIAL(?:\s*NO)?\.?)\s*[:#\-]?\s*([A-Z0-9\-]{5,})/,'serial',m=>m[1]);
   g(/(?:MODEL|TYPE)\s*(?:NO\.?)?\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{3,})/,'model',m=>m[1]);
-  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY'];
-  const b = brands.find(x=>T.includes(' '+x)); const ident = {manufacturer: b ? b.replace(/\b\w/g,c=>c).trim() : null};
+  const brands = ['ABB','SIEMENS','WEG','WEGEURO','TECO','TOSHIBA','CARRIER','TRANE','DAIKIN','YORK','LG','SAMSUNG','MITSUBISHI','GREE','ZAMIL','GRUNDFOS','KSB','WILO','SCHNEIDER','LEGRAND','EATON','ATLAS COPCO','INGERSOLL','ARISTON','RHEEM','A.O. SMITH','PHILIPS','OSRAM','BALDOR','LEESON','NIDEC','MARATHON','LEROY','DANFOSS','HITACHI','ALSTOM','ELSEWEDY','SATURN','TEFAL','MOULINEX','BRAUN','KENWOOD','DELONGHI','PANASONIC','SHARP','CANON','EPSON','DELL','LENOVO','BOSCH','ELECTROLUX','WHIRLPOOL','HAIER','MIDEA','HISENSE','SONY','XEROX','RICOH','KYOCERA','NESPRESSO','KRUPS','HOOVER','BEKO','INDESIT','ZANUSSI','TCL','BLACK+DECKER','SIEMENS','SMEG','GORENJE','HEWLETT','BROTHER','APC','VERTIV','FUJITSU','TOSHIBA','DAEWOO','NIKAI','GEEPAS','KELVINATOR','GENERAL','O GENERAL','SUPER GENERAL','WANSA'];
+  const Tns = T.replace(/[^A-Z+]/g,'');
+  const b = brands.find(x=>T.includes(' '+x)) || brands.find(x=>x.length>=5 && Tns.startsWith(x)) || brands.find(x=>x.length>=6 && Tns.includes(x.replace(/[^A-Z+]/g,'')));
+  let mf = b || null;
+  if (!mf) { const w = (t.split(/\n/).map(l=>l.trim()).find(l=>/^[A-Za-z][A-Za-z\-&.]{2,}/.test(l))||'').match(/^[A-Za-z][A-Za-z\-&.]{2,}/); if (w && !/^(MODEL|TYPE|SERIAL|MADE|INPUT|RATED|POWER|WARNING|CAUTION)$/i.test(w[0])) mf = w[0]; }
+  const ident = {manufacturer: mf ? mf.charAt(0)+mf.slice(1).toLowerCase() : null, item: (findProfile(t)||{}).name || null};
   ['year','serial','model'].forEach(k=>{ ident[k]=f[k]||null; delete f[k]; });
   // class scoring from keywords
   const sc = {motor:0,pump:0,fan:0,air_compressor:0,hvac:0,chiller:0,boiler:0,transformer:0,panel:0,dhw:0,lighting:0,appliance:0};
@@ -5682,7 +5734,8 @@ function parseText(t){
   k('transformer',/TRANSFORMER|ONAN|\bHV\b|\bLV\b|IMPEDANCE|VECTOR|DYN11/,3); if(f.kva) sc.transformer+=2;
   k('panel',/PANEL|SWITCHBOARD|BUSBAR|MCCB|\bACB\b|ICW|\bAIC\b/,3);
   k('dhw',/WATER HEATER|GEYSER|HEATER.*(L|GAL)|\bUEF\b/,4); k('lighting',/LAMP|LED|LUMINAIRE|BALLAST|DRIVER|LUMEN|LM\b/,3);
-  k('appliance',/REFRIGERATOR|MICROWAVE|COPIER|PRINTER|DISPENSER|WASHER|TV\b|MONITOR/,3);
+  const pf0 = findProfile(t); if (pf0) sc[pf0.cls||'appliance'] += 6;
+  if (f.watts && !f.kw && !f.hp && !f.kva) sc.appliance += 2;
   const tot = Object.values(sc).reduce((a,b)=>a+b,0) || 1;
   const candidates = Object.entries(sc).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cls,v])=>({cls,confidence:r2(Math.min(.95,v/tot*.9),2)}));
   return {fields:f, candidates, rawText:t, ...ident};
@@ -5725,6 +5778,7 @@ function derive(){
   if (num(f.tankGal)!=null && num(f.tankL)==null) d.tankL = r2(num(f.tankGal)*3.785,0);
   if (num(f.tankL)!=null && num(f.tankGal)==null) d.tankGal = r2(num(f.tankL)/3.785,0);
   if (num(f.inputKbtuh)!=null && num(f.inputKw)==null) d.inputKw = r2(num(f.inputKbtuh)/3.412);
+  if (num(f.watts)==null && V && A) d.watts = r2((ph===3?Math.sqrt(3):1)*V*A*(num(f.pf)||0.9),0);
   const yr = num(f.year); if (yr && yr>1950) d.age = new Date().getFullYear()-yr;
   S.derived = d; return d;
 }
@@ -5756,25 +5810,61 @@ function stepReview(){
   h += `<div class="snap-group"><h4>On site</h4><div class="snap-grid">`;
   h += `<label class="sf"><span>Condition</span><select onchange="S_extra('condition',this.value)">${['Excellent','Good','Fair','Poor'].map(o=>`<option ${ (S.extra.condition||'Fair')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
   if (['motor','pump','fan','air_compressor','other','boiler','appliance'].includes(S.cls))
-    h += `<label class="sf"><span>Runs</span><select onchange="S_extra('mode',this.value)">${['Business Hours 8am-6pm','24/7 Continuous','Standby/Backup-normally off','Decommissioned-still connected'].map(o=>`<option ${(S.extra.mode||'Business Hours 8am-6pm')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
+    h += `<label class="sf"><span>Runs</span><select onchange="S_name(document.getElementById('snap-name').value);S_extra('mode',this.value)">${['Business Hours 8am-6pm','24/7 Continuous','Standby/Backup-normally off','Decommissioned-still connected'].map(o=>`<option ${(S.extra.mode||'Business Hours 8am-6pm')===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
   if (S.cls==='lighting') h += `<label class="sf"><span>Space</span><input value="${esc(S.extra.space||'')}" onchange="S_extra('space',this.value)"></label><label class="sf"><span>Fixture count</span><input inputmode="numeric" value="${esc(S.extra.count||'')}" onchange="S_extra('count',this.value)"></label>`;
-  if (S.cls==='appliance') h += `<label class="sf"><span>Quantity</span><input inputmode="numeric" value="${esc(S.extra.count||1)}" onchange="S_extra('count',this.value)"></label>`;
+  if (S.cls==='appliance') h += `<label class="sf"><span>Quantity</span><input inputmode="numeric" value="${esc(S.extra.count||1)}" oninput="S_extra('count',this.value);const el=document.getElementById('snap-kpis');if(el)el.innerHTML=window._snapKpis()"></label>`;
   h += `</div>`;
   if (['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls) || S.fromMotor)
     h += `<label class="snap-check"><input type="checkbox" ${S.extra.toLoads!==false?'checked':''} onchange="S_extra('toLoads',this.checked)"> Also add to the Electrical load list</label>`;
   h += `</div>`;
+  h += estimateBlock();
   if (S.notes || S.raw) h += `<details class="snap-raw"><summary>Text read from the plate</summary><pre>${esc((S.notes?'Notes: '+S.notes+'\n\n':'')+(S.raw||'').replace(/\|/g,'\n'))}</pre></details>`;
   $('snap-body').innerHTML = h;
   $('snap-foot').innerHTML = `<button class="btn-secondary" onclick="stepWhereAgain()">‹ Type</button><button class="btn-primary" onclick="snapSave()">Save to ${esc(secLabel(c.sec))} ✓</button>`;
 }
+// ---------- Energy & cost estimate ----------
+const ESTIMATED = ['appliance','motor','pump','fan','air_compressor','other','boiler'];
+function estBase(){
+  const f=S.fields, d=S.derived, pr=S.profile||{};
+  const rot = S.fromMotor || ['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls);
+  const mh = MODE_HRS[S.extra.mode||'Business Hours 8am-6pm'];
+  const kw = S.cls==='appliance' ? (num(f.watts)??d.watts??0)/1000 : (d.kwInput ?? num(f.inputKw) ?? num(f.kw) ?? d.kw ?? (num(f.watts)??d.watts??0)/1000);
+  return { kw, h: S.extra.h ?? (rot ? mh[0] : pr.h ?? 9), d: S.extra.d ?? (rot ? mh[1] : pr.d ?? 261),
+           duty: S.extra.duty ?? (rot ? mh[2] : pr.duty ?? 0.5), sb: S.extra.sb ?? (rot ? 0 : pr.sb ?? 0), rot };
+}
+function estCalc(){
+  const e = estBase(), n = num(S.extra.count)||1;
+  const onH = e.h*e.d, kwh = (e.kw*e.duty*onH + (e.sb/1000)*Math.max(0, 8760-onH))*n;
+  const rate = (typeof elecRate==='function' ? elecRate() : 0) || 0.18;
+  return {...e, n, kwh, cost: kwh*rate, rate, eflh: e.h*e.duty};
+}
+function estimateBlock(){
+  if (!ESTIMATED.includes(S.cls) && !S.fromMotor) return '';
+  const e = estCalc(), pr = S.profile||{};
+  const cur = (appState.settings && appState.settings.currency) || 'SAR';
+  const inp = (k,v,lab,u,step) => `<label class="sf"><span>${lab} <i>${u}</i></span><input inputmode="decimal" value="${r2(v,2)}" oninput="snapEst('${k}',this.value${k==='duty'?',100':''})"></label>`;
+  return `<div class="snap-group snap-est"><h4>Energy estimate ${pr.name&&!e.rot?'· typical '+esc(pr.name.toLowerCase())+' use':e.rot?'· from “Runs”':''}</h4>
+    <div class="snap-grid">${inp('h',e.h,'On','h/day')}${inp('d',e.d,'Days','per yr')}${inp('duty',e.duty*100,e.rot?'Load factor':'Time at full power','%')}${e.rot?'':inp('sb',e.sb,'Standby','W')}</div>
+    <div class="snap-kpis" id="snap-kpis">${kpis(e,cur)}</div>
+    ${pr.tip && !e.rot ? `<div class="snap-tip">💡 ${esc(pr.tip)}</div>` : ''}
+    ${e.rot && num(S.fields.ieClass?.replace?.(/\D/g,''))!=null && /IE[12]/.test(S.fields.ieClass) ? `<div class="snap-tip">💡 IE3 replacement saves ≈ ${Math.round(e.kwh*0.04).toLocaleString()} kWh/yr (≈4%); add a VSD if load varies.</div>` : ''}
+  </div>`;
+}
+function kpis(e,cur){ cur = cur || (appState.settings && appState.settings.currency) || 'SAR';
+  return `<div><b>${e.kw ? r2(e.kw*1000,0).toLocaleString() : '—'}</b><span>W rated${e.n>1?' × '+e.n:''}</span></div>
+    <div><b>${Math.round(e.kwh).toLocaleString()}</b><span>kWh / yr</span></div>
+    <div><b>${Math.round(e.cost).toLocaleString()}</b><span>${esc(cur)} / yr</span></div>`; }
+window.snapEst = function(k,v,div){ const n=num(v); if(n==null) return; S.extra[k] = div ? n/div : n; const el=$('snap-kpis'); if(el) el.innerHTML = kpis(estCalc()); };
 function secLabel(s){ const n = NAV_ITEMS.find(x=>x.id===s); return n ? n.label : s; }
 function defaultName(){
   const f=S.fields, c=C[S.cls], p = num(f.kw)??S.derived.kw, t = num(f.coolTons)??S.derived.coolTons;
   const size = t ? t+' TR' : f.kva ? f.kva+' kVA' : p ? p+' kW' : f.lampW ? f.lampW+' W' : '';
-  return [S.fromMotor ? c.label+' motor' : c.label, size].filter(Boolean).join(' ');
+  const what = S.fromMotor ? c.label+' motor' : (S.item || c.label);
+  return [what, [f.manufacturer, f.model].filter(Boolean).join(' ') || size].filter(Boolean).join(' — ');
 }
 window.S_name = v => S.extra.name = v;
-window.S_extra = (k,v) => S.extra[k] = v;
+window.S_extra = (k,v) => { S.extra[k] = v; if (k==='mode') { delete S.extra.h; delete S.extra.d; delete S.extra.duty; stepReview(); } };
+window._snapKpis = () => kpis(estCalc());
 window.snapSet = (k,v) => { v = v.trim(); if (v==='') delete S.fields[k]; else S.fields[k] = (F[k][1] && num(v)!=null) ? num(v) : v; const nm=$('snap-name').value; S.extra.name=nm; stepReview(); };
 window.stepWhereAgain = () => stepWhere(!S.photos.length);
 
@@ -5818,20 +5908,22 @@ window.snapSave = async function(){
     appState.lighting.rows.push({space:ex.space||name, area:'', areaUnit:'ft²', fixture, count:ex.count||'', wpf: (num(f.lampW)||0)*(num(f.lampsPerFixture)||1) || '', control:'Manual', hpd:'10', dpy:'261', pctLed: /LED/.test(fixture)?'100':'0', condition:cond});
     if (typeof renderLightingRows==='function') renderLightingRows();
   } else if (S.cls==='appliance'){
-    const w = num(f.watts) ?? (num(f.volts)&&num(f.amps) ? r2(num(f.volts)*num(f.amps)*0.9,0) : 100);
-    appState.plugloads.rows.push({name, watts:w, hrs:8, days:261, count: num(ex.count)||1, powerMgmt:false});
+    const e = estCalc(), w = num(f.watts) ?? d.watts ?? 100;
+    // plug-load table works in full-power hours, so store h × duty (+ standby converted to equivalent hours)
+    const eqH = e.d ? r2((e.kw*e.duty*e.h*e.d + (e.sb/1000)*Math.max(0,8760-e.h*e.d)) / Math.max(e.kw,0.001) / e.d, 2) : 0;
+    appState.plugloads.rows.push({name, watts:w, hrs:eqH, days:e.d, count: num(ex.count)||1, powerMgmt:false});
     if (typeof renderPlugRows==='function') renderPlugRows();
   } else {
     if (!appState.other.customEquip) appState.other.customEquip = [];
     const capPair = kw!=null ? [kw,'kW'] : num(f.inputKw)!=null ? [f.inputKw,'kW'] : num(f.cfm)!=null ? [f.cfm,'CFM'] : num(f.flowGpm)!=null ? [f.flowGpm,'GPM'] : ['','kW'];
-    appState.other.customEquip.push({name, type: OTHER_TYPE[S.cls]||'Other', capacity:capPair[0], unit:capPair[1], year:f.year||'', condition:cond, annKwh:'', notes:noteBits});
+    appState.other.customEquip.push({name, type: OTHER_TYPE[S.cls]||'Other', capacity:capPair[0], unit:capPair[1], year:f.year||'', condition:cond, annKwh: Math.round(estCalc().kwh)||'', notes:noteBits});
     if (typeof renderCustomEquipment==='function') renderCustomEquipment();
   }
   // Electrical load list for rotating equipment
   if ((['motor','pump','fan','air_compressor','other','boiler'].includes(S.cls) || S.fromMotor) && ex.toLoads!==false && appState.loads && (kw!=null || num(f.inputKw)!=null)){
     const cat = {pump:'HVAC-Pump',fan:'HVAC-AHU-Fan',air_compressor:'Other',hvac:'HVAC-Compressor',chiller:'HVAC-Chiller'}[S.cls] || 'Other';
     const mode = ex.mode || 'Business Hours 8am-6pm';
-    const hpd = /24\/7/.test(mode)?24 : /Standby|Decomm/.test(mode)?0 : 10, dpw = /24\/7/.test(mode)?7:5;
+    const e = estCalc(), hpd = e.h, dpw = Math.min(7, Math.max(0, Math.round(e.d/52)));
     appState.loads.push({name, category:cat, npKW: d.kwInput ?? num(f.inputKw) ?? kw, measKW:'', measPF:f.pf||'', mode, hpd, dpw, wpy:52, control:'None', condition:cond, notes:noteBits, startType:'None', inrushX:0});
     if (typeof renderLoadTable==='function') renderLoadTable();
   }
